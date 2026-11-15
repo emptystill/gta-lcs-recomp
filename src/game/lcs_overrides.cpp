@@ -438,11 +438,17 @@ namespace
             // game kept - docs/LCS.md "Mouse camera"): TheCamera (0x43BBF0) + 0x260 the active camera's mode (4 on foot,
             // 18 behind a vehicle: GTA III's FOLLOWPED / CAM_ON_A_STRING), +0x2F4 / +0x310 the heading and its target,
             // +0x2F8 the pitch and +0x300 its negation (the target); the stick raises the pitch to 1.466 at most.
-            input.directMode = 0x260u;
-            input.directBeta = 0x2F4u;
-            input.directBetaTarget = 0x310u;
-            input.directAlpha = 0x2F8u;
-            input.directAlphaNeg = 0x300u;
+            // three CCams (GTA III's Cams[3]) at +0x260, +0x510, +0x7C0 (modes found at each), the active one's index a
+            // byte at +0x50 (as VCS's); the fields below are inside a CCam
+            input.directCamera = 0x0043BBF0u; // TheCamera (xglobal: VCS 0x6F44D0)
+            input.directActive = 0x50u;
+            input.directCam0 = 0x260u;
+            input.directCamStride = 0x2B0u;
+            input.directMode = 0x0u;
+            input.directBeta = 0x94u;
+            input.directBetaTarget = 0xB0u;
+            input.directAlpha = 0x98u;
+            input.directAlphaNeg = 0xA0u;
             input.directAlphaMin = -0.40f;
             input.directAlphaMax = 1.466f;
             vcs::input::setGameLayout(input);

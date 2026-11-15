@@ -238,9 +238,16 @@ and by writes the game keeps (`pokef`, which needed the frame hook below):
 | 0x2F8 / 0x300 | the pitch (+ looks down, the camera rises; the stick reaches 1.466; a negative one kept as 2 pi - x) and its negation (the target) |
 | 0x308 | FOV (70) |
 
-`vcs::input::GameLayout::direct*` (`vcs_input.cpp`): in modes 4 / 18 the mouse adds to both of each pair, on frames
-the game ran; Keyboard > Mouse sensitivity / Car camera sensitivity / invert apply. The game clamps the pitch itself
-(on foot it will not look up past ~-0.07). Checked on foot and in the car: the heading turns by the mouse and stays.
+The fields are inside a CCam: three of them (GTA III's `Cams[3]`) at TheCamera + 0x260 / 0x510 / 0x7C0 (stride
+0x2B0), the active one's index a byte at TheCamera + 0x50; offsets above minus 0x260 (mode +0, heading +0x94 / +0xB0,
+pitch +0x98 / +0xA0). `vcs::input::GameLayout::direct*` (`vcs_input.cpp`, `directCamera` = TheCamera): in modes 4 / 18
+the mouse adds to both of each pair, on frames the game ran; Keyboard > Mouse sensitivity / Car camera sensitivity /
+invert apply. The game clamps the pitch itself (on foot it will not look up past ~-0.07). Measured (`VCS_MOUSE_LOG=1`):
+the view is at the new heading within a frame (the stick path took ~400 ms to reach a fraction of it).
+
+The first version (commit f683527) never ran in play: it read the camera through `GameLayout::theCamera`, which LCS
+leaves 0 to keep VCS's camera code off, so it read address 0x260 (mode 0) and the mouse stayed the stick - the user
+felt no difference. Its test had passed by the stick path's own turning.
 
 **The frame hook** (`lcs_overrides.cpp` `frameBoundary`, on the limiter 0x2B5400 - VCS's markFrameKick): the rig's
 game-thread jobs run there, so the control channel's `poke` / `pokef` / `dump` / `scm` work on LCS now (they never

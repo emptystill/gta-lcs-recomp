@@ -513,9 +513,23 @@ namespace vcs::input
                 // target the camera eases toward, so the game keeps them - instead of standing in for the stick (capped at
                 // the stick's top speed, with its easing). Only on frames the game ran (not while it is paused).
                 bool direct = false;
-                if (on && L.directMode && g_rdram)
+                // the active CCam (Cams[ActiveCam]); the direct* fields are offsets inside it
+                uint32_t dcam = 0;
+                if (L.directCamera && L.directCam0 && g_rdram)
                 {
-                    const uint32_t dmode = rd32(L.theCamera + L.directMode) & 0xFFFFu;
+                    const uint32_t active = L.directActive ? g_rdram[(L.directCamera + L.directActive) & kRamMask] : 0u;
+                    dcam = L.directCamera + L.directCam0 + (active < 3u ? active : 0u) * L.directCamStride;
+                }
+                { // VCS_MOUSE_LOG=1: the direct camera's inputs, when the mouse moved
+                    static const bool mlog = std::getenv("VCS_MOUSE_LOG") != nullptr;
+                    if (mlog && (dx != 0.0f || dy != 0.0f))
+                        std::fprintf(stderr, "[mouse] dx %.0f dy %.0f on %d active %u mode %u frameAdvanced %d frame %u\n", dx, dy, on ? 1 : 0,
+                                     L.directActive && g_rdram ? g_rdram[(L.directCamera + L.directActive) & kRamMask] : 0u,
+                                     dcam ? rd32(dcam + L.directMode) & 0xFFFFu : 0u, frameAdvanced ? 1 : 0, frame);
+                }
+                if (on && dcam)
+                {
+                    const uint32_t dmode = rd32(dcam + L.directMode) & 0xFFFFu;
                     if (dmode == L.directFootMode || dmode == L.directCarMode)
                     {
                         direct = true;
@@ -523,18 +537,24 @@ namespace vcs::input
                         const float turn = -dx * look, tilt = -up * look; // pitch: + looks down (the camera rises)
                         if (frameAdvanced && (turn != 0.0f || tilt != 0.0f))
                         {
-                            float beta = std::fmod(rdf(L.theCamera + L.directBetaTarget) + turn, 6.2831855f);
+                            float beta = std::fmod(rdf(dcam + L.directBetaTarget) + turn, 6.2831855f);
                             if (beta < 0.0f)
                                 beta += 6.2831855f;
-                            wrf(L.theCamera + L.directBeta, beta);
-                            wrf(L.theCamera + L.directBetaTarget, beta);
+                            {
+                                static const bool mlog = std::getenv("VCS_MOUSE_LOG") != nullptr;
+                                if (mlog)
+                                    std::fprintf(stderr, "[mouse] beta %.4f target %.4f turn %.4f look %.6f -> %.4f\n", rdf(dcam + L.directBeta),
+                                                 rdf(dcam + L.directBetaTarget), turn, look, beta);
+                            }
+                            wrf(dcam + L.directBeta, beta);
+                            wrf(dcam + L.directBetaTarget, beta);
                             // the game keeps a negative pitch as 2 pi - x
-                            float was = rdf(L.theCamera + L.directAlpha);
+                            float was = rdf(dcam + L.directAlpha);
                             if (was > 3.14159265f)
                                 was -= 6.2831855f;
                             const float alpha = std::clamp(was + tilt, L.directAlphaMin, L.directAlphaMax);
-                            wrf(L.theCamera + L.directAlpha, alpha);
-                            wrf(L.theCamera + L.directAlphaNeg, -alpha);
+                            wrf(dcam + L.directAlpha, alpha);
+                            wrf(dcam + L.directAlphaNeg, -alpha);
                         }
                     }
                 }

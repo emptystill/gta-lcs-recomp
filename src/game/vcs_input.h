@@ -32,10 +32,14 @@ namespace vcs::input
         // CTimer: m_FrameCounter, m_UserPause / m_CodePause (bytes), m_snTimeInMilliseconds
         unsigned frameCounter = 0x004CD124u, userPause = 0x004CD2ACu, codePause = 0x004CD11Cu, gameClock = 0x004CD104u;
         bool extras = true;
-        // A simpler direct mouse camera (Liberty City Stories; 0 = off): the active camera's mode at TheCamera +
+        // A simpler direct mouse camera (Liberty City Stories; directCam0 0 = off): the active camera's mode at TheCamera +
         // directMode; when it is directFootMode or directCarMode the mouse writes the heading (directBeta and its target
         // directBetaTarget) and the pitch (directAlpha, and directAlphaNeg = -pitch), pitch kept in directAlphaMin..Max.
         // The game keeps a heading / pitch written to both of each pair.
+        // The active camera: Cams[byte at TheCamera + directActive] at TheCamera + directCam0 + i * directCamStride
+        // (directActive 0: always Cams[0]); directMode / directBeta / ... are offsets inside that CCam.
+        unsigned directCamera = 0; // TheCamera for the direct camera (its own: theCamera above gates VCS's camera code)
+        unsigned directActive = 0, directCam0 = 0, directCamStride = 0;
         unsigned directMode = 0, directFootMode = 4u, directCarMode = 18u;
         unsigned directBeta = 0, directBetaTarget = 0, directAlpha = 0, directAlphaNeg = 0;
         float directAlphaMin = -0.5f, directAlphaMax = 1.46f;
