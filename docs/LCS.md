@@ -78,26 +78,22 @@ What it took, in order (each in `src/game/lcs_overrides.cpp` with its reason, `L
 4. **A function only reached through a pointer**: 0x20CE98 (32 bytes, between two mapped functions; the log's
    `[guest-branch:missing-target] ... target=0x20ce98`, thread 1 dormant). `game/lcs/manual_functions.csv` (kept by
    make_config.py; find_missing_functions.py rewrites extra_functions.csv). Expect more of these: each is one line.
+5. **The runtime's fixed pools out of LCS's memory** (`LCS_RPC_POOLS=0` undoes; runtime change in
+   PS2RECOMP_PATCHES.md, `PS2X_RPC_POOL_BASE`): skipping the intro cutscene hung about half the time (black screen,
+   `CTimer::m_FrameCounter` stopped, the main loop alive), letting it play never did. The hang was a model converted
+   from corrupted data: guest samples in a RenderWare list walk (0x31E820) that never got back to its head, reached
+   from the model loader (0x18E4B8 / 0x18EC8C); `LCS_CHECK_LISTS` caught the list (owner 0x1F0EF5C, nodes pointing
+   past RAM) - always inside model 171's buffer. `LCS_CHECK_READS` (each streamed file compared with the disc before
+   its conversion) showed 22-56 bytes changed in it, always at the absolute address 0x1F1008C, with values of the
+   sound driver's RPC client (0x3F60C0, 1444 = its buffer size): the runtime's emulated `sceSifBindRpc` /
+   `sceSifCallRpc` keep their server structures at a fixed 0x1F10000 (RPC packets 0x1F00000, TLS 0x1F20000, boot mode
+   0x1F30000), in the middle of LCS's streaming heap (0x634140). Whether the write landed on a live part of a model
+   depended on where the model was placed - hence one run in two. Now packed at 0x6C000..0x77000 (the EE kernel's
+   area, below the runtime's heap move): 11 of 11 skips fine. Ruled out on the way: the native streaming's timing
+   (`VCS_STREAM_SYNC=1`, `VCS_STREAM_DELAY_MS`), the IOP's writes (`PS2X_TRACE_IOP_WRITES`), the VU0 natives
+   (`PS2X_VU0_NATIVE=0`), the HLE renderer (`PS2X_HLE=0`), the pad report (`PS2X_PAD_TRACE`).
 
 Open:
-
-- **Skipping the intro cutscene hangs about half the time** (2026-11-14; already so before the controls work: the
-  built-in pad mapping hangs too, 1 run in 3). Letting the cutscenes play reaches gameplay every time (4 of 4). Cross
-  pressed through the intro (at 40 / 50 / 60 s in a hidden run) -> black screen, 0 draws. What is known:
-  - the game thread is alive but `CTimer::m_FrameCounter` stops (~frame 950); interrupts (vblank 0x2D92B0, timer
-    0x368310) and the sound driver's per-frame RPCs carry on; the host thread mostly waits (the EE's cycle pacing);
-    guest samples are in 0x31E820 (a RenderWare linked-list walk, `for each in list until back at the head`, called
-    here by 0x104B48 with the no-op callback 0x1049B8 from 0x26CDF0): consistent with a list made circular without
-    its head, i.e. memory freed and reused while still linked;
-  - once (1 run in ~12) the same hang showed as `[ee] thread 1 -> dormant pc=0 ra=0x18acf4`: 0x18AC98 walks a world
-    sector's entity list (from 0x18A560 / 0x18A9D0 / 0x18AAD8, the sectors at 0x3D09F4) and calls vtable(+0x5C)+0x44
-    - an entity whose vtable has 0 there, again a freed entity still linked. `LCS_CHECK_SECTORS=1` checks those lists
-    before each walk (found nothing in 3 hung runs: that form is rarer);
-  - not the disc streaming (`streamstate`: nothing pending, no polls while hung), not the pad report (`PS2X_PAD_TRACE`:
-    byte-identical in both mappings), not a blocked thread (`eethreads`: thread 1 running; LCS has one EE thread).
-  Next: catch the freed block being reused while linked (`VCS_WATCH` / `LCS_HWBP` on the list node once the hang's
-  list is known; the cutscene's clumps / objects deleted by the skip, `CCutsceneMgr`-like), and check the recompiler's
-  delay-slot resume bug below is not involved.
 
 - **IOP modules loaded twice** at boot (`[IOP] module arena exhausted`, MCMAN falls back to HLE): LCS reboots the IOP
   with IOPRP300.IMG between two loads; the runtime's reboot does not unload the first set. Harmless so far.
@@ -142,6 +138,10 @@ car camera, the pause menu's mouse (VCS-only modules, `GameLayout::extras` off).
 - Control channel (`tools/gamectl.py`): `eethreads` (the EE kernel's threads: status, wait, pc / ra), `streamstate`
   (native streaming: reads, polls, waits, pending per channel), `padstate`, `peek` / `peekf`.
 - `PS2X_PAD_TRACE=1`: every change of the pad report; `LCS_CHECK_SECTORS=1`: the world sectors' entity lists checked.
+- `LCS_CHECK_LISTS=1`: 0x31E820's lists followed first (a list that never returns to its head logged with the guest
+  call chain; every 100,000th walk's chain too). `LCS_CHECK_READS=1`: each streamed model file compared with the disc
+  before conversion. `PS2X_TRACE_IOP_WRITES=1`: the IOP's writes into EE memory. `VCS_STREAM_SYNC=1` /
+  `VCS_STREAM_DELAY_MS=n`: native stream reads done at once / slowed (experiments).
 
 - `LCS_HWBP=<guest addr>[,<guest addr>]`: hardware write breakpoint on EE RAM in every host thread (Windows) - the
   writer's thread and RIP (`exe+0x...`; vcs.exe has no symbols for the runtime, read the code with llvm-objdump).
@@ -159,4 +159,5 @@ car camera, the pause menu's mouse (VCS-only modules, `GameLayout::extras` off).
   `LCSRecomp` (the launcher's own backups had still pointed at `VCSRecomp`), VCS docs to `docs/vcs-reference/`.
 - 2026-11-14: controls - the bindings on with LCS's addresses (`vcs::input::GameLayout`): keys, gamepad, mouse
   (as the right stick), the Driving keys (checked: W walks; F enters the car; W accelerates, A steers). Found the
-  intermittent hang when the intro cutscene is skipped (above). `tools/xglobal.py`.
+  intermittent hang when the intro cutscene is skipped. `tools/xglobal.py`.
+- 2026-11-15: the skip hang fixed (step 5 above): the runtime's RPC / TLS pools moved out of LCS's streaming memory.

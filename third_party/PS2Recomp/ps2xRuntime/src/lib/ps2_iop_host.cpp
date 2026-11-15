@@ -15,6 +15,10 @@
 #include <filesystem>
 #include <iostream>
 #include <limits>
+#include <mutex>
+#include <unordered_set>
+#include <cstdio>
+#include <cstdlib>
 #include <utility>
 
 #if !defined(_WIN32)
@@ -165,6 +169,24 @@ bool PS2IopHostAdapter::writeGuest(uint32_t address, const void *source, size_t 
     {
         uint8_t *const rdram = m_activeRdram ? m_activeRdram : m_runtime.memory().getRDRAM();
         ps2TraceGuestRangeWrite(rdram, address, static_cast<uint32_t>(size), "IopHost::writeGuest", nullptr);
+        // [gta-recomp] PS2X_TRACE_IOP_WRITES=1: the IOP's writes into EE memory (SIF DMA, RPC replies): every one of
+        // 256 bytes or more, and the first at each other address (LCS: what overwrote a model after a skipped cutscene)
+        static const bool traceWrites = [] {
+            const char *e = std::getenv("PS2X_TRACE_IOP_WRITES");
+            return e && e[0] == '1';
+        }();
+        if (traceWrites)
+        {
+            static std::mutex seenMutex;
+            static std::unordered_set<uint32_t> seen;
+            bool log = size >= 256;
+            {
+                std::lock_guard<std::mutex> lock(seenMutex);
+                log = seen.insert(address).second || log;
+            }
+            if (log)
+                std::fprintf(stderr, "[iop-write] 0x%08x +0x%zx\n", address, size);
+        }
         std::memcpy(destination, source, size);
     }
     return true;

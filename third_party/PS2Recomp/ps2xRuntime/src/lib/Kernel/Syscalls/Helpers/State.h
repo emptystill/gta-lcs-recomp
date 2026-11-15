@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 
 // Thread status
 #define THS_RUN 0x01
@@ -243,21 +244,40 @@ inline std::filesystem::path g_cdrom_cwd;
 inline std::string g_ps2_cwd_device = "host0";
 
 static constexpr uint32_t kRpcPacketSize = 64;
-static constexpr uint32_t kRpcPacketPoolBase = 0x01F00000;
-static constexpr uint32_t kRpcPacketPoolBytes = 0x00010000;
-static constexpr uint32_t kRpcPacketPoolCount = kRpcPacketPoolBytes / kRpcPacketSize;
-static constexpr uint32_t kRpcServerPoolBase = 0x01F10000;
-static constexpr uint32_t kRpcServerPoolBytes = 0x00010000;
 static constexpr uint32_t kRpcServerStride = 0x80;
-static constexpr uint32_t kRpcServerPoolCount = kRpcServerPoolBytes / kRpcServerStride;
-
-static constexpr uint32_t kTlsPoolBase = 0x01F20000;
-static constexpr uint32_t kTlsPoolBytes = 0x00010000;
 static constexpr uint32_t kTlsBlockSize = 0x100;
-static constexpr uint32_t kTlsPoolCount = kTlsPoolBytes / kTlsBlockSize;
 
-static constexpr uint32_t kBootModePoolBase = 0x01F30000;
-static constexpr uint32_t kBootModePoolBytes = 0x00001000;
+// [gta-recomp] The runtime's own guest-memory pools (SIF RPC packets and server structures, TLS blocks, boot mode
+// data) sit at fixed addresses in EE RAM: 0x1F00000..0x1F31000 by default. A game whose own memory is there gets it
+// overwritten - Liberty City Stories streams models into that range, and the RPC server structures written at each
+// bind / call corrupted a model being converted (a hang after a skipped cutscene, docs/LCS.md).
+// PS2X_RPC_POOL_BASE=<hex>: the four packed from there instead (0xB000 bytes: 256 packets, 64 servers, 64 TLS
+// blocks, 4 KB of boot mode data), somewhere the game never uses.
+struct RpcPoolLayout
+{
+    uint32_t packetBase, packetBytes, serverBase, serverBytes, tlsBase, tlsBytes, bootBase, bootBytes;
+};
+inline const RpcPoolLayout &rpcPools()
+{
+    static const RpcPoolLayout layout = []
+    {
+        if (const char *e = std::getenv("PS2X_RPC_POOL_BASE"); e && *e)
+        {
+            const uint32_t b = static_cast<uint32_t>(std::strtoul(e, nullptr, 16));
+            return RpcPoolLayout{b, 0x4000, b + 0x4000, 0x2000, b + 0x6000, 0x4000, b + 0xA000, 0x1000};
+        }
+        return RpcPoolLayout{0x01F00000, 0x10000, 0x01F10000, 0x10000, 0x01F20000, 0x10000, 0x01F30000, 0x1000};
+    }();
+    return layout;
+}
+#define kRpcPacketPoolBase (rpcPools().packetBase)
+#define kRpcPacketPoolCount (rpcPools().packetBytes / kRpcPacketSize)
+#define kRpcServerPoolBase (rpcPools().serverBase)
+#define kRpcServerPoolCount (rpcPools().serverBytes / kRpcServerStride)
+#define kTlsPoolBase (rpcPools().tlsBase)
+#define kTlsPoolCount (rpcPools().tlsBytes / kTlsBlockSize)
+#define kBootModePoolBase (rpcPools().bootBase)
+#define kBootModePoolBytes (rpcPools().bootBytes)
 
 static constexpr uint32_t kSifRpcModeNowait = 0x01;
 static constexpr uint32_t kSifRpcModeNoWbDc = 0x02;

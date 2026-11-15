@@ -23,6 +23,9 @@ namespace vcs
     };
     bool installStreamHooksAt(PS2Runtime &runtime, const StreamLayout &layout);
 
+    // The last read whose destination was `dest` (debugging: LCS_CHECK_READS): false if none.
+    bool lastReadInto(unsigned dest, unsigned &lsn, unsigned &bytes);
+
     // Milestone 6 step 3: with streaming and sound both native the emulated IOP is switched off - no IRX module is
     // loaded or run - unless PS2X_IOP=1; PS2X_IOP=0 switches it off regardless.
     void retireIop(bool nativeComplete);

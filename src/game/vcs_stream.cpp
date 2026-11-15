@@ -17,6 +17,8 @@
 #include "runtime/ps2_control.h"
 
 #include <string>
+#include <unordered_map>
+#include <utility>
 
 #include <algorithm>
 #include <atomic>
@@ -79,6 +81,13 @@ namespace vcs
                     r.queue.pop_front();
                 }
                 const auto start = ps2x::hostNow();
+                // VCS_STREAM_DELAY_MS=<n>: each read takes at least this long (an experiment: a drive's timing)
+                static const int delayMs = [] {
+                    const char *e = std::getenv("VCS_STREAM_DELAY_MS");
+                    return e ? std::atoi(e) : 0;
+                }();
+                if (delayMs > 0)
+                    std::this_thread::sleep_for(std::chrono::milliseconds(delayMs));
                 IPS2DiscImage *disc = ps2_disc::image();
                 const uint32_t dest = request.dest & 0x01FFFFFFu;
                 const uint32_t bytes = std::min<uint32_t>(request.bytes, 0x02000000u - dest);
@@ -113,6 +122,13 @@ namespace vcs
         // "streamstate" (control channel): calls so far and what the last poll asked about
         std::atomic<uint64_t> g_polls{0}, g_pollsBusy{0}, g_waits{0}, g_heads{0}, g_readCalls{0};
         std::atomic<uint32_t> g_lastPollChannel{0}, g_lastPollRa{0};
+        std::mutex g_lastReadsMutex;
+        std::unordered_map<uint32_t, std::pair<uint32_t, uint32_t>> g_lastReads; // dest -> (lsn, bytes)
+        void noteRead(uint32_t dest, uint32_t lsn, uint32_t bytes)
+        {
+            std::lock_guard<std::mutex> lock(g_lastReadsMutex);
+            g_lastReads[dest & 0x01FFFFFFu] = {lsn, bytes};
+        }
 
         // FUN_00221818(channel, dest, lsn, size)
         PS2_GUEST_CC void streamRead(uint8_t *rdram, R5900Context *ctx, PS2Runtime *)
@@ -125,6 +141,26 @@ namespace vcs
             if (trace)
                 std::fprintf(stderr, "[stream] read ch=%u dest=0x%08x lsn=0x%x bytes=%u ra=0x%x\n", request.channel,
                              request.dest, request.lsn, request.bytes, GPR_U32(ctx, 31));
+            // VCS_STREAM_SYNC=1: the read done here, on the game thread, before the call returns (an experiment: the
+            // data can never arrive later than the game expects)
+            static const bool sync = [] {
+                const char *e = std::getenv("VCS_STREAM_SYNC");
+                return e && e[0] == '1';
+            }();
+            if (sync)
+            {
+                IPS2DiscImage *disc = ps2_disc::image();
+                const uint32_t dest = request.dest & 0x01FFFFFFu;
+                const uint32_t bytes = std::min<uint32_t>(request.bytes, 0x02000000u - dest);
+                if (!disc || !disc->readBytes(static_cast<uint64_t>(request.lsn) * 2048u, bytes, rdram + dest))
+                    std::fprintf(stderr, "[stream] read of %u bytes at LSN 0x%x failed\n", bytes, request.lsn);
+                g_readCalls.fetch_add(1, std::memory_order_relaxed);
+                noteRead(request.dest, request.lsn, request.bytes);
+                r.head.store(request.lsn + (request.bytes + 2047u) / 2048u, std::memory_order_relaxed);
+                SET_GPR_U64(ctx, 2, r.readAccepted);
+                ctx->pc = GPR_U32(ctx, 31);
+                return;
+            }
             {
                 std::lock_guard<std::mutex> lock(r.mutex);
                 if (!r.started)
@@ -137,6 +173,7 @@ namespace vcs
                 r.queue.push_back(request);
             }
             g_readCalls.fetch_add(1, std::memory_order_relaxed);
+            noteRead(request.dest, request.lsn, request.bytes);
             r.head.store(request.lsn + (request.bytes + 2047u) / 2048u, std::memory_order_relaxed);
             r.cv.notify_one();
             report();
@@ -232,6 +269,17 @@ namespace vcs
             runtime.replaceFunction(layout.wait, &streamWait);
         if (layout.head)
             runtime.replaceFunction(layout.head, &streamHead);
+        return true;
+    }
+
+    bool lastReadInto(unsigned dest, unsigned &lsn, unsigned &bytes)
+    {
+        std::lock_guard<std::mutex> lock(g_lastReadsMutex);
+        auto it = g_lastReads.find(dest & 0x01FFFFFFu);
+        if (it == g_lastReads.end())
+            return false;
+        lsn = it->second.first;
+        bytes = it->second.second;
         return true;
     }
 

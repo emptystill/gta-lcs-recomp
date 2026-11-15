@@ -4,6 +4,10 @@
 #include "game_overrides.h"
 #include "game/vcs_input.h"
 #include "game/vcs_stream.h"
+#include "runtime/ps2_disc_image.h"
+
+#include <algorithm>
+#include <vector>
 #include "ps2_runtime.h"
 #include "ps2_runtime_macros.h"
 
@@ -112,6 +116,109 @@ namespace
             node = next;
         }
         g_origSectorWalk(rdram, ctx, runtime);
+    }
+
+    // LCS_CHECK_LISTS=1: 0x31E820(owner, callback, data) walks the linked list at owner+8 (node = next pointer; the
+    // item is node - 0x1C) until it is back at the head. Before each walk the list is followed from the host: one that
+    // never comes back to its head (the hang after a skipped cutscene) is logged with its nodes and the caller.
+    PS2Runtime::RecompiledFunction g_origListWalk = nullptr;
+    PS2_GUEST_CC void checkListWalk(uint8_t *rdram, R5900Context *ctx, PS2Runtime *runtime)
+    {
+        const uint32_t owner = GPR_U32(ctx, 4), head = owner + 8;
+        uint32_t node = ld32(rdram, head);
+        int n = 0;
+        for (; node != head && n < 20000; ++n)
+        {
+            if (node < 0x100000u || node >= 0x2000000u)
+                break;
+            node = ld32(rdram, node);
+        }
+        if (n >= 20000 || (node != head && (node < 0x100000u || node >= 0x2000000u)))
+        {
+            static int logged = 0;
+            if (logged++ < 20)
+            {
+                std::fprintf(stderr, "[lcs] list walk 0x31E820: owner 0x%x never back at its head (ra 0x%x, callback 0x%x, "
+                                     "stopped at 0x%x after %d) - nodes:", owner, GPR_U32(ctx, 31), GPR_U32(ctx, 5), node, n);
+                uint32_t p = ld32(rdram, head);
+                for (int i = 0; i < 12 && p >= 0x100000u && p < 0x2000000u; ++i, p = ld32(rdram, p))
+                    std::fprintf(stderr, " %x(prev %x)", p, ld32(rdram, p + 4));
+                // the guest stack's words that look like return addresses: the call chain
+                std::fprintf(stderr, " | stack code words:");
+                const uint32_t sp = GPR_U32(ctx, 29);
+                for (uint32_t w = 0; w < 0x400; w += 4)
+                {
+                    const uint32_t v = ld32(rdram, sp + w);
+                    if (v >= 0x100000u && v < 0x3D9000u && (v & 3) == 0)
+                        std::fprintf(stderr, " sp+%x=%x", w, v);
+                }
+                std::fprintf(stderr, " | regs s0-s7:");
+                for (int r = 16; r <= 23; ++r)
+                    std::fprintf(stderr, " %x", GPR_U32(ctx, r));
+                std::fprintf(stderr, "\n");
+            }
+        }
+        // every 100000th call, the guest's call chain (the stack's code words) and the frame counter: in a hang the
+        // looping caller shows up again and again
+        static uint64_t calls = 0;
+        if (++calls % 100000 == 0)
+        {
+            std::fprintf(stderr, "[lcs] walk #%llu frame %u owner 0x%x ra 0x%x chain:", static_cast<unsigned long long>(calls),
+                         ld32(rdram, 0x003D9B6Cu), owner, GPR_U32(ctx, 31));
+            const uint32_t sp = GPR_U32(ctx, 29);
+            for (uint32_t w = 0; w < 0x300; w += 4)
+            {
+                const uint32_t v = ld32(rdram, sp + w);
+                if (v >= 0x100000u && v < 0x3D9000u && (v & 3) == 0)
+                    std::fprintf(stderr, " %x", v);
+            }
+            std::fprintf(stderr, "\n");
+        }
+        g_origListWalk(rdram, ctx, runtime);
+    }
+
+    // LCS_CHECK_READS=1: before a streamed model file is converted in place (0x18E4B8(buffer, model)), the buffer is
+    // compared with the disc read that filled it: a difference means something wrote over it in between.
+    PS2Runtime::RecompiledFunction g_origConvert = nullptr;
+    PS2_GUEST_CC void checkConvert(uint8_t *rdram, R5900Context *ctx, PS2Runtime *runtime)
+    {
+        const uint32_t buffer = GPR_U32(ctx, 4) & 0x01FFFFFFu;
+        unsigned lsn = 0, bytes = 0;
+        static uint64_t checked = 0, bad = 0;
+        if (vcs::lastReadInto(buffer, lsn, bytes) && bytes && buffer + bytes <= 0x02000000u)
+        {
+            std::vector<uint8_t> disc(bytes);
+            IPS2DiscImage *image = ps2_disc::image();
+            if (image && image->readBytes(static_cast<uint64_t>(lsn) * 2048u, bytes, disc.data()))
+            {
+                ++checked;
+                uint32_t first = bytes, count = 0;
+                for (uint32_t i = 0; i < bytes; ++i)
+                    if (disc[i] != rdram[buffer + i])
+                    {
+                        first = std::min(first, i);
+                        ++count;
+                    }
+                if ((count && bad++ < 30) || GPR_U32(ctx, 5) == 171u)
+                {
+                    std::fprintf(stderr, "[lcs] model %u at 0x%x (LSN 0x%x, %u bytes): %u bytes differ from the disc, the first at"
+                                         " +0x%x (ra 0x%x) frame %u:", GPR_U32(ctx, 5), buffer, lsn, bytes, count, first,
+                                 GPR_U32(ctx, 31), ld32(rdram, 0x003D9B6Cu));
+                    int shown = 0;
+                    for (uint32_t i = first; i < bytes && shown < 24; ++i)
+                        if (disc[i] != rdram[buffer + i])
+                        {
+                            std::fprintf(stderr, " +%x:%02x->%02x", i, disc[i], rdram[buffer + i]);
+                            ++shown;
+                        }
+                    std::fprintf(stderr, "\n");
+                }
+            }
+        }
+        if ((checked & 1023) == 1)
+            std::fprintf(stderr, "[lcs] read check: %llu model files checked, %llu differed\n",
+                         static_cast<unsigned long long>(checked), static_cast<unsigned long long>(bad));
+        g_origConvert(rdram, ctx, runtime);
     }
 
     PS2_GUEST_CC void traceOom(uint8_t *rdram, R5900Context *ctx, PS2Runtime *runtime)
@@ -234,11 +341,26 @@ namespace
     // LCS_HWBP (the writer was the runtime, invisible to VCS_WATCH). The EE kernel's area below the callback stacks
     // (0x80000) is never the game's: 0x40000..0x78000. LCS_RUNTIME_HEAP=0 keeps the old placement.
     constexpr uint32_t kRuntimeHeapBase = 0x00040000u;
-    constexpr uint32_t kRuntimeHeapLimit = 0x00078000u;
+    constexpr uint32_t kRuntimeHeapLimit = 0x0006C000u;
+    // The runtime's fixed pools (SIF RPC packets / servers, TLS, boot mode: 0x1F00000.. by default) are in LCS's
+    // streaming memory: the RPC server structures overwrote a model being converted - the hang after a skipped
+    // cutscene (docs/LCS.md). Moved next to the runtime's heap: 0x6C000..0x77000 (PS2X_RPC_POOL_BASE).
+    // LCS_RPC_POOLS=0 keeps them where they were.
+    constexpr const char *kRpcPoolBase = "6C000";
 
     void applyLcs(PS2Runtime &runtime)
     {
         std::fprintf(stderr, "[lcs] Liberty City Stories overrides\n");
+        if (!envOff("LCS_RPC_POOLS"))
+        {
+#if defined(_WIN32)
+            _putenv_s("PS2X_RPC_POOL_BASE", kRpcPoolBase);
+#else
+            setenv("PS2X_RPC_POOL_BASE", kRpcPoolBase, 1);
+#endif
+            std::fprintf(stderr, "[lcs] the runtime's RPC / TLS pools at 0x%s, not in the game's streaming memory"
+                                 " (LCS_RPC_POOLS=0: as before)\n", kRpcPoolBase);
+        }
         if (!envOff("LCS_RUNTIME_HEAP"))
         {
 #if defined(_WIN32)
@@ -288,6 +410,18 @@ namespace
             input.userPause = input.codePause = 0;
             input.extras = false;
             vcs::input::setGameLayout(input);
+        }
+        if (envOn("LCS_CHECK_READS"))
+        {
+            g_origConvert = runtime.lookupFunction(0x0018E4B8u);
+            if (g_origConvert && runtime.replaceFunction(0x0018E4B8u, &checkConvert))
+                std::fprintf(stderr, "[lcs] checking streamed model files against the disc (LCS_CHECK_READS)\n");
+        }
+        if (envOn("LCS_CHECK_LISTS"))
+        {
+            g_origListWalk = runtime.lookupFunction(0x0031E820u);
+            if (g_origListWalk && runtime.replaceFunction(0x0031E820u, &checkListWalk))
+                std::fprintf(stderr, "[lcs] checking 0x31E820's lists (LCS_CHECK_LISTS)\n");
         }
         if (envOn("LCS_CHECK_SECTORS"))
         {

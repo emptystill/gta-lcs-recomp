@@ -276,6 +276,10 @@ itself ("GTA Liberty City Stories Launcher vX"), so the file has no heading. Fol
   game streams the same model in at another address, so such keys never stop coming. The RSL recordings were one
   (bounded since 2026-11-10, `VCS_RSL_RECORDINGS_MB`); `VCS_RSL_WORLD_LOG=1` prints what they hold, `tools/memcheck.py`
   is the check (PERFORMANCE.md 31).
+- Game data corrupted at the same absolute address in every run, or a hang only some runs show (a model, a list,
+  an entity): the runtime keeps structures of its own at fixed guest addresses - its heap (`guestMalloc`), the SIF
+  RPC / TLS pools (0x1F00000..0x1F31000 by default). LCS moves both (`LCS_RUNTIME_HEAP`, `LCS_RPC_POOLS`; docs/LCS.md
+  steps 2 and 5). `LCS_HWBP` catches a host writer; `LCS_CHECK_READS` compares streamed files with the disc.
 - First things to grep in a log: `[ee] thread N -> dormant`, `[guest-branch:unlisted-resume]`.
 
 ## Working style for long autonomous runs
