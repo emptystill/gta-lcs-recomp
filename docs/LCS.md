@@ -222,5 +222,10 @@ the newest, it stops at the first (GS stage time in `bindTexture` 19.5% -> 3.9%)
   intermittent hang when the intro cutscene is skipped. `tools/xglobal.py`.
 - 2026-11-15: the skip hang fixed (step 5 above): the runtime's RPC / TLS pools moved out of LCS's streaming memory.
 - 2026-11-15: full speed (60 vblanks / s, was 23): ThinLTO, textures keyed by content, VU1 microcode compiled.
+- 2026-11-15: a hang while driving to Chinatown (the user's report): `[guest-branch:missing-target] ... JAL
+  target=0x1833c0`, thread 1 dormant - a function only called directly (from 0x17ED2C) that Ghidra left out. Every
+  `jal` target and every code pointer in the executable checked against the map: that was the only one outside a
+  mapped function (0x200C00's caller is data; 0x151040 / 0x3601BC are an epilogue and alignment). Added to
+  `game/lcs/manual_functions.csv`.
 - 2026-11-15: frame rate above 30: VCS's frame-rate module at LCS's addresses, the step floor and two dead-branch
   patches; 60 / 144 checked against 30. Uncapped ~130 fps.
