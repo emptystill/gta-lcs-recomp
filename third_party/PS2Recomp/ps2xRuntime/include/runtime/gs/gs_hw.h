@@ -112,10 +112,6 @@ void gsHwSetReducedPostFx(bool on);
 // [gta-recomp] The motion blur (the previous picture blended into the frame, nativeFrameCopy): 0 off, 1 reduced above
 // 30 fps / 1x (PS2X_HW_BLUR_STRENGTH, default 0.75 - before this setting), 2 the PS2's strength everywhere. Any thread.
 void gsHwSetMotionBlur(int mode);
-// [gta-recomp] Texture upscaling: game textures made k (2 or 4; 1 off) times larger at creation by an edge-aware hybrid
-// filter (gs_hw.cpp upscale::), for the hardware-sampled path - so it needs anisotropic filtering (GSHwOptions::
-// anisotropy > 1); the other paths read the larger texture at the original texel positions. Before rendering starts.
-void gsHwSetTextureUpscale(int k);
 // [gta-recomp] Frame pacing between the game and the window. Off (the PS2's timing): the game may run 3 frames ahead and
 // each host frame renders every queued frame, showing the last - game time keeps its pace when the GPU falls behind.
 // On (frame-rate independent timing, where game time follows the clock anyway): one frame queued, one rendered and

@@ -675,25 +675,6 @@ namespace
         s.onChange = [](int v) { setEnv("PS2X_HW_ANISO", std::to_string(v)); };
         settings::add(s);
 
-        // Texture upscaling: the textures made larger when they are created (gs_hw.cpp upscale::, an edge-aware hybrid of
-        // xBR's corner rule and bilinear), so a texel is no longer a block at 1440p. Through the hardware-sampled path:
-        // needs anisotropic filtering.
-        s = {};
-        s.key = "display.tex_upscale";
-        s.page = "Graphics";
-        s.section = "Image quality";
-        s.label = "Texture upscaling";
-        s.help = "Makes the game's small textures larger when they load, keeping edges and diagonals sharp and smoothing "
-                 "the rest, so they no longer show as blocks at a high resolution. Needs Texture filtering set to "
-                 "Anisotropic. 4x costs more memory and loading time. Off is the original.";
-        s.type = Type::Choice;
-        s.choices = {{"Off (original)", 1}, {"2x", 2}, {"4x", 4}};
-        s.defaultValue = 1;
-        s.apply = Apply::Restart;
-        s.env = "LCS_TEX_UPSCALE";
-        s.onChange = [](int v) { gsHwSetTextureUpscale(v); };
-        settings::add(s);
-
         // Liberty City Stories' textures are tiny (a PSP game): at any internal resolution the picture stays soft. A
         // contrast-adaptive sharpening pass at the end (render/shaders/present.hlsl) brings out what detail they have.
         s = {};

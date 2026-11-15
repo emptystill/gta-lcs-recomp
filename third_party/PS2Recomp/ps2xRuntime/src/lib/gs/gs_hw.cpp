@@ -53,7 +53,6 @@ namespace
     std::atomic<float> g_aspectWidening{1.0f};          // [gta-recomp] gsHwSetAspectWidening
     std::atomic<bool> g_reducedPostFx{false};           // [gta-recomp] gsHwSetReducedPostFx
     std::atomic<int> g_motionBlur{1};                    // [gta-recomp] gsHwSetMotionBlur
-    std::atomic<int> g_texUpscale{1};                    // [gta-recomp] gsHwSetTextureUpscale
     std::atomic<uint32_t> g_frameW{0}, g_frameH{0};     // [gta-recomp] gsHwSetFrameSize
     struct TargetRole                                   // [gta-recomp] gsHwSetTargetRole
     {
@@ -160,7 +159,6 @@ void gsHwSetFrameSize(uint32_t width, uint32_t height)
 void gsHwSetAspectWidening(float widening) { g_aspectWidening.store(widening, std::memory_order_relaxed); }
 void gsHwSetReducedPostFx(bool on) { g_reducedPostFx.store(on, std::memory_order_relaxed); }
 void gsHwSetMotionBlur(int mode) { g_motionBlur.store(mode, std::memory_order_relaxed); }
-void gsHwSetTextureUpscale(int k) { g_texUpscale.store(k == 2 || k == 4 ? k : 1, std::memory_order_relaxed); }
 
 // [gta-recomp] gsHwShownInputNs (gs_hw.h)
 static int64_t steadyNs()
@@ -408,94 +406,6 @@ namespace
             src = dst;
             dst += size_t(dw) * dh;
             sw = dw, sh = dh;
-        }
-    }
-
-    // [gta-recomp] Texture upscaling (gsHwSetTextureUpscale): a game texture made k times larger when it is created, for
-    // the hardware-sampled path (anisotropic filtering), so a low-resolution texture magnified on a high-resolution
-    // screen does not show its texels as blocks. Each 2x step is a hybrid: where the xBR edge rule finds an edge through
-    // a corner of the texel (the corner's direction clearly weaker than the cross direction), the corner takes the mean
-    // of the texel and the nearer of its two neighbours - a sharp diagonal; elsewhere the new texel is the bilinear mean
-    // at its own position - smooth gradients, no "painted" look. Wrapping is repeat (textures tile).
-    namespace upscale
-    {
-        inline int ch(uint32_t c, int s) { return static_cast<int>((c >> s) & 0xFFu); }
-
-        // xBR's colour distance: luma weighted over chroma, alpha too (cut-out edges)
-        inline int dist(uint32_t a, uint32_t b)
-        {
-            const int dr = ch(a, 0) - ch(b, 0), dg = ch(a, 8) - ch(b, 8), db = ch(a, 16) - ch(b, 16), da = ch(a, 24) - ch(b, 24);
-            const int y = std::abs(dr * 299 + dg * 587 + db * 114) / 1000;
-            const int u = std::abs(dr * -169 + dg * -331 + db * 500) / 1000;
-            const int v = std::abs(dr * 500 + dg * -419 + db * -81) / 1000;
-            return 48 * y + 7 * u + 6 * v + 32 * std::abs(da);
-        }
-
-        inline uint32_t mix(uint32_t a, uint32_t b, int wa, int wb) // weights out of wa + wb
-        {
-            uint32_t out = 0;
-            for (int s = 0; s < 32; s += 8)
-                out |= static_cast<uint32_t>((ch(a, s) * wa + ch(b, s) * wb + (wa + wb) / 2) / (wa + wb)) << s;
-            return out;
-        }
-
-        inline uint32_t bilinear4(uint32_t c00, uint32_t c10, uint32_t c01, uint32_t c11, int fx, int fy) // f out of 4
-        {
-            uint32_t out = 0;
-            for (int s = 0; s < 32; s += 8)
-            {
-                const int top = ch(c00, s) * (4 - fx) + ch(c10, s) * fx, bot = ch(c01, s) * (4 - fx) + ch(c11, s) * fx;
-                out |= static_cast<uint32_t>((top * (4 - fy) + bot * fy + 8) / 16) << s;
-            }
-            return out;
-        }
-
-        void step2x(const std::vector<uint32_t> &src, uint32_t w, uint32_t h, std::vector<uint32_t> &dst)
-        {
-            dst.assign(size_t(w) * h * 4u, 0u);
-            auto at = [&](int x, int y) {
-                const uint32_t wx = static_cast<uint32_t>((x % static_cast<int>(w) + static_cast<int>(w)) % static_cast<int>(w));
-                const uint32_t wy = static_cast<uint32_t>((y % static_cast<int>(h) + static_cast<int>(h)) % static_cast<int>(h));
-                return src[size_t(wy) * w + wx];
-            };
-            for (int y = 0; y < static_cast<int>(h); ++y)
-                for (int x = 0; x < static_cast<int>(w); ++x)
-                {
-                    const uint32_t E = at(x, y);
-                    for (int q = 0; q < 4; ++q)
-                    {
-                        const int sx = (q & 1) ? 1 : -1, sy = (q & 2) ? 1 : -1;
-                        auto n = [&](int ox, int oy) { return at(x + ox * sx, y + oy * sy); };
-                        const uint32_t F = n(1, 0), H = n(0, 1), I = n(1, 1), D = n(-1, 0), B = n(0, -1);
-                        const uint32_t C = n(1, -1), G = n(-1, 1), F4 = n(2, 0), I4 = n(2, 1), H5 = n(0, 2), I5 = n(1, 2);
-                        // the new texel's own position: a quarter texel from E's centre toward the corner
-                        uint32_t out = bilinear4(E, F, H, I, 1, 1);
-                        const int e = dist(E, C) + dist(E, G) + dist(I, F4) + dist(I, H5) + 4 * dist(H, F);
-                        const int i = dist(H, D) + dist(H, I5) + dist(F, I4) + dist(F, B) + 4 * dist(E, I);
-                        if (e < i && dist(E, F) > 0 && dist(E, H) > 0)
-                        {
-                            const uint32_t px = dist(E, F) <= dist(E, H) ? F : H;
-                            out = mix(E, px, 1, 1);
-                        }
-                        else if (e > i) // an edge along E-I: keep E's side crisp
-                            out = mix(E, out, 3, 1);
-                        const uint32_t ox = static_cast<uint32_t>(2 * x + ((q & 1) ? 1 : 0));
-                        const uint32_t oy = static_cast<uint32_t>(2 * y + ((q & 2) ? 1 : 0));
-                        dst[size_t(oy) * (w * 2u) + ox] = out;
-                    }
-                }
-        }
-
-        // k = 2 or 4 (other values: unchanged); w, h updated
-        void apply(std::vector<uint32_t> &pixels, uint32_t &w, uint32_t &h, uint32_t k)
-        {
-            std::vector<uint32_t> tmp;
-            for (uint32_t f = 1; f < k; f *= 2)
-            {
-                step2x(pixels, w, h, tmp);
-                pixels.swap(tmp);
-                w *= 2u, h *= 2u;
-            }
         }
     }
 
@@ -2624,10 +2534,6 @@ namespace
             c.tmeTfxTccFst[2] = s.tcc;
             c.tmeTfxTccFst[3] = s.fst;
             c.linearIipFgeAte[0] = s.linear;
-            // [gta-recomp] an upscaled game texture (gsHwSetTextureUpscale): its scale for the texel reads (gs_draw.hlsl
-            // fetchTexel), which address the original texels
-            if (s.tme && !s.texIsRt && tex && s.tw && tex->desc().width > s.tw)
-                c.filterDest[2] = static_cast<float>(tex->desc().width / s.tw);
             // [gta-recomp] anisotropic filtering (GSHwOptions::anisotropy): a bilinear-filtered game texture with plain
             // repeat / clamp wrapping is sampled by the hardware - trilinear over a mip chain, anisotropic - instead of
             // the GS's own bilinear; region wraps, render targets and nearest filtering keep the exact GS path
@@ -5158,12 +5064,6 @@ namespace
                 const char *e = std::getenv("PS2X_HW_CPU_MIPS");
                 return !(e && *e == '0');
             }();
-            { // [gta-recomp] texture upscaling (gsHwSetTextureUpscale): only with the hardware-sampled path (anisotropic)
-                const uint32_t k = static_cast<uint32_t>(g_texUpscale.load(std::memory_order_relaxed));
-                if (k > 1u && m_anisotropy > 1u && tc.pixels.size() == size_t(tc.w) * tc.h && tc.w && tc.h && tc.w * k <= 2048u &&
-                    tc.h * k <= 2048u)
-                    upscale::apply(tc.pixels, tc.w, tc.h, k);
-            }
             const bool mipChain = m_anisotropy > 1u && cpuMips && tc.w <= 4096u && tc.h <= 4096u &&
                                   tc.pixels.size() == size_t(tc.w) * tc.h;
             if (!makeTextureEarly(tc, mipChain) && mipChain)
