@@ -1,0 +1,239 @@
+# The launcher (docs/LAUNCHER.md): built and self-tested on every change to it or the tools it runs, on Windows, on
+# Linux (Vulkan through lavapipe, with the validation layer: any message fails the job) and on macOS (Apple Silicon). On a tag v*, each platform
+# makes its release file - the Windows zip (tools/release.py: source, launcher, embeddable Python, the libraries) and
+# the Linux AppImage (release.py --platform linux) - no game code, which only ever exists on a player's PC - and
+# `publish` puts both on one GitHub release, so the two always ship together.
+name: launcher
+
+on:
+  push:
+    branches: [main]
+    paths: ["launcher/**", "tools/**", "src/disc/**", "src/util/sha1.h", ".github/workflows/launcher.yml"]
+    tags: ["v*"]
+  pull_request:
+    paths: ["launcher/**", "tools/**", "src/disc/**", "src/util/sha1.h", ".github/workflows/launcher.yml"]
+  # a manual run builds every platform, or the ones named (gh workflow run launcher.yml -f platforms=macos): each
+  # makes its release file as an artifact for testing; only a tag publishes
+  workflow_dispatch:
+    inputs:
+      platforms:
+        description: "Platforms to build: all, or any of linux windows macos"
+        default: all
+
+permissions:
+  contents: write
+
+jobs:
+  # Ubuntu 22.04 on purpose: the AppImage's launcher needs the glibc of the system it was built on, and 22.04's (2.35)
+  # makes it run on Ubuntu 22.04, Debian 12 and everything newer (tools/release.py refuses a newer one)
+  linux:
+    if: github.event_name != 'workflow_dispatch' || inputs.platforms == 'all' || contains(inputs.platforms, 'linux')
+    runs-on: ubuntu-22.04
+    env:
+      WAYLAND_PROTOCOLS: "1.45"
+      WAYLAND_PROTOCOLS_SHA256: 4d2b2a9e3e099d017dc8107bf1c334d27bb87d9e4aff19a0c8d856d17cd41ef0
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # docs/LINUX.md's packages for the launcher (any clang: 22.04's 14); mesa-vulkan-drivers brings lavapipe (no GPU
+      # on the runner); git for tools/deps.py
+      - name: Packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang cmake ninja-build pkg-config glslang-tools git \
+            libvulkan-dev libfreetype-dev libfontconfig-dev libx11-dev libxcursor-dev libxrandr-dev libwayland-dev \
+            libxkbcommon-dev libdbus-1-dev mesa-vulkan-drivers vulkan-validationlayers fonts-dejavu-core
+
+      # 22.04's wayland-protocols (1.25) lacks fractional-scale and cursor-shape: the release's, pinned
+      - name: wayland-protocols ${{ env.WAYLAND_PROTOCOLS }}
+        run: |
+          cd "$RUNNER_TEMP"
+          curl -sSfL -o wp.tar.xz "https://gitlab.freedesktop.org/wayland/wayland-protocols/-/releases/$WAYLAND_PROTOCOLS/downloads/wayland-protocols-$WAYLAND_PROTOCOLS.tar.xz"
+          echo "$WAYLAND_PROTOCOLS_SHA256  wp.tar.xz" | sha256sum -c -
+          tar xf wp.tar.xz
+          echo "VCS_WAYLAND_PROTOCOLS_DIR=$RUNNER_TEMP/wayland-protocols-$WAYLAND_PROTOCOLS" >> "$GITHUB_ENV"
+
+      - name: Build the launcher
+        run: python3 tools/build.py --launcher
+
+      - name: Self-test
+        run: |
+          ./VCSLauncher --self-test --out "$RUNNER_TEMP/selftest.txt"; code=$?
+          cat "$RUNNER_TEMP/selftest.txt"
+          exit $code
+
+      # offscreen (no display on the runner), validated: a [vulkan] line is a failure
+      - name: Screenshots
+        env:
+          VCS_LAUNCHER_VK_DEBUG: "1"
+        run: |
+          mkdir -p "$RUNNER_TEMP/shots"
+          for screen in home gallery setup:disc setup:tools sheet:settings; do
+            ./VCSLauncher --screenshot "$RUNNER_TEMP/shots/${screen/:/-}.png" --screen "$screen" 2>&1 | tee -a "$RUNNER_TEMP/shots/log.txt"
+          done
+          if grep -q '^\[vulkan\]' "$RUNNER_TEMP/shots/log.txt"; then echo "validation messages above"; exit 1; fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: launcher-linux-screenshots
+          path: ${{ runner.temp }}/shots
+
+      # the AppImage, self-tested as a player starts it (extract-and-run: no FUSE on the runner). A manual run (Run
+      # workflow) makes it too, as an artifact to try before tagging: only a tag publishes
+      - name: Release AppImage
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: python3 tools/release.py --platform linux --ref ${{ github.ref_name }} --launcher VCSLauncher
+
+      - uses: actions/upload-artifact@v4
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        with:
+          name: release-linux
+          path: |
+            build/dist/*.AppImage
+            build/dist/*.AppImage.sha256
+
+  windows:
+    if: github.event_name != 'workflow_dispatch' || inputs.platforms == 'all' || contains(inputs.platforms, 'windows')
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      # llvm-mingw (the compiler; CMake / Ninja when the runner's are too old), pinned in tools/toolchain.py and
+      # downloaded by the build: kept between runs
+      - uses: actions/cache@v4
+        with:
+          path: build/build-tools
+          key: build-tools-windows-${{ hashFiles('tools/toolchain.py') }}
+
+      - name: Build the launcher
+        run: python tools/build.py --launcher
+
+      # its report outside the checkout: release.py refuses a working tree with untracked files
+      - name: Self-test
+        shell: pwsh
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP 'selftest.txt'
+          $p = Start-Process -FilePath .\VCSLauncher.exe -ArgumentList '--self-test','--out',$out -Wait -PassThru
+          Get-Content $out
+          if ($p.ExitCode -ne 0) { exit 1 }
+
+      # pwsh: `cmd || echo` leaves $LASTEXITCODE at cmd's 1 (echo is a cmdlet), and the runner exits with it
+      - name: Tool checks
+        shell: pwsh
+        run: |
+          python tools/doctor.py
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          python tools/deps.py list
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          python tools/recompile.py --check
+          if ($LASTEXITCODE -ne 0) { "no generated code here (expected)" }
+          exit 0
+
+      - name: Release zip
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: python tools/release.py --ref ${{ github.ref_name }} --launcher VCSLauncher.exe
+
+      - uses: actions/upload-artifact@v4
+        if: startsWith(github.ref, 'refs/tags/v')
+        with:
+          name: release-windows
+          path: |
+            build/dist/*.zip
+            build/dist/*.zip.sha256
+
+  # macOS on Apple Silicon (docs/MACOS.md): VCSLauncher.app with Apple's clang, Metal and Core Text; its shader through
+  # glslang + SPIRV-Cross built from pinned sources (tools/shader_tools.py, cached). A virtual Mac may have no Metal
+  # device: the self-test then reports the renderer as skipped (VCS_SELFTEST_NO_GPU) instead of failing.
+  macos:
+    if: github.event_name != 'workflow_dispatch' || inputs.platforms == 'all' || contains(inputs.platforms, 'macos')
+    runs-on: macos-15
+    env:
+      VCS_SELFTEST_NO_GPU: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/cache@v4
+        with:
+          path: build/build-tools
+          key: build-tools-macos-${{ hashFiles('tools/toolchain.py', 'tools/shader_tools/CMakeLists.txt') }}
+
+      - name: Build the launcher
+        run: python3 tools/build.py --launcher
+
+      - name: Self-test
+        run: |
+          ./VCSLauncher.app/Contents/MacOS/VCSLauncher --self-test --out "$RUNNER_TEMP/selftest.txt"; code=$?
+          cat "$RUNNER_TEMP/selftest.txt"
+          exit $code
+
+      - name: Tool checks
+        run: |
+          python3 tools/doctor.py || true
+          python3 tools/deps.py list --platform macos
+          /usr/bin/python3 -I tools/doctor.py --json > /dev/null
+
+      - name: Screenshots
+        continue-on-error: true # no Metal device on some virtual Macs
+        run: |
+          mkdir -p "$RUNNER_TEMP/shots"
+          for screen in home gallery setup:disc setup:tools sheet:settings; do
+            ./VCSLauncher.app/Contents/MacOS/VCSLauncher --screenshot "$RUNNER_TEMP/shots/${screen/:/-}.png" --screen "$screen"
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: launcher-macos-screenshots
+          path: ${{ runner.temp }}/shots
+          if-no-files-found: ignore
+
+      # the disk image (the app next to an Applications link), self-tested as a player starts it. A manual run makes it
+      # too, as an artifact: only a tag publishes
+      - name: Release app
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        run: python3 tools/release.py --platform macos --ref ${{ github.ref_name }} --launcher VCSLauncher.app
+
+      - uses: actions/upload-artifact@v4
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        with:
+          name: release-macos
+          path: |
+            build/dist/*.dmg
+            build/dist/*.dmg.sha256
+
+  # every platform's files on one release, only when all were made: Windows, Linux and macOS ship together
+  # The title as every release has it; the notes from docs/releases/<tag>.md when the tag has one (written for players),
+  # else GitHub's generated list.
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [linux, windows, macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -l dist
+          notes="docs/releases/${{ github.ref_name }}.md"
+          if [ -f "$notes" ]; then notes_arg=(--notes-file "$notes"); else notes_arg=(--generate-notes); fi
+          gh release create "${{ github.ref_name }}" dist/* --repo "${{ github.repository }}" \
+            --title "GTA Vice City Stories Launcher ${{ github.ref_name }}" "${notes_arg[@]}"

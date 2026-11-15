@@ -1,0 +1,368 @@
+// Render hardware interface (docs/NATIVE_RENDERER.md): the small set of GPU operations the renderer needs, so the
+// renderer never sees a graphics API. One backend per API: D3D11 (rhi/d3d11, Windows), Vulkan (rhi/vulkan, Linux, and
+// Windows to compare), Metal (rhi/metal, macOS) and null (rhi/null, no GPU work). Immutable pipelines, explicit passes, copies and readbacks as
+// plain operations.
+//
+// Threading: one device, used from one thread (the main thread). No API types appear in this header.
+#pragma once
+
+#include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <string>
+#include <vector>
+
+namespace rhi
+{
+    enum class Format : uint8_t
+    {
+        Unknown,
+        RGBA8,  // 8-bit unorm, R in the lowest byte
+        R32F,
+        D32F,   // depth
+    };
+
+    enum TextureUsage : uint32_t
+    {
+        UsageSampled = 1u << 0,
+        UsageRenderTarget = 1u << 1,
+        UsageDepth = 1u << 2,
+        UsageDynamic = 1u << 3, // rewritten by the CPU often (whole texture)
+    };
+
+    struct TextureDesc
+    {
+        uint32_t width = 0;
+        uint32_t height = 0;
+        Format format = Format::RGBA8;
+        uint32_t usage = UsageSampled;
+        const char *name = nullptr; // debug name
+        uint32_t samples = 1;       // > 1: multisampled render target / depth (not sampled: resolveTexture first)
+        uint32_t mipLevels = 1;     // 0: the full chain, made from level 0 by generateMips (sampled + render target)
+    };
+
+    class Texture
+    {
+    public:
+        virtual ~Texture() = default;
+        const TextureDesc &desc() const { return m_desc; }
+
+    protected:
+        TextureDesc m_desc;
+    };
+
+    enum class BufferUsage : uint8_t
+    {
+        Vertex,
+        Index,
+        Constant,
+    };
+
+    struct BufferDesc
+    {
+        size_t size = 0;
+        BufferUsage usage = BufferUsage::Vertex;
+        bool dynamic = true; // rewritten by the CPU (whole buffer per update)
+        const char *name = nullptr;
+    };
+
+    class Buffer
+    {
+    public:
+        virtual ~Buffer() = default;
+        const BufferDesc &desc() const { return m_desc; }
+
+    protected:
+        BufferDesc m_desc;
+    };
+
+    enum class Filter : uint8_t
+    {
+        Nearest,
+        Linear,
+    };
+
+    enum class Wrap : uint8_t
+    {
+        Clamp,
+        Repeat,
+    };
+
+    struct SamplerDesc
+    {
+        Filter filter = Filter::Nearest;
+        Wrap wrapU = Wrap::Clamp;
+        Wrap wrapV = Wrap::Clamp;
+        uint32_t anisotropy = 0; // > 1: anisotropic filtering with up to that many samples (Linear)
+    };
+
+    class Sampler
+    {
+    public:
+        virtual ~Sampler() = default;
+    };
+
+    enum class Topology : uint8_t
+    {
+        Triangles,
+        TriangleStrip,
+        Lines,
+        Points,
+    };
+
+    enum class BlendFactor : uint8_t
+    {
+        Zero,
+        One,
+        SrcAlpha,
+        InvSrcAlpha,
+        DstAlpha,
+        InvDstAlpha,
+        Src1Alpha,    // dual-source blending
+        InvSrc1Alpha,
+        Constant,     // the pass's blend constant
+        InvConstant,
+    };
+
+    enum class BlendOp : uint8_t
+    {
+        Add,
+        Subtract,        // src - dst
+        ReverseSubtract, // dst - src
+        Min,
+        Max,
+    };
+
+    struct BlendState
+    {
+        bool enable = false;
+        BlendFactor srcColor = BlendFactor::One;
+        BlendFactor dstColor = BlendFactor::Zero;
+        BlendOp colorOp = BlendOp::Add;
+        BlendFactor srcAlpha = BlendFactor::One;
+        BlendFactor dstAlpha = BlendFactor::Zero;
+        BlendOp alphaOp = BlendOp::Add;
+        uint8_t writeMask = 0xF; // RGBA bits
+    };
+
+    enum class Compare : uint8_t
+    {
+        Never,
+        Less,
+        Equal,
+        LessEqual,
+        Greater,
+        NotEqual,
+        GreaterEqual,
+        Always,
+    };
+
+    struct DepthState
+    {
+        bool test = false;
+        bool write = false;
+        Compare func = Compare::Always;
+    };
+
+    enum class VertexFormat : uint8_t
+    {
+        Float1,
+        Float2,
+        Float3,
+        Float4,
+        UByte4Norm,
+        UInt1,
+    };
+
+    struct VertexAttribute
+    {
+        const char *semantic = "TEXCOORD"; // HLSL semantic name; GLSL/MSL backends use the order
+        uint32_t semanticIndex = 0;
+        VertexFormat format = VertexFormat::Float4;
+        uint32_t offset = 0;
+    };
+
+    // Compiled shader for this device (D3D11: DXBC from fxc; Vulkan: SPIR-V from tools/hlsl_spirv.py; Metal: MSL text
+    // from tools/hlsl_msl.py, compiled by the device).
+    struct ShaderCode
+    {
+        const void *data = nullptr;
+        size_t size = 0;
+    };
+
+    struct PipelineDesc
+    {
+        ShaderCode vertex;
+        ShaderCode pixel;
+        std::vector<VertexAttribute> attributes; // empty: vertices come from the vertex id
+        uint32_t stride = 0;
+        Topology topology = Topology::Triangles;
+        BlendState blend;
+        DepthState depth;
+        bool scissor = false;
+        bool depthClip = true; // false: depth outside 0..1 is not clipped (clip distances still apply)
+        const char *name = nullptr;
+    };
+
+    class Pipeline
+    {
+    public:
+        virtual ~Pipeline() = default;
+    };
+
+    // A pass draws into one colour target (null = the swapchain's back buffer, unless depthOnly) and an optional
+    // depth target. Colour and depth targets bound together must be the same size.
+    struct PassDesc
+    {
+        Texture *color = nullptr;
+        Texture *depth = nullptr;
+        bool depthOnly = false; // no colour target: only `depth`
+        bool clearColor = false;
+        float clearRgba[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+        bool clearDepth = false;
+        float clearDepthValue = 0.0f;
+        const char *name = nullptr;
+    };
+
+    enum class Backend : uint8_t
+    {
+        D3D11,
+        Vulkan,
+        Null, // no GPU work: textures read back as zeros (bring-up and tests of the CPU side)
+        Metal, // macOS (after Null: the values are kept in vcs.ini)
+    };
+    const char *backendName(Backend backend);         // "D3D11", "Vulkan", "null", "Metal"
+    bool backendFromName(const char *name, Backend &out); // d3d11 | vulkan | null | metal, any case
+    bool backendBuilt(Backend backend);               // compiled into this build
+    Backend defaultBackend();                         // D3D11 on Windows, Metal on macOS, Vulkan elsewhere
+
+    // What the Vulkan backend needs from the window (the platform layer's SDL): opaque to the RHI.
+    struct VulkanWindow
+    {
+        const char *const *(*instanceExtensions)(uint32_t *count) = nullptr; // for the surface
+        bool (*createSurface)(void *instance, uint64_t *surface) = nullptr;  // VkInstance -> VkSurfaceKHR
+    };
+
+    // A graphics card the game can draw with (Graphics > Graphics card; GitHub issue 112: a laptop started the game on
+    // its integrated chip). `id` names it in vcs.ini and DeviceDesc::gpu: made from the PCI vendor / device ids (and
+    // which of several identical cards), so the same card has the same id under D3D11 and Vulkan and across starts.
+    struct Gpu
+    {
+        std::string name;        // as the driver names it ("NVIDIA GeForce GTX 1080 Ti"); " #2" on a second identical card
+        uint32_t vendorId = 0;   // PCI
+        uint32_t deviceId = 0;
+        bool integrated = false; // the CPU's chip (D3D11: DXCore's IsIntegrated, Windows 10 2004+; Vulkan: the device type)
+        int id = 0;              // > 0
+    };
+    int gpuId(uint32_t vendorId, uint32_t deviceId, int ordinal); // ordinal: 0, or n for the n+1th identical card
+    // The cards, the fastest first (D3D11: DXGI's high-performance ranking; Vulkan: discrete before integrated). D3D11
+    // where it is built (Windows), else Vulkan; software renderers left out. Empty when none can be listed.
+    std::vector<Gpu> listGpus();
+
+    struct DeviceDesc
+    {
+        Backend backend = defaultBackend();
+        int gpu = 0; // a Gpu::id; 0 or an id no card has: the fastest (the first of listGpus)
+        void *nativeWindow = nullptr; // D3D11: the HWND
+        VulkanWindow vulkan;          // Vulkan
+        void *metalLayer = nullptr;   // Metal: the window's CAMetalLayer (platform::metalLayer)
+        uint32_t width = 0;
+        uint32_t height = 0;
+        bool debug = false;     // API validation layer (when installed)
+        bool offscreen = false; // Vulkan / Metal: no swapchain, the back buffer is a texture (hidden windows: test runs)
+    };
+
+    class Device
+    {
+    public:
+        virtual ~Device() = default;
+
+        virtual Backend backend() const = 0;
+        virtual const std::string &adapterName() const = 0;
+
+        // ---- resources --------------------------------------------------------------------------------------------
+        // `data`: initial contents, rows top-down, `rowPitch` bytes apart (0 = tightly packed).
+        virtual std::unique_ptr<Texture> createTexture(const TextureDesc &desc, const void *data = nullptr, uint32_t rowPitch = 0) = 0;
+        virtual void updateTexture(Texture &texture, uint32_t x, uint32_t y, uint32_t width, uint32_t height, const void *data,
+                                   uint32_t rowPitch = 0) = 0;
+        // Waits for the GPU and copies a region out (RGBA8 / R32F only). Slow: screenshots, dumps, tests.
+        virtual bool readTexture(Texture &texture, uint32_t x, uint32_t y, uint32_t width, uint32_t height, void *out,
+                                 uint32_t rowPitch = 0) = 0;
+        virtual void copyTexture(Texture &dst, uint32_t dstX, uint32_t dstY, Texture &src, uint32_t srcX, uint32_t srcY,
+                                 uint32_t width, uint32_t height) = 0;
+        // a multisampled texture averaged into a single-sampled one of the same size and format
+        virtual void resolveTexture(Texture &dst, Texture &src) = 0;
+        // the mip chain of a texture made with mipLevels 0, from level 0
+        virtual void generateMips(Texture &texture) = 0;
+        // A sampled RGBA8 texture with its mip chain given: `levels[i]` is level i (max(1, width >> i) x max(1, height >>
+        // i), tightly packed), `levelCount` of them. Not a render target and no generateMips: a burst of new textures
+        // costs one plain creation each (PERFORMANCE.md 21).
+        virtual std::unique_ptr<Texture> createTextureLevels(const TextureDesc &desc, const void *const *levels, uint32_t levelCount) = 0;
+        // True when createTexture (one level, with data, not a target) and createTextureLevels may be called from any
+        // thread while the owner draws (D3D11: device creation calls are free-threaded; Vulkan: the image is made there
+        // and its first contents staged, then recorded into the set-up commands at the owner's next submit).
+        virtual bool freeThreadedCreation() const { return false; }
+
+        virtual std::unique_ptr<Buffer> createBuffer(const BufferDesc &desc, const void *data = nullptr) = 0;
+        virtual void updateBuffer(Buffer &buffer, const void *data, size_t size) = 0; // from offset 0, the rest discarded
+
+        virtual std::unique_ptr<Sampler> createSampler(const SamplerDesc &desc) = 0;
+        virtual std::unique_ptr<Pipeline> createPipeline(const PipelineDesc &desc) = 0;
+
+        // ---- drawing ----------------------------------------------------------------------------------------------
+        // beginPass sets the viewport to the whole target and clears the scissor to it.
+        virtual void beginPass(const PassDesc &pass) = 0;
+        virtual void endPass() = 0;
+        virtual void setViewport(float x, float y, float width, float height) = 0;
+        virtual void setScissor(int x, int y, int width, int height) = 0;
+        virtual void setBlendConstant(const float rgba[4]) = 0;
+        virtual void setPipeline(Pipeline &pipeline) = 0;
+        virtual void setVertexBuffer(Buffer &buffer, uint32_t offset = 0) = 0;
+        virtual void setIndexBuffer(Buffer &buffer, bool uint32Indices) = 0;
+        virtual void setTexture(uint32_t slot, Texture *texture, Sampler *sampler) = 0; // pixel shader
+        virtual void setConstants(uint32_t slot, Buffer &buffer) = 0;                    // vertex + pixel shader
+        virtual void draw(uint32_t vertexCount, uint32_t firstVertex = 0) = 0;
+        virtual void drawIndexed(uint32_t indexCount, uint32_t firstIndex = 0, int32_t baseVertex = 0) = 0;
+
+        virtual void pushMarker(const char *name) = 0; // debugger / profiler annotations
+        virtual void popMarker() = 0;
+
+        // ---- swapchain --------------------------------------------------------------------------------------------
+        virtual void backbufferSize(uint32_t &width, uint32_t &height) const = 0;
+        virtual void resize(uint32_t width, uint32_t height) = 0;
+        // Immediate: as soon as it is drawn, never torn (flip model: a newer frame replaces one not shown yet);
+        // Vsync: waits for the display's refresh; Tearing: at once, mid-refresh if need be (lowest latency, VRR - falls
+        // back to Immediate where the system can't).
+        enum class PresentMode : uint8_t
+        {
+            Immediate,
+            Vsync,
+            Tearing,
+        };
+        virtual void present(PresentMode mode) = 0;
+        // The input snapshot time (steady_clock ns) of the frame about to be presented: a backend that can tell when the
+        // GPU finished it reports the input-to-screen delay (Vulkan: PS2X_RHI_STATS). Before present.
+        virtual void setFrameInputTime(int64_t) {}
+
+        // ---- Dear ImGui renderer (the ImGui context belongs to the platform layer) ---------------------------------
+        virtual bool uiInit() = 0;
+        virtual void uiNewFrame() = 0;               // before ImGui::NewFrame
+        virtual void uiRender(void *imDrawData) = 0; // ImDrawData *, into the current pass
+        virtual void uiShutdown() = 0;
+    };
+
+    // The device of desc.backend. Null with `error` set when that backend isn't built or no device / swapchain could be
+    // made.
+    std::unique_ptr<Device> createDevice(const DeviceDesc &desc, std::string &error);
+
+    // The backends (rhi.cpp calls them; each exists only when built).
+    std::unique_ptr<Device> createD3D11Device(const DeviceDesc &desc, std::string &error);
+    std::unique_ptr<Device> createVulkanDevice(const DeviceDesc &desc, std::string &error);
+    std::unique_ptr<Device> createNullDevice(const DeviceDesc &desc, std::string &error);
+    std::unique_ptr<Device> createMetalDevice(const DeviceDesc &desc, std::string &error);
+    std::vector<Gpu> listD3D11Gpus();  // listGpus() for each backend
+    std::vector<Gpu> listVulkanGpus();
+    std::vector<Gpu> listMetalGpus();
+    // Fills in the ids (and " #2" names) of a list in its final order: shared by the backends so they agree.
+    void numberGpus(std::vector<Gpu> &gpus);
+}

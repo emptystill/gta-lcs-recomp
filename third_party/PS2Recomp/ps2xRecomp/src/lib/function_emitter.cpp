@@ -1,0 +1,341 @@
+#include "ps2recomp/Emitters/function_emitter.h"
+#include "ps2recomp/code_generator.h"
+#include "ps2recomp/gif_dma_kick_analyzer.h"
+#include "ps2recomp/instructions.h"
+#include "ps2recomp/pc_observation.h"
+#include "ps2recomp/r5900_decoder.h"
+#include "ps2recomp/recompiler_reporter.h"
+#include "ps2recomp/types.h"
+#include "runtime/ps2_address.h"
+
+#include <algorithm>
+#include <cstdlib>
+#include <sstream>
+#include <stdexcept>
+#include <unordered_set>
+
+namespace ps2recomp
+{
+    namespace
+    {
+        Instruction makeSyntheticDelaySlot(uint32_t address)
+        {
+            Instruction inst{};
+            inst.address = address;
+            inst.raw = 0;
+            inst.opcode = OPCODE_SPECIAL;
+            inst.function = SPECIAL_SLL;
+            return inst;
+        }
+
+    }
+
+    // [gta-recomp] Pure ALU/FPU/MMI instructions neither trap nor call into the runtime, so
+    // nothing can read ctx->pc while they run: skip the per-instruction pc store for them.
+    bool cannotObservePc(const Instruction &inst)
+    {
+        if (inst.isLoad || inst.isStore || inst.isMmio || inst.isBranch || inst.isJump)
+            return false;
+        switch (inst.opcode)
+        {
+        case 0x00: // SPECIAL
+            switch (inst.function)
+            {
+            case 0x00: case 0x02: case 0x03: case 0x04: case 0x06: case 0x07: // shifts
+            case 0x0A: case 0x0B:                                               // MOVZ/MOVN
+            case 0x10: case 0x11: case 0x12: case 0x13:                         // HI/LO moves
+            case 0x14: case 0x16: case 0x17:                                    // 64-bit shifts
+            case 0x18: case 0x19: case 0x1A: case 0x1B:                         // MULT/DIV (no traps)
+            case 0x21: case 0x23: case 0x24: case 0x25: case 0x26: case 0x27:   // ADDU SUBU AND OR XOR NOR
+            case 0x28: case 0x29: case 0x2A: case 0x2B: case 0x2D: case 0x2F:   // MFSA MTSA SLT SLTU DADDU DSUBU
+            case 0x38: case 0x3A: case 0x3B: case 0x3C: case 0x3E: case 0x3F:   // DSLL...DSRA32
+                return true;
+            default:
+                return false; // ADD/SUB/DADD/DSUB (overflow), SYSCALL, BREAK, SYNC, traps
+            }
+        case 0x09: case 0x0A: case 0x0B: case 0x0C: case 0x0D: case 0x0E: case 0x0F: // ADDIU..LUI
+        case 0x19:                                                                  // DADDIU
+        case 0x1C:                                                                  // MMI
+            return true;
+        case 0x11: // COP1 (branches excluded above)
+            return true;
+        default:
+            return false;
+        }
+    }
+
+    bool isPlainMemoryOpcode(const Instruction &inst)
+    {
+        switch (inst.opcode)
+        {
+        case OPCODE_LB: case OPCODE_LH: case OPCODE_LWL: case OPCODE_LW: case OPCODE_LBU: case OPCODE_LHU:
+        case OPCODE_LWR: case OPCODE_LWU: case OPCODE_LD: case OPCODE_LDL: case OPCODE_LDR: case OPCODE_LQ:
+        case OPCODE_LWC1: case OPCODE_LQC2:
+        case OPCODE_SB: case OPCODE_SH: case OPCODE_SWL: case OPCODE_SW: case OPCODE_SWR: case OPCODE_SD:
+        case OPCODE_SDL: case OPCODE_SDR: case OPCODE_SQ: case OPCODE_SWC1: case OPCODE_SQC2:
+            return true;
+        default:
+            return false;
+        }
+    }
+
+    bool restrictCtxEnabled()
+    {
+        static const bool on = [] {
+            const char *off = std::getenv("PS2X_RECOMP_NO_RESTRICT");
+            return !(off && *off && *off != '0');
+        }();
+        return on;
+    }
+
+    bool leanPcEnabled()
+    {
+        static const bool lean = [] {
+            const char *full = std::getenv("PS2X_RECOMP_FULL_PC");
+            return !(full && *full && *full != '0');
+        }();
+        return lean;
+    }
+
+    FunctionEmitter::FunctionEmitter(CodeGenerator &codeGenerator)
+        : m_codeGenerator(codeGenerator)
+    {
+    }
+
+    std::string FunctionEmitter::emit(
+        const Function &function,
+        const std::vector<Instruction> &instructions,
+        bool useHeaders)
+    {
+        CodeGenerator &cg = m_codeGenerator;
+        std::stringstream ss;
+        cg.m_currentFunctionName = function.name;
+
+        if (useHeaders)
+        {
+            ss << "#include <stdexcept>\n";
+            ss << "#include \"ps2_runtime_macros.h\"\n";
+            ss << "#include \"ps2_runtime.h\"\n";
+            ss << "#include <ps2_recompiled_functions.h>\n";
+            ss << "#include <ps2_recompiled_stubs.h>\n\n";
+            ss << "#include \"ps2_syscalls.h\"\n";
+            ss << "#include \"ps2_stubs.h\"\n\n";
+            ss << "#ifdef PS2_FUNCTION_LOG_TRACKER\n";
+            ss << "#include \"ps2_log.h\"\n";
+            ss << "#endif\n\n";
+        }
+
+        CodeGenerator::AnalysisResult analysisResult = cg.collectInternalBranchTargets(function, instructions);
+        std::vector<uint32_t> resumeTargets(analysisResult.resumeEntryPoints.begin(),
+                                            analysisResult.resumeEntryPoints.end());
+        auto resumeIt = cg.m_resumeEntryTargetsByOwner.find(function.start);
+        if (resumeIt != cg.m_resumeEntryTargetsByOwner.end())
+        {
+            resumeTargets.insert(resumeTargets.end(), resumeIt->second.begin(), resumeIt->second.end());
+        }
+        std::sort(resumeTargets.begin(), resumeTargets.end());
+        resumeTargets.erase(std::unique(resumeTargets.begin(), resumeTargets.end()), resumeTargets.end());
+        for (uint32_t target : resumeTargets)
+        {
+            analysisResult.entryPoints.insert(target);
+        }
+
+        const std::unordered_set<uint32_t> &internalTargets = analysisResult.entryPoints;
+        ConstantRegisterState constantRegisters;
+        GifDmaKickPlan gifDmaKickPlan{};
+        ss << "// Function: " << function.name << "\n";
+        ss << "// Address: 0x" << std::hex << function.start << " - 0x" << function.end << std::dec << "\n";
+
+        std::string sanitizedName = cg.getFunctionName(function.start);
+        if (sanitizedName.empty())
+        {
+            std::stringstream nameBuilder;
+            nameBuilder << "Errorfunc_" << std::hex << function.start;
+            sanitizedName = nameBuilder.str();
+        }
+
+        // [gta-recomp] ctx as __restrict: the guest's RAM (rdram, a uint8_t*) never holds the register file, and every
+        // runtime call that touches the context is handed ctx - so the compiler may keep guest registers in host
+        // registers across guest stores instead of reloading them after each one. PS2X_RECOMP_NO_RESTRICT=1: off.
+        ss << "PS2_GUEST_CC void " << sanitizedName << "(uint8_t* rdram, R5900Context* " << (restrictCtxEnabled() ? "__restrict " : "")
+           << "ctx, PS2Runtime *runtime) {\n";
+        ss << "#ifdef PS2_FUNCTION_LOG_TRACKER\n";
+        ss << "    PS_LOG_ENTRY(\"" << sanitizedName << "\");\n";
+        ss << "#endif\n";
+        ss << "\n";
+        // [gta-recomp] entered at the start (the common case): straight to the body
+        ss << "    if (ctx->pc != 0x" << std::hex << function.start << std::dec << "u) {\n";
+        if (!resumeTargets.empty())
+        {
+            ss << "    switch (ctx->pc) {\n";
+            for (uint32_t target : resumeTargets)
+            {
+                ss << "        case 0x" << std::hex << target << "u: goto label_" << target << ";\n"
+                   << std::dec;
+            }
+            ss << "        default: break;\n";
+            ss << "    }\n\n";
+        }
+        // [gta-recomp] Entering mid-body at an address without a resume label would silently
+        // restart the function (re-running its prologue): report it.
+        ss << "    if (ctx->pc != 0x" << std::hex << function.start << "u && ctx->pc - 0x" << function.start
+           << "u < 0x" << (function.end - function.start) << "u) ps2ReportUnlistedResume(ctx, 0x" << function.start
+           << "u);\n"
+           << std::dec;
+        ss << "    ctx->pc = 0x" << std::hex << function.start << "u;\n"
+           << std::dec;
+        ss << "    }\n";
+        ss << "\n";
+
+        bool lastInstructionWasControlFlow = false;
+
+        for (size_t i = 0; i < instructions.size(); ++i)
+        {
+            const Instruction &inst = instructions[i];
+            lastInstructionWasControlFlow = inst.hasDelaySlot;
+
+            if (internalTargets.contains(inst.address))
+            {
+                constantRegisters.clear();
+                ss << "label_" << std::hex << inst.address << std::dec << ":\n";
+            }
+
+            if (cg.m_emitInstructionComments)
+            {
+                ss << "    // 0x" << std::hex << inst.address << ": 0x" << inst.raw << std::dec;
+                std::string disassembly = R5900Decoder::disassembleInstruction(inst);
+                if (!disassembly.empty())
+                {
+                    ss << "  " << disassembly;
+                }
+                ss << "\n";
+            }
+
+            try
+            {
+                if (inst.hasDelaySlot)
+                {
+                    const bool hasDecodedDelaySlot =
+                        i + 1 < instructions.size() &&
+                        instructions[i + 1].address == inst.address + 4u;
+
+                    Instruction syntheticDelaySlot{};
+                    const Instruction *delaySlot = nullptr;
+                    if (hasDecodedDelaySlot)
+                    {
+                        delaySlot = &instructions[i + 1];
+                    }
+                    else
+                    {
+                        syntheticDelaySlot = makeSyntheticDelaySlot(inst.address + 4u);
+                        delaySlot = &syntheticDelaySlot;
+                    }
+
+                    if (hasDecodedDelaySlot && internalTargets.contains(delaySlot->address))
+                    {
+                        ss << "label_" << std::hex << delaySlot->address << std::dec << ":\n";
+                    }
+
+                    if (gifDmaKickPlan.valid &&
+                        gifDmaKickPlan.completesInDelaySlot &&
+                        gifDmaKickPlan.branchIndex == i &&
+                        hasDecodedDelaySlot)
+                    {
+                        ss << cg.handleBranchDelaySlots(
+                            inst,
+                            *delaySlot,
+                            function,
+                            analysisResult,
+                            gifDmaDelaySlotOverride(*delaySlot, gifDmaKickPlan, cg.m_emitInstructionComments));
+                        gifDmaKickPlan = {};
+                    }
+                    else
+                    {
+                        ss << cg.handleBranchDelaySlots(inst, *delaySlot, function, analysisResult);
+                    }
+
+                    if (hasDecodedDelaySlot)
+                    {
+                        ++i; // Skip delay slot instruction (handled inside branch logic)
+                    }
+                    constantRegisters.clear();
+                }
+                else
+                {
+                    if (!gifDmaKickPlan.valid)
+                    {
+                        gifDmaKickPlan = tryBuildGifDmaKickPlan(instructions, i, constantRegisters, internalTargets);
+                    }
+
+                    if (gifDmaKickPlan.suppresses(i))
+                    {
+                        const size_t slot = gifDmaKickPlan.slotFor(i);
+                        emitGifDmaCapture(ss, gifDmaKickPlan, slot, "    ");
+
+                        if (gifDmaKickPlan.completesAt(i))
+                        {
+                            ss << "    ctx->pc = 0x" << std::hex << inst.address << "u;\n"
+                               << std::dec;
+                            ss << "    " << gifDmaKickCall(gifDmaKickPlan) << "\n";
+                            gifDmaKickPlan = {};
+                        }
+
+                        updateConstantRegisters(inst, constantRegisters);
+                        continue;
+                    }
+
+                    const MemoryAccessHint memoryHint = resolveMemoryAccessHint(inst, constantRegisters);
+                    // [gta-recomp] lean pc: a RAM / scratchpad access (constant scratchpad addresses go to the
+                    // runtime's inline Load / Store) takes its pc as ps2AccessPc instead of a store
+                    const bool scratchConstant = memoryHint.hasAddress && memoryHint.address - 0x70000000u < 0x4000u;
+                    const bool plainAccess =
+                        leanPcEnabled() && isPlainMemoryOpcode(inst) &&
+                        (scratchConstant ||
+                         (!inst.isMmio && (!memoryHint.hasAddress || !Ps2IsSpecialAddress(memoryHint.address))));
+                    if (!plainAccess && !cannotObservePc(inst))
+                    {
+                        ss << "    ctx->pc = 0x" << std::hex << inst.address << "u;\n"
+                           << std::dec;
+                    }
+                    if (plainAccess && !memoryHint.hasAddress)
+                    {
+                        ss << "    { constexpr uint32_t ps2AccessPc = 0x" << std::hex << inst.address << std::dec
+                           << "u; " << cg.translateInstruction(inst, memoryHint) << " }";
+                    }
+                    else
+                    {
+                        ss << "    " << cg.translateInstruction(inst, memoryHint);
+                    }
+                    if (inst.isMmio)
+                    {
+                        ss << " // MMIO: 0x" << std::hex << inst.mmioAddress << std::dec;
+                    }
+                    ss << "\n";
+
+                    updateConstantRegisters(inst, constantRegisters);
+                }
+            }
+            catch (const std::exception &e)
+            {
+                if (cg.m_reporter)
+                {
+                    std::ostringstream msg;
+                    msg << "translation failed: " << e.what() << " raw=0x" << std::hex << inst.raw;
+                    cg.m_reporter->errorAt("codegen", function.name, inst.address, msg.str());
+                }
+
+                throw;
+            }
+        }
+
+        // Fallthrough with no terminating branch: publish the next PC so the EE dispatcher does not re-enter this function.
+        if (!instructions.empty() && !lastInstructionWasControlFlow)
+        {
+            ss << "    ctx->pc = 0x" << std::hex << function.end << "u;\n"
+               << std::dec;
+        }
+
+        ss << "}\n";
+        return ss.str();
+    }
+}

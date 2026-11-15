@@ -1,0 +1,215 @@
+# Hand-made adjustments merged by tools/make_config.py into vcs.toml.
+
+# SDK functions the analyzer identified, but whose runtime handler is only a
+# TODO that throws. Recompile the game's own copy instead: the tty/Deci2 ones end
+# in the Deci2Call syscall, which the runtime implements (and logs the text).
+drop_stubs = [
+  "sceDmaPause@0x004489F8",
+  "sceTtyHandler@0x00468628",
+  "sceTtyWrite@0x004687C0",
+  "sceTtyRead@0x00468938",
+  "sceTtyInit@0x00468A08",
+  "sceDeci2Open@0x0046EA98",
+  "sceDeci2ReqSend@0x0046EAE8",
+  "sceDeci2Poll@0x0046EB18",
+  "sceDeci2ExRecv@0x0046EB48",
+  "sceDeci2ExSend@0x0046EB80",
+]
+
+# _lf_bind spins until the IOP ROM's LOADFILE RPC server (sid 0x80000006)
+# answers. Module loading is handled by the runtime's _sceSifLoadModule stub,
+# so there is no such server: report success.
+stubs = [
+  "ret0@0x0046CD10",
+  # libfileio directory API -> runtime (served from the mapped disc).
+  # FUN_002209F0 walks cdrom0: recursively with these at boot.
+  "sceDopen@0x0046C7B8",
+  "sceDread@0x0046C9E8",
+  "sceDclose@0x0046C880",
+  # libcdvd calls that RPC the IOP ROM's cdvdfsv server, which doesn't exist here.
+  # (The rest of libcdvd is stubbed from the analyzer's SDK identification.)
+  "sceCdSearchFile@0x0044E480",
+  "sceCdSearchFile@0x0044E180",  # sceCdLayerSearchFile(fp, name, layer): same args, layer ignored
+  "sceCdGetDiskType@0x0044EFA8", # sceCdGetDiskType2
+  "sceCdDiskReady@0x0044EB48",   # sceCdDiskReady_old
+]
+
+# Instruction patches (address -> replacement word), applied by the recompiler.
+#
+# FUN_001f1d38 (ped animation movement) turns the frame's animation root displacement into the ped's target velocity
+# (+0x794): `if (ms_fTimeStep < 0.5) delta *= 0.5; else delta *= 1 / ms_fTimeStep;` - the `< 0.5` branch is dead on the
+# PS2 (CTimer floors the step at 0.5) and wrong (0.5 where 1/step >= 2): below the floor peds ran at a quarter speed,
+# which capped frame-rate independent timing at 100 fps. The 0.5 is loaded once for the compare and the multiply
+# (`lui $at, 0x3F00` at 0x1F2158); 0.001 instead sends every real step down the 1 / step path, and a zero step still
+# gets a finite (near-zero) velocity. Steps >= 0.5 run exactly as before. (game-internals.md 4, docs/PERFORMANCE.md)
+[[patches]]
+address = "0x001F2158"
+value = "0x3C013A83"
+
+# FUN_0031ae38 (CCutsceneObject::ProcessControl, as in reVC) turns the frame's animation movement into a move speed:
+# `if (ms_fTimeStep < 0.5) speed *= 2; else speed *= 1 / ms_fTimeStep;`, then adds step * speed to the object's
+# offset (+0x210). The `< 0.5` branch is dead on the PS2 and wrong (2 where 1/step > 2): below the floor a cutscene
+# character kept only 2 * step of each frame's root movement and drifted off its animation - floating or sunk in the
+# ground at 144 fps (mission MAR_A1 "Shakedown"). The 0.5 is only the compare's (`lui $at, 0x3F00` at 0x31B19C);
+# 0.001 sends every real step down the 1 / step path, and a zero step still takes the finite `* 2`.
+[[patches]]
+address = "0x0031B19C"
+value = "0x3C013A83"
+
+# FUN_00337208 (CBike::ProcessControl) turns the frame's sideways change of speed into the bike's lean:
+# `lean = dv / (max(ms_fTimeStep, 0.5) * 0.008)` (GRAVITY; VC has max(step, 0.01)). Below the floor (above 100 fps) dv
+# shrinks with the step but the divisor doesn't, so the bike leant less into turns (22 degrees at 144 fps where it
+# leans 30 at 30). The 0.5 is only the max.s operand (`lui $at, 0x3F00` at 0x33BB10, $f1 rewritten at 0x33BB58);
+# 0.001 sends every real step through. Steps >= 0.5 run exactly as before. (game-internals.md 4)
+[[patches]]
+address = "0x0033BB10"
+value = "0x3C013A83"
+
+# Vehicles in water: FUN_00138B68 (cars) and FUN_00336CB8 (bikes) divide the buoyancy impulse's z (from the buoyancy
+# code, a force times the step) by `mass * max(ms_fTimeStep, 0.5) * GRAVITY` for the share of the vehicle under water,
+# which sets the water's drag (pow(1 - share * 0.05, step)) and the sinking / engine-off thresholds. Above 100 fps the
+# share came out step / 0.5 too small: at 144 fps a car kept 1.6 m/s a second into the water (0.6 at 30) and a bike
+# sank to the bottom. The 0.5 is only the max.s operand: cars load it on two paths (`lui $at, 0x3F00` at 0x138C48 and 0x138C6C, into $f2, max.s
+# at 0x138C88, $f2 rewritten at 0x138C94), bikes once (0x336D60, $f1, rewritten at 0x336D9C). 0.001 as the others.
+[[patches]]
+address = "0x00138C48"
+value = "0x3C013A83"
+[[patches]]
+address = "0x00138C6C"
+value = "0x3C013A83"
+[[patches]]
+address = "0x00336D60"
+value = "0x3C013A83"
+
+# Boats: FUN_0019FDA0 (CBoat::ProcessControl) applies part of the rudder's turn force times `max(ms_fTimeStep, 0.5)`
+# where the rest of it is times the step, so above 100 fps that part acted more per second (at 144 fps a boat lost 1.7
+# m/s more in a turn). `lui $at, 0x3F00` at 0x1A2468, $f1 only the max.s operand (0x1A2480; a call before its next use).
+[[patches]]
+address = "0x001A2468"
+value = "0x3C013A83"
+
+# Moving platforms: the ferris wheel (FUN_00175620, 12 carriages) and the escalators (FUN_002469A0, CEscalator::Update)
+# place their objects each frame and give them the move speed `(new position - old) * 1 / max(ms_fTimeStep, 1.0)`. Above
+# 50 fps (step < 1.0) that speed came out step times too small - 0.83 at 60 fps, 0.35 at 144 - and a ped standing on
+# the object, who moves with its move speed, slid off it: Vic fell out of a ferris wheel carriage within 2 s at 144 fps
+# (issue 10). The 1.0 register is also the numerator and is used elsewhere, so the max.s itself changes, using the two
+# hazard nops behind it: `lui $at, 0x3A83; mtc1 $at, $fK; max.s $fD, $fS, $fK` = max(step, 0.001), as the patches above.
+# $fK is written before any read after it ($f4 at 0x176144 in the wheel, $f3 at 0x246EC4 in the escalator); $at is
+# loaded again before its next use. Steps >= 1.0 run exactly as before. (game-internals.md 4)
+[[patches]]
+address = "0x00176078"
+value = "0x3C013A83"
+[[patches]]
+address = "0x00176080"
+value = "0x44812000"
+[[patches]]
+address = "0x00176084"
+value = "0x46040028"
+[[patches]]
+address = "0x00246EB4"
+value = "0x3C013A83"
+[[patches]]
+address = "0x00246EB8"
+value = "0x44811800"
+[[patches]]
+address = "0x00246EBC"
+value = "0x46030868"
+
+# The follow cameras: FUN_0029DAB0 (mode 4, on foot) and FUN_0029FAF0 (modes 18 / 22, behind a vehicle / a boat) turn
+# their heading toward where they want to be by a per-frame amount, then make it a speed: `(new beta - beta) / max(step,
+# 1.0)` (0x29EA50 / 0x2A0790), eased into the heading speed (+0x140) and added back times the step. Above 50 fps that
+# automatic turn came out step times too slow (0.35 at 144): the camera trailed further in turns and took longer to
+# get back behind the car. The stick's and the mouse's turning are added after it and were not affected. $f3 (1.0) is
+# read again two instructions later, so the 0.001 goes to $f5, which is not read before the call that follows (the
+# callee, FUN_0044A548, never touches it) and is written again after it before any read. As above.
+[[patches]]
+address = "0x0029EA50"
+value = "0x3C013A83"
+[[patches]]
+address = "0x0029EA54"
+value = "0x44812800"
+[[patches]]
+address = "0x0029EA58"
+value = "0x46050868"
+[[patches]]
+address = "0x002A0790"
+value = "0x3C013A83"
+[[patches]]
+address = "0x002A0794"
+value = "0x44812800"
+[[patches]]
+address = "0x002A0798"
+value = "0x46050868"
+
+# CVehicle::ProcessWheel (FUN_003E6C18 cars, FUN_003E7618 bikes): with neither gas nor brake the wheel's rolling
+# resistance is a brake of 0.9 / mass (0.09 under 500 kg, 0.18 for the RC Bandit, 0.54 / (mass + 200) for bikes; the
+# bike version uses 0.18 under 500 kg) - per frame, never multiplied by the time step (reVC: `brake *=
+# CTimer::GetTimeStepFix()` under FIX_BUGS). At 144 fps a car coasted down at 16 m/s^2 instead of 3.4, and a bike
+# stopped hard enough to pitch onto its nose. Each constant's `lui $at, hi; ori $at, $at, lo; mtc1 $at, $fN` becomes
+# `lui $at, 0x8; lwc1 $fN, -0x100 + 4k($at); nop`: the constant is read from guest RAM 0x7FF00 + 4k (below the
+# runtime's callback stacks at 0x80000, unused by the game), where game/vcs_physics_timing.cpp writes it scaled by the
+# frame's step over the PS2's before every ProcessWheel - the game's own value at 30 fps and below. $at is rewritten
+# before any read on every path after each block. Slots: 0x7FF00 0.54, 0x7FF04 0.09, 0x7FF08 0.9, 0x7FF0C 0.18.
+[[patches]]
+address = "0x003E6EF8"
+value = "0x3C010008"
+[[patches]]
+address = "0x003E6EFC"
+value = "0xC421FF00"
+[[patches]]
+address = "0x003E6F00"
+value = "0x00000000"
+[[patches]]
+address = "0x003E6F40"
+value = "0x3C010008"
+[[patches]]
+address = "0x003E6F44"
+value = "0xC420FF04"
+[[patches]]
+address = "0x003E6F48"
+value = "0x00000000"
+[[patches]]
+address = "0x003E6F5C"
+value = "0x3C010008"
+[[patches]]
+address = "0x003E6F60"
+value = "0xC420FF08"
+[[patches]]
+address = "0x003E6F64"
+value = "0x00000000"
+[[patches]]
+address = "0x003E6F70"
+value = "0x3C010008"
+[[patches]]
+address = "0x003E6F74"
+value = "0xC420FF0C"
+[[patches]]
+address = "0x003E6F78"
+value = "0x00000000"
+[[patches]]
+address = "0x003E7900"
+value = "0x3C010008"
+[[patches]]
+address = "0x003E7904"
+value = "0xC421FF00"
+[[patches]]
+address = "0x003E7908"
+value = "0x00000000"
+[[patches]]
+address = "0x003E7944"
+value = "0x3C010008"
+[[patches]]
+address = "0x003E7948"
+value = "0xC420FF08"
+[[patches]]
+address = "0x003E794C"
+value = "0x00000000"
+[[patches]]
+address = "0x003E7958"
+value = "0x3C010008"
+[[patches]]
+address = "0x003E795C"
+value = "0xC420FF0C"
+[[patches]]
+address = "0x003E7960"
+value = "0x00000000"
