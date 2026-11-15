@@ -449,8 +449,10 @@ namespace
             input.directBetaTarget = 0xB0u;
             input.directAlpha = 0x98u;
             input.directAlphaNeg = 0xA0u;
-            input.directAlphaMin = -0.40f;
-            input.directAlphaMax = 1.466f;
+            input.directAlphaMin = -0.07f;  // the game's own limit on foot (looking up)
+            input.directAlphaMax = 1.466f;  // the stick's
+            input.directCarAlphaMin = -0.07f;
+            input.directCarAlphaMax = 1.30f;
             vcs::input::setGameLayout(input);
         }
         if (envOn("LCS_CHECK_READS"))

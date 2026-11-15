@@ -527,37 +527,62 @@ namespace vcs::input
                                      L.directActive && g_rdram ? g_rdram[(L.directCamera + L.directActive) & kRamMask] : 0u,
                                      dcam ? rd32(dcam + L.directMode) & 0xFFFFu : 0u, frameAdvanced ? 1 : 0, frame);
                 }
+                // The camera is the mouse's: its heading and pitch are kept here and written on every frame the game runs
+                // in these modes - not only when the mouse moves, or the game's own following (behind the player as he
+                // walks, behind the vehicle as it drives) turned it back between moves. Taken from the game when the mode
+                // starts or changes (a cutscene, getting in / out), so the view does not jump.
+                static struct
+                {
+                    bool active = false;
+                    uint32_t mode = 0, cam = 0;
+                    float beta = 0.0f, alpha = 0.0f;
+                } dstate;
+                bool directNow = false;
                 if (on && dcam)
                 {
                     const uint32_t dmode = rd32(dcam + L.directMode) & 0xFFFFu;
                     if (dmode == L.directFootMode || dmode == L.directCarMode)
                     {
-                        direct = true;
+                        direct = directNow = true;
+                        auto pitchOf = [&](float a) { return a > 3.14159265f ? a - 6.2831855f : a; }; // 2 pi - x: negative
+                        if (!dstate.active || dstate.mode != dmode || dstate.cam != dcam)
+                        {
+                            static const bool mlog = std::getenv("VCS_MOUSE_LOG") != nullptr;
+                            if (mlog)
+                                std::fprintf(stderr, "[mouse] camera taken from the game: active %d mode %u -> %u cam 0x%x -> 0x%x frame %u\n",
+                                             dstate.active ? 1 : 0, dstate.mode, dmode, dstate.cam, dcam, frame);
+                            dstate.active = true;
+                            dstate.mode = dmode;
+                            dstate.cam = dcam;
+                            dstate.beta = rdf(dcam + L.directBetaTarget);
+                            dstate.alpha = pitchOf(rdf(dcam + L.directAlpha));
+                        }
                         const float look = dmode == L.directCarMode ? m.carLook : m.mouseLook;
                         const float turn = -dx * look, tilt = -up * look; // pitch: + looks down (the camera rises)
-                        if (frameAdvanced && (turn != 0.0f || tilt != 0.0f))
+                        if (frameAdvanced)
                         {
-                            float beta = std::fmod(rdf(dcam + L.directBetaTarget) + turn, 6.2831855f);
+                            float beta = std::fmod(dstate.beta + turn, 6.2831855f);
                             if (beta < 0.0f)
                                 beta += 6.2831855f;
+                            dstate.beta = beta;
+                            const bool inCar = dmode == L.directCarMode;
+                            dstate.alpha = std::clamp(dstate.alpha + tilt, inCar ? L.directCarAlphaMin : L.directAlphaMin,
+                                                      inCar ? L.directCarAlphaMax : L.directAlphaMax);
                             {
                                 static const bool mlog = std::getenv("VCS_MOUSE_LOG") != nullptr;
-                                if (mlog)
-                                    std::fprintf(stderr, "[mouse] beta %.4f target %.4f turn %.4f look %.6f -> %.4f\n", rdf(dcam + L.directBeta),
-                                                 rdf(dcam + L.directBetaTarget), turn, look, beta);
+                                if (mlog && (turn != 0.0f || tilt != 0.0f))
+                                    std::fprintf(stderr, "[mouse] game beta %.4f alpha %.4f -> ours %.4f %.4f\n", rdf(dcam + L.directBeta),
+                                                 pitchOf(rdf(dcam + L.directAlpha)), dstate.beta, dstate.alpha);
                             }
-                            wrf(dcam + L.directBeta, beta);
-                            wrf(dcam + L.directBetaTarget, beta);
-                            // the game keeps a negative pitch as 2 pi - x
-                            float was = rdf(dcam + L.directAlpha);
-                            if (was > 3.14159265f)
-                                was -= 6.2831855f;
-                            const float alpha = std::clamp(was + tilt, L.directAlphaMin, L.directAlphaMax);
-                            wrf(dcam + L.directAlpha, alpha);
-                            wrf(dcam + L.directAlphaNeg, -alpha);
+                            wrf(dcam + L.directBeta, dstate.beta);
+                            wrf(dcam + L.directBetaTarget, dstate.beta);
+                            wrf(dcam + L.directAlpha, dstate.alpha);
+                            wrf(dcam + L.directAlphaNeg, -dstate.alpha);
                         }
                     }
                 }
+                if (!directNow)
+                    dstate.active = false;
 
                 if (direct)
                 {

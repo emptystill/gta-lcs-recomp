@@ -42,7 +42,8 @@ namespace vcs::input
         unsigned directActive = 0, directCam0 = 0, directCamStride = 0;
         unsigned directMode = 0, directFootMode = 4u, directCarMode = 18u;
         unsigned directBeta = 0, directBetaTarget = 0, directAlpha = 0, directAlphaNeg = 0;
-        float directAlphaMin = -0.5f, directAlphaMax = 1.46f;
+        float directAlphaMin = -0.5f, directAlphaMax = 1.46f;       // on foot
+        float directCarAlphaMin = -0.5f, directCarAlphaMax = 1.46f; // behind a vehicle
     };
     void setGameLayout(const GameLayout &layout);
 

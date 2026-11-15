@@ -245,6 +245,14 @@ the mouse adds to both of each pair, on frames the game ran; Keyboard > Mouse se
 invert apply. The game clamps the pitch itself (on foot it will not look up past ~-0.07). Measured (`VCS_MOUSE_LOG=1`):
 the view is at the new heading within a frame (the stick path took ~400 ms to reach a fraction of it).
 
+Then (the user: "it goes back to one position, on foot and in the car, and sometimes looks down while driving"): the
+game's own following turns the heading back behind the player / the vehicle on every frame it is not written, and the
+pitch target written once stayed. The direct camera now keeps its own heading and pitch (taken from the game when the
+mode or the active CCam changes - cutscenes, getting in / out) and writes them on every frame the game runs in modes
+4 / 18; the pitch kept in the game's range (on foot it looks up to -0.07, the stick's 1.466 down; in a vehicle
+-0.07..1.30). Measured at 60 fps: after a turn, 2.4 s of walking or driving leave the view within 1.5 degrees of where
+the mouse put it.
+
 The first version (commit f683527) never ran in play: it read the camera through `GameLayout::theCamera`, which LCS
 leaves 0 to keep VCS's camera code off, so it read address 0x260 (mode 0) and the mouse stayed the stick - the user
 felt no difference. Its test had passed by the stick path's own turning.
