@@ -1,7 +1,7 @@
 # Vendored from BigDaddyJRich/hctp-recomp (tools/vu1_recomp.py, GPL-3.0) for gta-recomp. Local changes, marked
 # [gta-recomp]: an uploads list input (VCS sends its microcode as REF payloads whose DMAtags carry the MPG VIFcode, so
 # there is no VIF stream to parse) and PS2X_* switch names.
-#   python tools/vu1_recomp.py <elf> <out.cpp> game/vcs/vu1_uploads.txt
+#   python tools/vu1_recomp.py <elf> <out.cpp> game/lcs/vu1_uploads.txt
 # VU1 recompiler: the game's VU1 microprograms (the MPG uploads in SLUS_206.39's .vutext) -> C++
 # (generated\vu1_compiled.cpp), which PS2Recomp's VU1 runs instead of interpreting while VU1 code memory holds exactly
 # that code (PS2Recomp ps2xRuntime/include/runtime/ps2_vu1_compiled.h). Each instruction pair becomes straight C++ with
@@ -22,7 +22,7 @@ import struct
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-ELF = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, 'build', 'elf', 'SLUS_215.90')
+ELF = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, 'build', 'elf', 'SLUS_214.23')
 OUT = sys.argv[2] if len(sys.argv) > 2 else os.path.join(ROOT, 'generated', 'vu1_compiled.cpp')
 UPLOADS = sys.argv[3] if len(sys.argv) > 3 else None  # [gta-recomp] 'src_hex vu_hex pairs' per line
 CODE_SIZE = 0x4000       # VU1 code memory

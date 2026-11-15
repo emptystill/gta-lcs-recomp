@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Disassemble part of the EE ELF, with call targets named from game/vcs/functions.csv.
+"""Disassemble part of the EE ELF, with call targets named from game/lcs/functions.csv.
 
     python -I tools/eedis.py <elf> <start_hex> [end_hex | +len_hex]
     python -I tools/eedis.py <elf> <name_or_addr_inside_function>     (whole function)
 
-The ELF is staged by vcs.exe at %LOCALAPPDATA%/VCSRecomp/cache/SLUS_215.90.
+The ELF is staged by vcs.exe at %LOCALAPPDATA%/LCSRecomp/cache/SLUS_214.23.
 Output is derived from game code: keep listings under build/analysis/.
 R5900-only opcodes (MMI, LQ/SQ, VU0 macro) show as '.word'. Needs capstone.
 """
@@ -40,7 +40,7 @@ def read(segs, addr, n):
 
 def load_functions():
     rows = []
-    for r in csv.reader(open(os.path.join(ROOT, 'game', 'vcs', 'functions.csv'))):
+    for r in csv.reader(open(os.path.join(ROOT, 'game', 'lcs', 'functions.csv'))):
         if len(r) >= 3 and r[1].startswith('0x'):
             rows.append((int(r[1], 16), int(r[2], 16), r[0]))
     rows.sort()

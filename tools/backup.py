@@ -6,7 +6,7 @@
     python tools/backup.py restore NAME           the card replaced by a backup (the card as it is goes into a backup
                                                   first); refused while the game runs unless --force
 
-<data> is VCS_DATA_DIR or the game's own folder (%LOCALAPPDATA%\\VCSRecomp, ~/.local/share/VCSRecomp). The card's
+<data> is VCS_DATA_DIR or the game's own folder (%LOCALAPPDATA%\\LCSRecomp, ~/.local/share/LCSRecomp). The card's
 order matters to the game (docs/game-internals.md 10c): each save folder's `.ps2x-order` file is backed up with it,
 and a restore puts back every file's modification and (Windows) creation time, in the original creation order.
 """
@@ -31,9 +31,9 @@ def data_dir():
     if os.environ.get("VCS_DATA_DIR"):
         return os.environ["VCS_DATA_DIR"]
     if tc.IS_WINDOWS:
-        return os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "VCSRecomp")
+        return os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "LCSRecomp")
     xdg = os.environ.get("XDG_DATA_HOME", "")
-    return os.path.join(xdg if xdg.startswith("/") else os.path.expanduser("~/.local/share"), "VCSRecomp")
+    return os.path.join(xdg if xdg.startswith("/") else os.path.expanduser("~/.local/share"), "LCSRecomp")
 
 
 def backups_dir():

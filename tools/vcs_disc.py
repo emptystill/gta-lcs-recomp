@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read the user's own GTA: Vice City Stories (PS2) disc image.
+"""Read the user's own GTA: Liberty City Stories (PS2) disc image.
 
 Plain ISO 9660 reader with no third-party dependencies. Used by the build
 pipeline to pull the game executable out of the user's ISO and check that
@@ -21,14 +21,17 @@ SECTOR = 2048
 
 # The one supported build. The recompiled code only matches this executable.
 KNOWN_BUILDS = {
-    "d1832508caf0990c2291c0f255c96a889cce9f88": "SLUS-21590 (USA) v1.00",
+    "9b021b4c4e42087bb9b374709f26cf67744b75ab": "SLUS-21423 (USA) v1.01",
 }
-ELF_NAME = "SLUS_215.90"
+ELF_NAME = "SLUS_214.23"
+GAME = "GTA: Liberty City Stories"
+GAME_DIR = "game/lcs"  # recompiler config + function map of ELF_NAME
 
 # Other discs a player may pick, named so the message says what to do (src/disc/vcs_disc_id.h has the same list)
 OTHER_RELEASES = {
-    "SLES_546.22": "the European release of Vice City Stories",  # the PAL build (DECISIONS.md, the BlackLine map)
-    "SLUS_214.23": "Liberty City Stories (USA), not Vice City Stories",  # read from a disc's SYSTEM.CNF
+    "SLUS_215.90": "Vice City Stories (USA), not Liberty City Stories (the VCS port is its own project)",
+    "SLES_546.22": "the European release of Vice City Stories",
+    "SLES_541.35": "the European release of Liberty City Stories",
 }
 
 
@@ -97,7 +100,7 @@ class IsoImage:
 
 
 def check(iso):
-    """Is `iso` the supported disc? {"ok": bool, "code": ..., "message": ..., "boot": "SLUS_215.90", "title": ...}.
+    """Is `iso` the supported disc? {"ok": bool, "code": ..., "message": ..., "boot": "SLUS_214.23", "title": ...}.
     Codes: ok, not_found, not_iso, not_ps2, other_release, unsupported_build. Reads SYSTEM.CNF and the ELF only (a
     second, not a hash of the whole image)."""
     import os
@@ -121,7 +124,7 @@ def check(iso):
     if boot.upper() != ELF_NAME:
         other = OTHER_RELEASES.get(boot.upper())
         return {"ok": False, "code": "other_release", "boot": boot,
-                "message": "this disc is %s (%s). Only GTA: Vice City Stories for the USA (SLUS-21590) is supported" % (other or "another game", boot)}
+                "message": "this disc is %s (%s). Only GTA: Liberty City Stories for the USA (SLUS-21423) is supported" % (other or "another game", boot)}
     rec = img.find(ELF_NAME)
     if not rec:
         return {"ok": False, "code": "not_ps2", "boot": boot, "message": ELF_NAME + " missing from the image (a damaged copy?)"}
@@ -129,8 +132,8 @@ def check(iso):
     if sha1 not in KNOWN_BUILDS:
         return {"ok": False, "code": "unsupported_build", "boot": boot, "sha1": sha1,
                 "message": "unsupported build of the executable (sha1 %s): a modified or damaged copy?" % sha1}
-    return {"ok": True, "code": "ok", "boot": boot, "sha1": sha1, "title": "GTA: Vice City Stories - " + KNOWN_BUILDS[sha1],
-            "message": "GTA: Vice City Stories - " + KNOWN_BUILDS[sha1]}
+    return {"ok": True, "code": "ok", "boot": boot, "sha1": sha1, "title": GAME + " - " + KNOWN_BUILDS[sha1],
+            "message": GAME + " - " + KNOWN_BUILDS[sha1]}
 
 
 def cmd_check(iso, as_json=False):
@@ -144,7 +147,7 @@ def cmd_info(iso):
     print("volume:", img.volume_id)
     rec = img.find(ELF_NAME)
     if not rec:
-        sys.exit("error: %s not found on disc - is this GTA: Vice City Stories (USA)?" % ELF_NAME)
+        sys.exit("error: %s not found on disc - is this GTA: Liberty City Stories (USA)?" % ELF_NAME)
     sha1 = hashlib.sha1(img.read_file(rec)).hexdigest()
     print("elf:", ELF_NAME, "lba", rec["lba"], "size", rec["size"])
     print("sha1:", sha1, "->", KNOWN_BUILDS.get(sha1, "UNKNOWN BUILD (unsupported)"))
@@ -168,7 +171,7 @@ def cmd_elf(iso, out):
     img = IsoImage(iso)
     rec = img.find(ELF_NAME)
     if not rec:
-        sys.exit("error: %s not found on disc - is this GTA: Vice City Stories (USA)?" % ELF_NAME)
+        sys.exit("error: %s not found on disc - is this GTA: Liberty City Stories (USA)?" % ELF_NAME)
     data = img.read_file(rec)
     sha1 = hashlib.sha1(data).hexdigest()
     if sha1 not in KNOWN_BUILDS:

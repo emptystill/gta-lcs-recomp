@@ -59,7 +59,10 @@ IS_MACOS = platform.system() == "Darwin"
 for _stream in (sys.stdout, sys.stderr):
     if hasattr(_stream, "reconfigure"):
         _stream.reconfigure(encoding="utf-8", errors="replace", line_buffering=_stream is sys.stdout or None)
-ISO_GLOB = "*Vice City Stories*.iso"
+ISO_GLOB = "*Liberty City Stories*.iso"
+# The game this tree ports (one source of truth: tools/vcs_disc.py, src/disc/vcs_disc_id.h has the same values)
+ELF_NAME = "SLUS_214.23"
+GAME_DIR = "game/lcs"  # recompiler config, function map, VU1 upload list of ELF_NAME
 
 
 def exe(path):
@@ -154,7 +157,7 @@ ROOT_INI = os.path.join(ROOT, "vcs.ini")
 
 def find_iso(given=None):
     """The disc image: `given`, VCS_ISO, iso=... in build/vcs.ini (the one vcs.exe reads) or the repository root's
-    vcs.ini, or a '*Vice City Stories*.iso' in the repository root."""
+    vcs.ini, or a '*Liberty City Stories*.iso' in the repository root or its iso/ folder."""
     if given:
         if not os.path.isfile(given):
             fail("disc image not found: " + given, "disc_not_found")
@@ -165,10 +168,10 @@ def find_iso(given=None):
         value = ini_value(ini, "iso")
         if value:
             return find_iso(value)
-    found = sorted(glob.glob(os.path.join(ROOT, ISO_GLOB)))
+    found = sorted(glob.glob(os.path.join(ROOT, ISO_GLOB)) + glob.glob(os.path.join(ROOT, "iso", ISO_GLOB)))
     if found:
         return found[0]
-    fail("no disc image: pass your Vice City Stories (USA) .iso, set VCS_ISO, or put the .iso in the repository root",
+    fail("no disc image: pass your Liberty City Stories (USA) .iso, set VCS_ISO, or put the .iso in the repository root or iso/",
          "no_disc")
 
 

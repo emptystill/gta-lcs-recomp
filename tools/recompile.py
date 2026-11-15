@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Recompile the game: your ISO -> generated C++ (generated/ee, generated/vu1).
 
-    python tools/recompile.py ["path/to/Grand Theft Auto - Vice City Stories (USA).iso"]
+    python tools/recompile.py ["path/to/Grand Theft Auto - Liberty City Stories (USA).iso"]
 
-Without an argument the disc is taken from VCS_ISO, iso=... in build/vcs.ini or vcs.ini, or a '*Vice City
-Stories*.iso' in the repository root. `--check` says whether generated/ is current (generated/recompile_stamp.json: a
-hash of the recompiler, its config and the function map). Uses the committed function map (game/vcs); Ghidra is only needed to redo the analysis
+Without an argument the disc is taken from VCS_ISO, iso=... in build/vcs.ini or vcs.ini, or a '*Liberty City
+Stories*.iso' in the repository root or iso/. `--check` says whether generated/ is current (generated/recompile_stamp.json: a
+hash of the recompiler, its config and the function map). Uses the committed function map (tc.GAME_DIR); Ghidra is only needed to redo the analysis
 (tools/ghidra_analyze.py). To recompile and build in one go: python tools/build.py --recompile
 """
 import argparse
@@ -22,7 +22,8 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import toolchain as tc  # noqa: E402
 
-ELF = os.path.join(tc.BUILD, "elf", "SLUS_215.90")
+ELF = os.path.join(tc.BUILD, "elf", tc.ELF_NAME)
+GAME_DIR = os.path.join(tc.ROOT, *tc.GAME_DIR.split("/"))
 GENERATED = os.path.join(tc.ROOT, "generated")
 STAMP = os.path.join(GENERATED, "recompile_stamp.json")
 
@@ -30,7 +31,8 @@ STAMP = os.path.join(GENERATED, "recompile_stamp.json")
 # stub list), the config and function map, and the scripts that translate and sync. A change to any of them means a
 # recompile; nothing else does (the runtime and src/ are compiled, not generated).
 STAMP_INPUTS = [
-    "game/vcs",
+    tc.GAME_DIR,
+    "tools/compat_symbols.py",
     "third_party/PS2Recomp/ps2xRecomp",
     "third_party/PS2Recomp/ps2xRuntime/include/ps2_call_list.h",
     "third_party/PS2Recomp/ps2xRuntime/include/ps2_runtime_calls.h",
@@ -107,7 +109,7 @@ def recompile(iso, env=None, verbose=False):
 
     step("extracting the executable from " + os.path.basename(iso), "disc")
     if subprocess.run(tc.PY + [tc.tool("vcs_disc.py"), "elf", iso, ELF], cwd=tc.ROOT).returncode != 0:
-        tc.fail("could not extract SLUS_215.90 from " + iso, "wrong_disc")
+        tc.fail("could not extract " + tc.ELF_NAME + " from " + iso, "wrong_disc")
 
     # Always (re)build the recompiler: it compiles in the runtime's stub list (ps2_call_list.h), so a stale
     # binary silently ignores new stubs.
@@ -119,16 +121,16 @@ def recompile(iso, env=None, verbose=False):
     export = os.path.join(tc.ROOT, "ghidra", "export", "ghidra_export.toml")
     analyzer = os.path.join(tc.BUILD, "analyzer", "analyzer.toml")
     if os.path.isfile(export) and os.path.isfile(analyzer):
-        step("merging the analysis exports into game/vcs/vcs.toml")
+        step("merging the analysis exports into " + tc.GAME_DIR + "/game.toml")
         subprocess.run(tc.PY + [tc.tool("make_config.py"), export, analyzer], cwd=tc.ROOT)
     else:
-        step("analysis exports not present: using the committed game/vcs/vcs.toml")
+        step("analysis exports not present: using the committed " + tc.GAME_DIR + "/game.toml")
 
     # Generate into a scratch dir, then copy only changed files so rebuilds stay incremental.
     step("translating MIPS to C++", "translate")
     fresh = os.path.join(tc.BUILD, "generated_fresh")
     shutil.rmtree(fresh, ignore_errors=True)
-    with open(os.path.join(tc.ROOT, "game", "vcs", "vcs.toml"), encoding="utf-8") as f:
+    with open(os.path.join(GAME_DIR, "game.toml"), encoding="utf-8") as f:
         config = f.read()
     config = re.sub(r'(?m)^output = .*$', lambda _: 'output = "%s"' % fresh.replace(os.sep, "/"), config)
     config = re.sub(r'(?m)^input = .*$', lambda _: 'input = "%s"' % ELF.replace(os.sep, "/"), config)
@@ -142,12 +144,15 @@ def recompile(iso, env=None, verbose=False):
             if "Warnings:" in line:
                 print("  " + line.strip())
     subprocess.run(tc.PY + [tc.tool("sync_generated.py"), fresh, os.path.join(tc.ROOT, "generated", "ee")], cwd=tc.ROOT, check=True)
+    # functions src/ calls by name that this executable lacks (VCS ones the LCS tree still compiles): declarations
+    # and stubs that stop loudly, so src/ links (tools/compat_symbols.py)
+    subprocess.run(tc.PY + [tc.tool("compat_symbols.py"), os.path.join(tc.ROOT, "generated", "ee")], cwd=tc.ROOT, check=True)
 
     # VU1 microcode -> C++ (runs instead of the VU1 interpreter while VU1 memory holds exactly that code)
     step("compiling VU1 microcode", "vu1")
     out = os.path.join(tc.BUILD, "vu1", "vu1_compiled.cpp")
     os.makedirs(os.path.dirname(out), exist_ok=True)
-    result = subprocess.run(tc.PY + [tc.tool("vu1_recomp.py"), ELF, out, os.path.join(tc.ROOT, "game", "vcs", "vu1_uploads.txt")],
+    result = subprocess.run(tc.PY + [tc.tool("vu1_recomp.py"), ELF, out, os.path.join(GAME_DIR, "vu1_uploads.txt")],
                             cwd=tc.ROOT, capture_output=True, text=True)
     if result.returncode != 0:
         print(result.stdout[-2000:] + result.stderr[-2000:])
@@ -165,7 +170,7 @@ def recompile(iso, env=None, verbose=False):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("iso", nargs="?", help="your Vice City Stories (USA) disc image")
+    ap.add_argument("iso", nargs="?", help="your Liberty City Stories (USA) disc image")
     ap.add_argument("-v", "--verbose", action="store_true", help="show all build output")
     ap.add_argument("--check", action="store_true", help="only say whether the generated code is current (exit 0) or not (1)")
     a = ap.parse_args()

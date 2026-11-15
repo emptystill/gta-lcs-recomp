@@ -3,17 +3,17 @@
 
 Scans .data/.rodata/.sdata-like sections for 32-bit words pointing into .text
 that fall in a gap between known functions (vtables, callback tables). Writes
-them to game/vcs/extra_functions.csv (merged by make_config.py); each one ends
+them to game/lcs/extra_functions.csv (merged by make_config.py); each one ends
 at the next known or new function start.
 
-    python -I tools/find_missing_functions.py build/elf/SLUS_215.90 ghidra/export/functions.csv
+    python -I tools/find_missing_functions.py build/elf/SLUS_214.23 ghidra/export/functions.csv
 """
 import bisect
 import csv
 import struct
 import sys
 
-OUT = "game/vcs/extra_functions.csv"
+OUT = "game/lcs/extra_functions.csv"
 LABEL_PREFIXES = ("entry_", "caseD_", "default", "LAB_", "switchD_")
 
 

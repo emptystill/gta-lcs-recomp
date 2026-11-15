@@ -1,9 +1,9 @@
-// GTA: Vice City Stories (PS2) native launcher.
+// GTA: Liberty City Stories (PS2) native launcher (built on the Vice City Stories port).
 //
 // Finds the user's disc image, checks it holds the supported executable,
 // maps it as cdrom0: and boots the recompiled game.
 //
-//   vcs.exe [path\to\Grand Theft Auto - Vice City Stories (USA).iso]
+//   vcs.exe [path\to\Grand Theft Auto - Liberty City Stories (USA).iso]
 //
 // Without an argument it uses "iso=" from vcs.ini next to the exe, then the
 // first *.iso in the exe's folder or the current folder.
@@ -155,15 +155,15 @@ namespace
             return fs::path(dir);
 #if defined(_WIN32)
         if (const char *local = std::getenv("LOCALAPPDATA"))
-            return fs::path(local) / "VCSRecomp";
+            return fs::path(local) / "LCSRecomp";
 #elif defined(__APPLE__)
         if (const char *home = std::getenv("HOME"); home && *home == '/')
-            return fs::path(home) / "Library/Application Support/VCSRecomp";
+            return fs::path(home) / "Library/Application Support/LCSRecomp";
 #endif
         if (const char *xdg = std::getenv("XDG_DATA_HOME"); xdg && *xdg == '/') // absolute only (the XDG spec)
-            return fs::path(xdg) / "VCSRecomp";
+            return fs::path(xdg) / "LCSRecomp";
         if (const char *home = std::getenv("HOME"))
-            return fs::path(home) / ".local/share/VCSRecomp";
+            return fs::path(home) / ".local/share/LCSRecomp";
         return exeDirectory() / "userdata";
     }
 
@@ -826,7 +826,7 @@ namespace
         vcs::IsoEntry entry;
         if (!iso.find(kElfName, entry))
         {
-            error = std::string(kElfName) + " not found: this is not GTA: Vice City Stories (USA)";
+            error = std::string(kElfName) + " not found: this is not " + std::string(vcs::disc::kSupported);
             return vcs::disc::kExitWrongDisc;
         }
         std::vector<uint8_t> elf(entry.size);
@@ -861,6 +861,13 @@ int main(int argc, char *argv[])
         // (~5 fps), which only tools/run.py and the test tools used to override - vcs.exe started on its own got it
         if (const char *gs = std::getenv("PS2X_GS"); !gs || !*gs)
             setEnv("PS2X_GS", "hw");
+        // Liberty City Stories: the VCS port's game code (src/game) knows VCS's addresses only. Its hooks are
+        // registered for VCS's executable alone (PS2_REGISTER_GAME_OVERRIDE); the parts main() installs itself are
+        // kept off the game's memory here until each has its LCS addresses: the runtime's own pad mapping instead of
+        // the bindings (which also turn the camera / aim / radio in VCS's memory), the volume setters left alone.
+        for (const char *off : {"VCS_INPUT_MAP", "VCS_GAME_VOLUME"})
+            if (const char *v = std::getenv(off); !v || !*v)
+                setEnv(off, "0");
         registerSettings();
         settings::load(exeDirectory() / "vcs.ini");
         // a test run never changes the player's settings: hidden, or shown (VCS_KEEP_SETTINGS=1 from
@@ -872,7 +879,7 @@ int main(int argc, char *argv[])
         const fs::path isoPath = locateIso(argc, argv);
         if (isoPath.empty())
         {
-            std::cerr << "No disc image found. Pass your Vice City Stories (USA) .iso as the first argument,\n"
+            std::cerr << "No disc image found. Pass your Liberty City Stories (USA) .iso as the first argument,\n"
                          "put iso=<path> in vcs.ini next to vcs.exe, or place the .iso next to vcs.exe."
                       << std::endl;
             return vcs::disc::kExitNoDisc;
@@ -933,7 +940,7 @@ int main(int argc, char *argv[])
                                         drawFrameRateCounter();
                                     },
                                     nullptr, nullptr);
-        if (!runtime.initialize("GTA: Vice City Stories"))
+        if (!runtime.initialize(vcs::disc::kGameName))
         {
             std::cerr << "Failed to initialize runtime" << std::endl;
             return vcs::disc::kExitInitFailed;
@@ -952,7 +959,7 @@ int main(int argc, char *argv[])
         PS2Runtime::setIoPaths(paths);
 
         vcs::rig::install(runtime); // control-channel automation commands (debug/rig.h)
-        vcs::trainer::install(runtime); // the trainer's control-channel command (game/vcs_trainer.h)
+        // the trainer (game/vcs_trainer.h) not installed: its script commands and addresses are VCS's
         vcs::input::install(runtime);   // the player's bindings feed the pad (game/vcs_input.h)
         vcs::volume::install(runtime);  // the game's music / effects levels follow the settings (game/vcs_volume.h)
         vcs::gameinfo::install(runtime); // the F3 overlay's game-state panel, the `gameinfo` command (debug/game_info.h)

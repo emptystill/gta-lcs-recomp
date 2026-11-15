@@ -7,9 +7,11 @@
 
 namespace vcs::disc
 {
-    constexpr const char *kElfName = "SLUS_215.90";
-    constexpr const char *kElfSha1 = "d1832508caf0990c2291c0f255c96a889cce9f88";
-    constexpr const char *kTitle = "GTA: Vice City Stories - USA (SLUS-21590) v1.00";
+    constexpr const char *kElfName = "SLUS_214.23";
+    constexpr const char *kElfSha1 = "9b021b4c4e42087bb9b374709f26cf67744b75ab";
+    constexpr const char *kTitle = "GTA: Liberty City Stories - USA (SLUS-21423) v1.01";
+    constexpr const char *kGameName = "GTA: Liberty City Stories"; // the window's title
+    constexpr const char *kSupported = "GTA: Liberty City Stories for the USA (SLUS-21423)";
 
     // vcs.exe's exit codes for a start that never reached the game (the launcher names the reason)
     enum ExitCode : int
@@ -18,7 +20,7 @@ namespace vcs::disc
         kExitError = 1,       // anything else (an exception, the runtime stopping)
         kExitNoDisc = 2,      // no disc image given or found
         kExitDiscUnreadable = 3,
-        kExitWrongDisc = 4,   // not SLUS_215.90, or another build of it
+        kExitWrongDisc = 4,   // not SLUS_214.23, or another build of it
         kExitInitFailed = 5,  // the runtime (window, renderer, sound) could not start
     };
 
@@ -45,10 +47,12 @@ namespace vcs::disc
     // What a boot executable other than ours is, in words a player can act on (empty when unknown).
     inline const char *describeOtherRelease(std::string_view elf)
     {
-        if (elf == "SLES_546.22") // the PAL build (DECISIONS.md, the BlackLine map)
+        if (elf == "SLUS_215.90")
+            return "Vice City Stories (USA), not Liberty City Stories (the VCS port is its own project)";
+        if (elf == "SLES_546.22")
             return "the European release of Vice City Stories";
-        if (elf == "SLUS_214.23") // read from a disc's SYSTEM.CNF
-            return "Liberty City Stories (USA), not Vice City Stories";
+        if (elf == "SLES_541.35")
+            return "the European release of Liberty City Stories";
         return "";
     }
 }

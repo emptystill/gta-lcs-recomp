@@ -35,7 +35,7 @@ def main():
     out = os.path.abspath(a.out or os.path.join(tc.BUILD, "analysis", "decomp", "_".join(x.lower().replace("0x", "") for x in a.addrs[:4]) + ".c"))
     os.makedirs(os.path.dirname(out), exist_ok=True)
     scripts = os.path.join(tc.ROOT, "tools", "ghidra")
-    cmd = [headless, project, "vcs", "-process", "-noanalysis", "-readOnly", "-scriptPath", scripts,
+    cmd = [headless, project, tc.GAME_DIR.split("/")[-1], "-process", "-noanalysis", "-readOnly", "-scriptPath", scripts,
            "-postScript", "DecompileList.java", out] + a.addrs
     code = subprocess.run(cmd, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode
     if code != 0 or not os.path.isfile(out):

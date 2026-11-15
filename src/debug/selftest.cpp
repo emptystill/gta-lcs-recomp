@@ -6,6 +6,9 @@
 #include "ps2_runtime.h"
 #include "ps2_runtime_macros.h"
 #include <ps2_recompiled_functions.h>
+#if __has_include(<ps2_compat_functions.h>)
+#include <ps2_compat_functions.h> // VCS functions this executable lacks (tools/compat_symbols.py)
+#endif
 
 #include <cstdio>
 #include <cstdlib>
