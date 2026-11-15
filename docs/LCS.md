@@ -218,6 +218,13 @@ Two settings (Graphics > Image quality), both off / as before by default:
 - **Motion blur** (`display.motion_blur`, `LCS_MOTION_BLUR`): Off / Reduced (the default, as before) / PS2
   (`gsHwSetMotionBlur`, runtime).
 
+Then (the user's 1440p screenshots: "Match window" in full screen, sharper than 1x - the HUD text and the outlines -
+but "jagged"): the targets are 2560x1646 with 8 samples, geometry edges are antialiased (checked in the user's own
+picture); the blocks are the textures' texels - a wallpaper texel covers several screen pixels at 1440p. Not point
+filtering: a count of point-filtered game textures (TEX1 MMAG / MMIN nearest) over the intro and the first mission was
+zero - every texture is bilinear already (a "smooth all textures" option was tried and dropped: it changed nothing).
+What would help is more texture detail: an upscaling filter at decode time (xBRZ-like) or replacement textures.
+
 ## Tools for LCS debugging
 
 - `tools/xglobal.py --vcs-lcs 0xADDR...`: a VCS global's LCS address, from the code around its uses (votes).
