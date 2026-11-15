@@ -29,7 +29,10 @@ import toolchain as tc  # noqa: E402
 
 ROOT_OUT = tc.GAME_DIR + "/game.toml"
 CSV_OUT = tc.GAME_DIR + "/functions.csv"
-EXTRA_CSV = tc.GAME_DIR + "/extra_functions.csv"  # tools/find_missing_functions.py
+EXTRA_CSV = tc.GAME_DIR + "/extra_functions.csv"
+# Functions found by hand (reached only through a pointer nothing else finds: a "[guest-branch:missing-target]" in a
+# run's log); find_missing_functions.py rewrites EXTRA_CSV, this one is kept.
+MANUAL_CSV = tc.GAME_DIR + "/manual_functions.csv"  # tools/find_missing_functions.py
 LABEL_PREFIXES = ("entry_", "caseD_", "default", "LAB_", "switchD_")
 OVERRIDES = tc.GAME_DIR + "/overrides.toml"
 
@@ -56,14 +59,18 @@ def filter_csv(src):
                 continue
             rows.append(line)
     kept, extra = len(rows), 0
-    try:
-        with open(EXTRA_CSV) as ex:
-            ex.readline()
-            for line in ex:
-                rows.append(line)
-                extra += 1
-    except FileNotFoundError:
-        pass
+    known = {line.split(",")[1].upper() for line in rows}
+    for path in (EXTRA_CSV, MANUAL_CSV):
+        try:
+            with open(path) as ex:
+                ex.readline()
+                for line in ex:
+                    if line.strip() and line.split(",")[1].upper() not in known:
+                        known.add(line.split(",")[1].upper())
+                        rows.append(line if line.endswith("\n") else line + "\n")
+                        extra += 1
+        except FileNotFoundError:
+            pass
     rows.sort(key=lambda line: int(line.split(",")[1], 16))
     with open(CSV_OUT, "w", newline="\n") as out:
         out.write(header)

@@ -51,6 +51,8 @@ namespace vcs
             std::atomic<uint32_t> pending[kChannels]{}; // reads queued or in flight per channel
             uint8_t *rdram = nullptr;
             bool started = false;
+            uint32_t readAccepted = 1u;     // the read's reply word: VCS's CDSTREAM answers 1, LCS's 0
+            std::atomic<uint32_t> head{0u}; // the LSN after the last read queued (fn 4: where the drive's head is)
             // statistics
             std::atomic<uint64_t> reads{0}, bytes{0}, nanoseconds{0};
         };
@@ -127,9 +129,31 @@ namespace vcs
                 r.pending[request.channel % kChannels].fetch_add(1, std::memory_order_relaxed);
                 r.queue.push_back(request);
             }
+            r.head.store(request.lsn + (request.bytes + 2047u) / 2048u, std::memory_order_relaxed);
             r.cv.notify_one();
             report();
-            SET_GPR_U64(ctx, 2, 1); // accepted (the reply word)
+            SET_GPR_U64(ctx, 2, r.readAccepted); // accepted (the reply word)
+            ctx->pc = GPR_U32(ctx, 31);
+        }
+
+        // fn 3 (LCS): wait(channel) - returns once the channel's reads are done, 0
+        PS2_GUEST_CC void streamWait(uint8_t *, R5900Context *ctx, PS2Runtime *)
+        {
+            Reader &r = reader();
+            std::atomic<uint32_t> &pending = r.pending[GPR_U32(ctx, 4) % kChannels];
+            if (pending.load(std::memory_order_acquire) != 0u)
+            {
+                std::unique_lock<std::mutex> lock(r.mutex);
+                r.doneCv.wait(lock, [&] { return pending.load(std::memory_order_acquire) == 0u; });
+            }
+            SET_GPR_U64(ctx, 2, 0);
+            ctx->pc = GPR_U32(ctx, 31);
+        }
+
+        // fn 4 (LCS): the drive head's LSN (the streamer picks the nearest copy of a file by it)
+        PS2_GUEST_CC void streamHead(uint8_t *, R5900Context *ctx, PS2Runtime *)
+        {
+            SET_GPR_U64(ctx, 2, reader().head.load(std::memory_order_relaxed));
             ctx->pc = GPR_U32(ctx, 31);
         }
 
@@ -158,7 +182,7 @@ namespace vcs
         }
     }
 
-    bool installStreamHooksAt(PS2Runtime &runtime, unsigned read, unsigned poll, unsigned fn5)
+    bool installStreamHooksAt(PS2Runtime &runtime, const StreamLayout &layout)
     {
         const char *v = std::getenv("VCS_NATIVE_STREAM");
         if (v && *v == '0')
@@ -166,10 +190,24 @@ namespace vcs
             std::fprintf(stderr, "[stream] through the IOP (VCS_NATIVE_STREAM=0)\n");
             return false;
         }
-        runtime.replaceFunction(read, &streamRead);
-        runtime.replaceFunction(poll, &streamPoll);
-        runtime.replaceFunction(fn5, &streamFn5);
+        reader().readAccepted = layout.readAccepted;
+        runtime.replaceFunction(layout.read, &streamRead);
+        runtime.replaceFunction(layout.poll, &streamPoll);
+        runtime.replaceFunction(layout.fn5, &streamFn5);
+        if (layout.wait)
+            runtime.replaceFunction(layout.wait, &streamWait);
+        if (layout.head)
+            runtime.replaceFunction(layout.head, &streamHead);
         return true;
+    }
+
+    bool installStreamHooksAt(PS2Runtime &runtime, unsigned read, unsigned poll, unsigned fn5)
+    {
+        StreamLayout layout;
+        layout.read = read;
+        layout.poll = poll;
+        layout.fn5 = fn5;
+        return installStreamHooksAt(runtime, layout);
     }
 
     bool installStreamHooks(PS2Runtime &runtime)

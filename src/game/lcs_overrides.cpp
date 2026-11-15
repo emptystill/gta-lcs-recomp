@@ -54,6 +54,11 @@ namespace
     constexpr uint32_t kStreamRead = 0x001F6CA0u;
     constexpr uint32_t kStreamPoll = 0x001F6D78u;
     constexpr uint32_t kStreamFn5 = 0x001F6E50u;
+    // LCS's CDSTREAM has two more client calls than VCS's (decompiled, 2026-11-14): fn 3 wait(channel) 0x1F6EA0 (blocks
+    // until the channel is idle; the model streamer 0x18F648 / 0x18F918 waits with it) and fn 4 0x1F6DE8 (no
+    // arguments; the drive head's LSN - FUN_0018F018 picks the nearest copy of GTA3PS2.IMG by it).
+    constexpr uint32_t kStreamWait = 0x001F6EA0u;
+    constexpr uint32_t kStreamHead = 0x001F6DE8u;
 
     // ---- LCS_TRACE_ALLOC=1: the heap's large-block path and its out-of-memory handler, logged on entry ----
     // Heap: CMemoryHeap-like at 0x406D50 (FUN_0014F2B8), over 0x673168.. (+0x148AE98); FUN_00150478(heap, size) (VCS
@@ -227,7 +232,14 @@ namespace
             if (g_origOom)
                 runtime.replaceFunction(0x001F3318u, &traceOom);
         }
-        if (vcs::installStreamHooksAt(runtime, kStreamRead, kStreamPoll, kStreamFn5))
+        vcs::StreamLayout stream;
+        stream.read = kStreamRead;
+        stream.poll = kStreamPoll;
+        stream.fn5 = kStreamFn5;
+        stream.wait = kStreamWait;
+        stream.head = kStreamHead;
+        stream.readAccepted = 0u; // the model streamer (0x18F648) re-sends a read until it answers 0
+        if (vcs::installStreamHooksAt(runtime, stream))
             std::fprintf(stderr, "[lcs] disc streaming native (VCS_NATIVE_STREAM=0: through the IOP)\n");
         // Sound is not native for LCS yet: the emulated IOP stays on, unless PS2X_IOP=0 (an experiment: no sound driver
         // answers then).
