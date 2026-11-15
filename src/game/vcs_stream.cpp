@@ -112,6 +112,10 @@ namespace vcs
             const int32_t size = static_cast<int32_t>(GPR_U32(ctx, 7));
             Request request{GPR_U32(ctx, 4), GPR_U32(ctx, 5), GPR_U32(ctx, 6),
                             size < 0 ? static_cast<uint32_t>(-size) : static_cast<uint32_t>(size) * 2048u};
+            static const bool trace = std::getenv("VCS_STREAM_TRACE") != nullptr;
+            if (trace)
+                std::fprintf(stderr, "[stream] read ch=%u dest=0x%08x lsn=0x%x bytes=%u ra=0x%x\n", request.channel,
+                             request.dest, request.lsn, request.bytes, GPR_U32(ctx, 31));
             {
                 std::lock_guard<std::mutex> lock(r.mutex);
                 if (!r.started)
@@ -154,7 +158,7 @@ namespace vcs
         }
     }
 
-    bool installStreamHooks(PS2Runtime &runtime)
+    bool installStreamHooksAt(PS2Runtime &runtime, unsigned read, unsigned poll, unsigned fn5)
     {
         const char *v = std::getenv("VCS_NATIVE_STREAM");
         if (v && *v == '0')
@@ -162,10 +166,15 @@ namespace vcs
             std::fprintf(stderr, "[stream] through the IOP (VCS_NATIVE_STREAM=0)\n");
             return false;
         }
-        runtime.replaceFunction(kRead, &streamRead);
-        runtime.replaceFunction(kPoll, &streamPoll);
-        runtime.replaceFunction(kFn5, &streamFn5);
+        runtime.replaceFunction(read, &streamRead);
+        runtime.replaceFunction(poll, &streamPoll);
+        runtime.replaceFunction(fn5, &streamFn5);
         return true;
+    }
+
+    bool installStreamHooks(PS2Runtime &runtime)
+    {
+        return installStreamHooksAt(runtime, kRead, kPoll, kFn5);
     }
 
     void retireIop(bool nativeComplete)

@@ -557,7 +557,12 @@ namespace ps2_syscalls
             heapLimit = kDefaultGuestHeapEnd;
         }
 
-        if (runtime)
+        // [gta-recomp] PS2X_RUNTIME_HEAP set (by a game layer that has put the runtime's own allocations elsewhere): the
+        // game's heap stays the game's. The runtime's guestMalloc (GS reset / font packets, SIF packets, MPEG callback
+        // data...) otherwise takes memory from the very region the game hands its own allocator - Liberty City Stories
+        // runs its heap from the ELF's end, and sceGsResetGraph's packet landed on live data (docs/LCS.md).
+        static const bool keepRuntimeHeap = std::getenv("PS2X_RUNTIME_HEAP") != nullptr;
+        if (runtime && !keepRuntimeHeap)
         {
             runtime->configureGuestHeap(heapBase, heapLimit);
 

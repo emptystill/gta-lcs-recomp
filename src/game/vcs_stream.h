@@ -10,6 +10,9 @@ namespace vcs
     // VCS_NATIVE_STREAM=0, which keeps the IOP's (the reference).
     bool installStreamHooks(PS2Runtime &runtime);
 
+    // The same at another game's addresses of the three EE functions (Liberty City Stories: game/lcs_overrides.cpp).
+    bool installStreamHooksAt(PS2Runtime &runtime, unsigned read, unsigned poll, unsigned fn5);
+
     // Milestone 6 step 3: with streaming and sound both native the emulated IOP is switched off - no IRX module is
     // loaded or run - unless PS2X_IOP=1; PS2X_IOP=0 switches it off regardless.
     void retireIop(bool nativeComplete);

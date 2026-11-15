@@ -30,7 +30,7 @@ def main():
     if not os.path.isfile(headless):
         tc.fail(f"{headless} not found: set GHIDRA_HOME")
     project = os.path.join(tc.ROOT, "ghidra", "project")
-    if not os.path.isfile(os.path.join(project, "vcs.gpr")):
+    if not os.path.isfile(os.path.join(project, tc.GAME_DIR.split("/")[-1] + ".gpr")):
         tc.fail("no EE project yet: python tools/ghidra_analyze.py")
     out = os.path.abspath(a.out or os.path.join(tc.BUILD, "analysis", "decomp", "_".join(x.lower().replace("0x", "") for x in a.addrs[:4]) + ".c"))
     os.makedirs(os.path.dirname(out), exist_ok=True)
