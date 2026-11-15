@@ -272,7 +272,13 @@ stays at its distance and stops on the ground (centre - 0.2) looking up. The piv
 game's offset to the point it looked at. That offset and the distance are eased with a 0.2 s time constant (reset on a
 new mode / CCam / entity), because the bike camera's lean and bumps came straight through. Limits: up to 0.80 rad on
 foot, 0.50 in a vehicle (more and the car leaves the picture). Measured: 40 degrees up on foot with Toni framed from
-below; in the car the camera stays outside. Not yet: the game's camera collision
+below; in the car the camera stays outside.
+
+Next round (the user: turning felt like a smooth, trailing move; in a car it should look up like on foot): the offset
+across the ground turns with the view, so easing it made the camera trail the mouse. Only the height and the distance
+are eased now. Behind a vehicle the camera moves in like on foot (ground: centre - 0.4), but no closer than half its
+distance, then it stays on the ground. The vehicle limit is 0.80 like on foot; the car is seen from below, outside it.
+Not yet: the game's camera collision
 (walls) works on its own camera, not this one - only its distance carries over.
 
 The first version (commit f683527) never ran in play: it read the camera through `GameLayout::theCamera`, which LCS

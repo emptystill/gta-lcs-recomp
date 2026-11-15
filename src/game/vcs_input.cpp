@@ -1248,8 +1248,11 @@ namespace vcs::input
         {
             const float dt = std::clamp(std::chrono::duration<float>(now - o.last).count(), 0.0f, 0.1f);
             const float k = 1.0f - std::exp(-dt / 0.2f);
-            for (int i = 0; i < 3; ++i)
-                o.offset[i] += (gameOffset[i] - o.offset[i]) * k;
+            // only the height and the distance are eased: the offset across the ground turns with the view, and easing
+            // it made the camera trail behind the mouse (the user: "un movimiento suave")
+            o.offset[0] = gameOffset[0];
+            o.offset[1] = gameOffset[1];
+            o.offset[2] += (gameOffset[2] - o.offset[2]) * k;
             o.dist += (along - o.dist) * k;
         }
         o.last = now;
@@ -1258,16 +1261,17 @@ namespace vcs::input
         const float ca = std::cos(d.alpha), sa = std::sin(d.alpha);
         const float dir[3] = {-std::cos(d.beta) * ca, -std::sin(d.beta) * ca, -sa};
         // The camera orbits the pivot at the full pitch, always looking at it (as the PC games do). Looking up lowers
-        // it; where it would go under the ground (a little below the ped's centre, or just under a vehicle's) it moves
-        // in towards the ped on foot, and behind a vehicle it stays at its distance on the ground looking up (moving in
-        // put it inside the car).
+        // it; where it would go under the ground (a little below the ped's / vehicle's centre) it moves in towards the
+        // pivot - behind a vehicle no closer than half its distance (closer put it inside the car), then it stays on
+        // the ground looking up.
         float dist = o.dist;
         const bool inCar = d.mode == L.directCarMode;
-        const float minZ = e[2] - (inCar ? 0.2f : 0.7f);
-        if (!inCar && sa < -1e-3f)
+        const float minZ = e[2] - (inCar ? 0.4f : 0.7f);
+        if (sa < -1e-3f)
         {
             const float room = pivot[2] - minZ;
-            dist = std::clamp(room / -sa, std::min(0.6f, dist), dist);
+            const float closest = inCar ? std::max(0.6f, 0.5f * o.dist) : 0.6f;
+            dist = std::clamp(room / -sa, std::min(closest, dist), dist);
         }
         float pos[3] = {pivot[0] - dir[0] * dist, pivot[1] - dir[1] * dist, pivot[2] - dir[2] * dist};
         pos[2] = std::max(pos[2], std::min(minZ, pivot[2]));
