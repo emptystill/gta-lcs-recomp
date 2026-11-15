@@ -1,3 +1,26 @@
-# VU1 microcode uploads made by SLUS_214.23 (find them with PS2X_LOG_MPG_SOURCES=1): ELF source address, VU1 byte
-# address, instruction pairs. tools/vu1_recomp.py reads the code from the user's ELF and compiles it to C++.
-# Empty until a run has listed them: VU1 is interpreted meanwhile.
+# VU1 microcode uploads made by SLUS_214.23 (found with PS2X_LOG_MPG_SOURCES=1 through the intro cutscenes and the first
+# mission, walking and driving): ELF source address, VU1 byte address, instruction pairs. tools/vu1_recomp.py reads the
+# code from the user's ELF and compiles it to C++.
+0011b820 2700 18
+00146690 07f0 84
+00146930 0c38 88
+00146bf0 1440 38
+00153110 2b50 256
+00153910 3350 60
+002074c0 2700 54
+0022f3b0 07f0 124
+0022f790 0c38 118
+0022fb40 1440 38
+0024b5a0 0000 256
+0024bda0 0800 256
+0024c5a0 1000 256
+0024cda0 1800 256
+0024d5a0 2000 224
+00272740 2700 158
+00272c30 2700 138
+002d4790 07f0 134
+002d4bc0 0c38 128
+002d4fc0 1440 42
+002d9bc0 2a30 30
+002e2aa0 2bf0 112
+002e2e20 2700 102

@@ -132,6 +132,30 @@ vehicle: the player's vehicle fields). Not yet: the mouse turning the on-foot ca
 CCam layout unchecked), the radio and weapon changes on the wheel (vehicle radio field; camera mode), free aim, the
 car camera, the pause menu's mouse (VCS-only modules, `GameLayout::extras` off).
 
+## Performance (2026-11-15)
+
+The game ran in slow motion: 23 vblanks a second (the PS2: 60), so ~38% of real time - the frame took 43 ms, of
+which the GS stage 37 ms (`perf`: `gs_ms`, `worker_ms`, `tex_decode_us`). Three fixes, measured at the first
+mission (hidden run, ThinLTO):
+
+| | vblanks / s | frame ms | game ms | render worker ms | GS stage ms | texture decode ms |
+|---|---|---|---|---|---|---|
+| quick build (none), before | 22.9 | 43.6 | 18.8 | 42.8 | 37.3 | ~31 |
+| ThinLTO (`--opt lto`) | 25.3 | 39.5 | 19.7 | 38.8 | 37.8 | ~31 |
+| + textures keyed by content | 35.6 | 28.1 | 4.0 | 27.5 | 6.0 | 0.03 |
+| + VU1 microcode compiled | 60.0 | 16.7 | 3.2 | 4.8 | 5.3 | 0.03 |
+
+- **Textures**: LCS re-sends its textures every frame in another format than they are read in (T4 as CT16, T8 as
+  CT32) and loads the CLUT into one of the texture's pages right after; the GS backend's cache keyed such textures
+  by page generations and missed every time (~25 MB decoded a frame). Keyed by the upload's content now
+  (`PS2X_HW_CONTENT_KEY_ANY`, runtime; set by `lcs_overrides.cpp`, `LCS_TEX_CONTENT_KEY=0` undoes). VCS avoided this
+  with hooks that name textures by the game's raster.
+- **VU1**: `game/lcs/vu1_uploads.txt` was empty, so every VU1 microprogram was interpreted. The 23 uploads LCS makes
+  (`PS2X_LOG_MPG_SOURCES=1` through the intro and the first mission, walking and driving) are listed there now;
+  `tools/vu1_recomp.py` compiles them (50 programs, 2970 pairs; `tools/recompile.py` runs it).
+- The game itself now runs as on the PS2: 30 game frames a second, its clock at 1000 ms a second. Above 30 needs the
+  VCS port's frame-rate work (`src/game/vcs_framerate.cpp` and the timing fixes) at LCS's addresses: next.
+
 ## Tools for LCS debugging
 
 - `tools/xglobal.py --vcs-lcs 0xADDR...`: a VCS global's LCS address, from the code around its uses (votes).
@@ -161,3 +185,4 @@ car camera, the pause menu's mouse (VCS-only modules, `GameLayout::extras` off).
   (as the right stick), the Driving keys (checked: W walks; F enters the car; W accelerates, A steers). Found the
   intermittent hang when the intro cutscene is skipped. `tools/xglobal.py`.
 - 2026-11-15: the skip hang fixed (step 5 above): the runtime's RPC / TLS pools moved out of LCS's streaming memory.
+- 2026-11-15: full speed (60 vblanks / s, was 23): ThinLTO, textures keyed by content, VU1 microcode compiled.

@@ -4928,6 +4928,26 @@ namespace
                         untouched = m_pageGen[p] == u.gens[p - u.first];
                     if (untouched)
                         raster = u.raster;
+                    // [gta-recomp] PS2X_HW_CONTENT_KEY_ANY=1: such a texture keyed by the upload's content too, when the
+                    // upload (another format at the same base: T8 sent as CT32, T4 as CT16) holds at least as many bytes
+                    // as the texture reads - the decoded texture is then a function of those bytes, the texture registers
+                    // and the CLUT. Without it the key is the pages' generations, which change at every re-upload: Liberty
+                    // City Stories re-sends its textures every frame and decoded ~25 MB of them a frame (30 ms of the GS
+                    // stage), VCS names them by raster through its own hooks instead.
+                    static const bool anyFormat = [] {
+                        const char *e = std::getenv("PS2X_HW_CONTENT_KEY_ANY");
+                        return e && e[0] == '1';
+                    }();
+                    const uint64_t upBits = static_cast<uint64_t>(u.w) * u.h * static_cast<uint64_t>(transferBitsPerPixel(u.dpsm));
+                    const uint64_t texBits = static_cast<uint64_t>(d.textureWidth) * d.textureHeight *
+                                             static_cast<uint64_t>(transferBitsPerPixel(t.psm));
+                    const bool sharedPageFormat = t.psm == GS_PSM_T8H || t.psm == GS_PSM_T4HL || t.psm == GS_PSM_T4HH;
+                    if (anyFormat && untouched && !sharedPageFormat && upBits != 0u && texBits != 0u && upBits >= texBits)
+                    {
+                        contentKeyed = true;
+                        key = mix64(mix64(key ^ 0xA11F0Bull, u.hash),
+                                    u.w | (uint64_t(u.h) << 16) | (uint64_t(u.dpsm) << 32) | (uint64_t(u.dbw) << 40));
+                    }
                 }
             }
             if (!raster && !m_pendingUploads.empty()) // [gta-recomp] step 3d: or the queued upload that wrote all its blocks
@@ -4936,6 +4956,31 @@ namespace
                 rectBlocks(t.psm, t.tbp0, t.tbw, 0u, 0u, d.textureWidth, d.textureHeight, m_scratchRead, nullptr);
                 if (const PendingUpload *w = soleQueuedWriter(m_scratchRead))
                     raster = w->raster;
+            }
+            // [gta-recomp] PS2X_HW_CONTENT_KEY_ANY=1 (see above), block by block: the queued upload that is the latest
+            // writer of every block the texture reads, in any format, keys it by its content. The page check above fails
+            // for LCS's textures: the CLUT loaded right after a texture lands in one of its pages.
+            if (!contentKeyed && !m_pendingUploads.empty())
+            {
+                static const bool anyFormat = [] {
+                    const char *e = std::getenv("PS2X_HW_CONTENT_KEY_ANY");
+                    return e && e[0] == '1';
+                }();
+                const bool sharedPageFormat = t.psm == GS_PSM_T8H || t.psm == GS_PSM_T4HL || t.psm == GS_PSM_T4HH;
+                if (anyFormat && !sharedPageFormat)
+                {
+                    m_scratchRead.clear();
+                    rectBlocks(t.psm, t.tbp0, t.tbw, 0u, 0u, d.textureWidth, d.textureHeight, m_scratchRead, nullptr);
+                    if (const PendingUpload *w = soleQueuedWriter(m_scratchRead); w && !w->data.empty())
+                    {
+                        const GSTransferCommand &c = w->cmd;
+                        contentKeyed = true;
+                        key = mix64(mix64(key ^ 0xB10C5ull, hashBytes(w->data.data(), static_cast<uint32_t>(w->data.size()))),
+                                    uint64_t(c.bitbltbuf.dbp) | (uint64_t(c.bitbltbuf.dbw) << 16) | (uint64_t(c.bitbltbuf.dpsm) << 24) |
+                                        (uint64_t(c.trxpos.dsax) << 32) | (uint64_t(c.trxpos.dsay) << 44));
+                        key = mix64(key, uint64_t(c.trxreg.rrw) | (uint64_t(c.trxreg.rrh) << 16));
+                    }
+                }
             }
             if (!contentKeyed)
                 for (uint32_t p = first; p < last && p < kPages; ++p)
@@ -4955,12 +5000,22 @@ namespace
             {
                 static const bool stats = std::getenv("PS2X_HW_UPSTATS") != nullptr;
                 static int logged = 0;
-                if (stats && !raster && logged++ < 40)
+                if (stats && logged++ < 60 && (m_frameIndex % 7u) == 0u)
                 {
                     const auto up = m_uploadAt.find(t.tbp0);
-                    std::fprintf(stderr, "[upload] texture without a raster: tbp %u tbw %u psm %u %ux%u, %s\n", t.tbp0, t.tbw, t.psm, d.textureWidth,
-                                 d.textureHeight, !contentKeyed ? (up == m_uploadAt.end() ? "no whole upload at its base" : "its upload's pages written since or not covering it")
-                                                                : "its upload's source unknown");
+                    std::fprintf(stderr, "[upload] texture miss (raster %x, content-keyed %d): tbp %u tbw %u psm %u %ux%u pages %u..%u, %s", raster,
+                                 contentKeyed ? 1 : 0, t.tbp0, t.tbw, t.psm, d.textureWidth, d.textureHeight, first, last,
+                                 up == m_uploadAt.end() ? "no whole upload at its base" : "upload at its base:");
+                    if (up != m_uploadAt.end())
+                    {
+                        const UploadInfo &u = up->second;
+                        int touched = 0;
+                        for (uint32_t p = first; p < last && p >= u.first && p < u.first + u.gens.size(); ++p)
+                            touched += m_pageGen[p] != u.gens[p - u.first];
+                        std::fprintf(stderr, " psm %u dbw %u at %u,%u %ux%u pages %u..%zu, %d touched since", u.dpsm, u.dbw, u.x, u.y,
+                                     u.w, u.h, u.first, u.first + u.gens.size(), touched);
+                    }
+                    std::fprintf(stderr, "\n");
                 }
             }
             static const bool debug = std::getenv("PS2X_HW_DEBUG") != nullptr;

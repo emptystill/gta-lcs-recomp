@@ -351,6 +351,17 @@ namespace
     void applyLcs(PS2Runtime &runtime)
     {
         std::fprintf(stderr, "[lcs] Liberty City Stories overrides\n");
+        // Textures re-sent every frame in another format than they are read in (T8 as CT32): keyed by the upload's
+        // content, so the decoded copy is found again (PS2X_HW_CONTENT_KEY_ANY in the runtime; ~25 MB of textures were
+        // decoded every frame, 30 ms of the GS stage). LCS_TEX_CONTENT_KEY=0: by page generations as before.
+        if (!envOff("LCS_TEX_CONTENT_KEY"))
+        {
+#if defined(_WIN32)
+            _putenv_s("PS2X_HW_CONTENT_KEY_ANY", "1");
+#else
+            setenv("PS2X_HW_CONTENT_KEY_ANY", "1", 1);
+#endif
+        }
         if (!envOff("LCS_RPC_POOLS"))
         {
 #if defined(_WIN32)
