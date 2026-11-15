@@ -224,6 +224,14 @@ picture); the blocks are the textures' texels - a wallpaper texel covers several
 filtering: a count of point-filtered game textures (TEX1 MMAG / MMIN nearest) over the intro and the first mission was
 zero - every texture is bilinear already (a "smooth all textures" option was tried and dropped: it changed nothing).
 What would help is more texture detail: an upscaling filter at decode time (xBRZ-like) or replacement textures.
+**Texture upscaling** (Graphics > Image quality, `display.tex_upscale`, `LCS_TEX_UPSCALE`; restart): each game texture
+made 2x / 4x larger when it is created (runtime `upscale::`): per 2x step, xBR's corner rule makes a sharp diagonal
+where it finds an edge through a texel's corner, the rest is the bilinear mean at the new texel's place (no "painted"
+look on photographic textures). Through the hardware-sampled path only, so it needs anisotropic filtering (every
+textured draw in the first mission takes that path: `PS2X_HW_ANISO_LOG`); the other paths read an upscaled texture at
+the original texels' blocks (gs_draw.hlsl `fetchTexel`). Cost at the first mission at 4x: texture decode 0.03 -> 0.8 ms
+a frame, GS stage 4.2 -> 4.8 ms. The gain is in textures with hard edges (patterns, signs); photographic ones change
+little.
 
 ## Tools for LCS debugging
 

@@ -31,7 +31,8 @@ cbuffer Draw : register(b0)
     float4 fogColor;       // rgb 0..255
     float4 filterSize;     // a filtered read (atstArefAfailRt.w == 3, sampleRtFiltered): xy the footprint of one target
                            // PS2 pixel in source texels (the tent's half-width), zw the source's size in texels (clamp)
-    float4 filterDest;     // a filtered read: xy the target's own scale (target pixels per PS2 pixel)
+    float4 filterDest;     // a filtered read: xy the target's own scale (target pixels per PS2 pixel); z: an upscaled game
+                           // texture's scale (gsHwSetTextureUpscale; 0 / 1 none)
 };
 
 struct VSIn
@@ -197,6 +198,8 @@ float4 fetchTexel(int2 t)
     int2 at = t;
     if (atstArefAfailRt.w == 1)
         at = int2((float2(t) + rtOrigin.xy + 0.5) * rtScale2());
+    else if (filterDest.z > 1.5) // an upscaled game texture (gs_hw.cpp gsHwSetTextureUpscale): the texel's own block
+        at = t * int(filterDest.z) + int(filterDest.z) / 2;
     return tex.Load(int3(at, 0)) * 255.0;
 }
 
