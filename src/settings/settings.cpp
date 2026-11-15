@@ -22,7 +22,7 @@ namespace settings
         std::filesystem::path g_ini;
         bool g_keepFile = false; // keepFile()
         std::unordered_set<std::string> g_overridden; // by their environment variable, at load()
-        std::unordered_map<std::string, std::string> g_loaded; // every key = value of vcs.ini at load()
+        std::unordered_map<std::string, std::string> g_loaded; // every key = value of lcs.ini at load()
         std::map<std::string, std::string> g_state;            // setState() values, written by save()
 
         bool valid(const Spec &s, int v)
@@ -49,7 +49,7 @@ namespace settings
             return s.substr(i);
         }
 
-        // Rewrites vcs.ini: our keys updated in place, missing ones appended, every other line kept as it was.
+        // Rewrites lcs.ini: our keys updated in place, missing ones appended, every other line kept as it was.
         void save()
         {
             if (g_ini.empty() || g_keepFile)
@@ -167,7 +167,7 @@ namespace settings
     void load(const std::filesystem::path &ini)
     {
         g_ini = ini;
-        std::unordered_map<std::string, std::string> found; // vcs.ini key -> value text
+        std::unordered_map<std::string, std::string> found; // lcs.ini key -> value text
         {
             std::ifstream in(ini);
             std::string line;

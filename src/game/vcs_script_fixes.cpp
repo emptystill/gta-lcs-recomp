@@ -1,4 +1,4 @@
-// Mission scripts that got stuck above 30 fps (docs/game-internals.md 11h; GitHub issue 41).
+// Mission scripts that got stuck above 30 fps (docs/vcs-reference/game-internals.md 11h; GitHub issue 41).
 //
 // GON_C3 "Purple Haze" (mission 94): at the meeting place a truck rams the player's van (SET_CAR_FORWARD_SPEED 25,
 // SET_CAR_RAM_CAR), the screen fades out, the two thugs are created beside the van, and half a second later the

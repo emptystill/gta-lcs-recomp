@@ -52,7 +52,7 @@ namespace vcs::input
 
         struct Control
         {
-            const char *id;       // vcs.ini: keys.<id>, keys.<id>2, pad.<id>
+            const char *id;       // lcs.ini: keys.<id>, keys.<id>2, pad.<id>
             const char *label;
             const char *section;  // on the Keyboard & mouse page
             Target target;
@@ -986,7 +986,7 @@ namespace vcs::input
         s.page = kKeys;
         s.section = "Menus";
         s.label = "Screenshot";
-        s.help = "Saves what is on screen (menus and overlays included) as a PNG in the screenshots folder next to vcs.exe.";
+        s.help = "Saves what is on screen (menus and overlays included) as a PNG in the screenshots folder next to lcs.exe.";
         s.type = Type::Key;
         s.group = "keys";
         s.defaultValue = KEY_F8;

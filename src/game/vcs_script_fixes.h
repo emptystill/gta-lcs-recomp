@@ -1,4 +1,4 @@
-// Mission scripts that got stuck above 30 fps (docs/game-internals.md 11h).
+// Mission scripts that got stuck above 30 fps (docs/vcs-reference/game-internals.md 11h).
 #pragma once
 
 class PS2Runtime;

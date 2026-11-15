@@ -87,10 +87,10 @@ namespace launcher
                           "tools for Windows\" (Visual Studio Installer, Modify)."}},
             {"vcvars_failed", {"Visual Studio's environment could not be set up",
                                "Repair Visual Studio from the Visual Studio Installer (More > Repair)."}},
-            {"no_disc", {"No disc image", "Choose your GTA: Vice City Stories (USA) .iso on the Disc step."}},
+            {"no_disc", {"No disc image", "Choose your GTA: Liberty City Stories (USA) .iso on the Disc step."}},
             {"disc_not_found", {"The disc image is gone", "It was moved or deleted: choose it again on the Disc step."}},
             {"wrong_disc", {"This is not the supported disc",
-                            "Only GTA: Vice City Stories for the USA (SLUS-21590) works. Choose another image."}},
+                            "Only GTA: Liberty City Stories for the USA (SLUS-21423) works. Choose another image."}},
             {"download_failed", {"A download failed",
                                  "The first build downloads libraries. Check the internet connection and try again "
                                  "(a release with a deps folder needs none)."}},
@@ -166,7 +166,7 @@ namespace launcher
                                 "install Xcode, then choose Check again."}},
             {"app_translocated", {"Move the launcher to Applications first",
                                   "macOS runs an app straight from a download in a read-only copy, which can't be "
-                                  "updated. Drag VCSLauncher.app to Applications in Finder, start it from there, then "
+                                  "updated. Drag LCSLauncher.app to Applications in Finder, start it from there, then "
                                   "update again."}},
             {"cpu_unsupported", {"This Mac has an Intel processor",
                                  "The macOS version of the game is for Apple Silicon Macs (M1 and newer)."}},
@@ -205,24 +205,24 @@ namespace launcher
     bool App::init(std::string &error)
     {
 #if defined(__APPLE__)
-        // a macOS release: VCSLauncher.app carries the release's files (Contents/MacOS -> Contents/Resources/release),
+        // a macOS release: LCSLauncher.app carries the release's files (Contents/MacOS -> Contents/Resources/release),
         // and the game is built in a folder of its own they are copied to, as from an AppImage
         if (const fs::path files = exePath().parent_path().parent_path() / "Resources" / "release";
             fs::is_regular_file(files / "RELEASE.json"))
         {
             payload = files;
             const char *dir = std::getenv("VCS_INSTALL_DIR");
-            root = dir && *dir ? pathFrom(dir) : knownFolder(Folder::LocalAppData) / "VCSRecomp" / "install";
+            root = dir && *dir ? pathFrom(dir) : knownFolder(Folder::LocalAppData) / "LCSRecomp" / "install";
         }
 #elif !defined(_WIN32)
         // a Linux AppImage: the release's files are in the image next to the launcher (usr/bin -> usr/share), and the
         // game is built in a folder of its own they are copied to
-        if (const fs::path files = exePath().parent_path().parent_path() / "share" / "vcs-recomp" / "release";
+        if (const fs::path files = exePath().parent_path().parent_path() / "share" / "lcs-recomp" / "release";
             fs::is_regular_file(files / "RELEASE.json"))
         {
             payload = files;
             const char *dir = std::getenv("VCS_INSTALL_DIR");
-            root = dir && *dir ? pathFrom(dir) : knownFolder(Folder::LocalAppData) / "VCSRecomp" / "install";
+            root = dir && *dir ? pathFrom(dir) : knownFolder(Folder::LocalAppData) / "LCSRecomp" / "install";
         }
 #endif
         // the repository: the exe's folder (a release, or a clone after build.py --launcher), or one above it
@@ -363,10 +363,10 @@ namespace launcher
         }
         loadSettings();
 
-        // the disc vcs.exe would use
+        // the disc lcs.exe would use
         std::string iniIso;
         {
-            std::ifstream in(build / "vcs.ini");
+            std::ifstream in(build / "lcs.ini");
             std::string line;
             while (std::getline(in, line))
                 if (line.rfind("iso=", 0) == 0)
@@ -621,7 +621,7 @@ namespace launcher
         task->startTime = m_now;
         std::vector<std::string> argv = python;
         argv.push_back("-I");
-        // the release's own copy of the scripts (inside VCSLauncher.app, or the AppImage): no __pycache__ written
+        // the release's own copy of the scripts (inside LCSLauncher.app, or the AppImage): no __pycache__ written
         // there - in the app bundle it breaks the signature (a sealed resource added), so macOS would refuse the app
         if (!payload.empty() && !args.empty() && args[0].rfind(pathText(payload), 0) == 0)
             argv.push_back("-B");
@@ -631,7 +631,7 @@ namespace launcher
         options.env = {{"VCS_PROGRESS", "json"}, {"PYTHONUTF8", "1"}, {"PYTHONIOENCODING", "utf-8"},
                        {"PYTHONUNBUFFERED", "1"}};
 #if defined(__APPLE__)
-        // a release's app bundle (Contents/MacOS/VCSLauncher): update.py apply replaces it
+        // a release's app bundle (Contents/MacOS/LCSLauncher): update.py apply replaces it
         if (!payload.empty())
             options.env.push_back({"VCS_APP_BUNDLE", pathText(exePath().parent_path().parent_path().parent_path())});
 #endif
@@ -751,8 +751,8 @@ namespace launcher
 
     bool App::writeIsoToIni(const fs::path &path)
     {
-        // vcs.exe's settings keep every line they don't own (src/settings/settings.cpp), iso= among them
-        const fs::path ini = build / "vcs.ini";
+        // lcs.exe's settings keep every line they don't own (src/settings/settings.cpp), iso= among them
+        const fs::path ini = build / "lcs.ini";
         std::vector<std::string> lines;
         {
             std::ifstream in(ini);
@@ -806,7 +806,7 @@ namespace launcher
         // macOS: the app bundle is replaced where it is (update.py), so the new one is at our own path
         return exePath();
 #else
-        // Windows: the release's launcher, written fresh by update.py (this one runs as VCSLauncher.exe.old)
+        // Windows: the release's launcher, written fresh by update.py (this one runs as LCSLauncher.exe.old)
         return root / os::kLauncherExe;
 #endif
     }
@@ -841,7 +841,7 @@ namespace launcher
         case 0: return "";
         case 2: return "The game found no disc image. Choose your disc again.";
         case 3: return "The game could not read the disc image (moved, or on a drive that's gone?).";
-        case 4: return "The game says this is not the supported disc (GTA: Vice City Stories USA, SLUS-21590).";
+        case 4: return "The game says this is not the supported disc (GTA: Liberty City Stories USA, SLUS-21423).";
         case 5: return "The game could not start its window, graphics or sound. Update the graphics driver; "
                        "the log has the details.";
         default: break;
@@ -884,14 +884,14 @@ namespace launcher
         if (const char *appimage = std::getenv("APPIMAGE"); appimage && *appimage && !payload.empty())
             target = pathFrom(appimage);
         return createShortcut(desktop / os::kShortcutName, target, root,
-                              "GTA: Vice City Stories (PC port) - launcher", error);
+                              "GTA: Liberty City Stories (PC port) - launcher", error);
     }
 
     fs::path App::savesFolder() const
     {
         if (const char *dir = std::getenv("VCS_DATA_DIR"); dir && *dir)
             return pathFrom(dir);
-        return knownFolder(Folder::LocalAppData) / "VCSRecomp";
+        return knownFolder(Folder::LocalAppData) / "LCSRecomp";
     }
 
     std::string App::next() const
@@ -935,7 +935,7 @@ namespace launcher
         std::error_code ec;
         fs::create_directories(build, ec);
         std::ofstream out(build / "launcher.ini", std::ios::trunc | std::ios::binary);
-        out << "# the launcher's own settings (the game's are in vcs.ini)\n"
+        out << "# the launcher's own settings (the game's are in lcs.ini)\n"
             << "after_launch=" << settings.afterLaunch << "\n"
             << "opt=" << settings.opt << "\n"
             << "check_updates=" << (settings.checkUpdates ? 1 : 0) << "\n"

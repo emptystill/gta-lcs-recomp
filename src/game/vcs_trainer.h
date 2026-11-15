@@ -1,4 +1,4 @@
-// The trainer (docs/TRAINER.md): god mode, unlimited ammo, wanted level, money, weapons, vehicle spawning and repair, missions,
+// The trainer (docs/vcs-reference/TRAINER.md): god mode, unlimited ammo, wanted level, money, weapons, vehicle spawning and repair, missions,
 // teleports to the city's districts, time / weather / game speed - for single-player fun, off unless used.
 //
 // What it does goes through the game's own script commands (MAIN.SCM opcodes, game-internals.md 11), run as a short

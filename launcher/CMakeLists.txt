@@ -1,7 +1,7 @@
 # The launcher (docs/LAUNCHER.md): finds and checks the disc, installs what the build needs, runs tools/build.py and
 # starts the game. A project of its own - no generated code, no disc, no third-party code - so CI builds it in seconds
 # for a release:
-#   python tools/build.py --launcher        (build/launcher, VCSLauncher(.exe) in the repository root)
+#   python tools/build.py --launcher        (build/launcher, LCSLauncher(.exe) in the repository root)
 # Its own window, renderer and UI (uppies' design). Windows: Win32, Direct3D 11, DirectWrite. Linux: X11 or Wayland,
 # Vulkan, FreeType + fontconfig - the system's libraries, nothing downloaded. macOS: Cocoa, Metal, Core Text. Layers, each using only those below it:
 # screens/ -> ui/ -> render/ -> platform/ -> core/; model/ is the state and the tools it runs.
@@ -53,7 +53,7 @@ if(WIN32)
             VERBATIM)
     endforeach()
 
-    add_executable(VCSLauncher WIN32
+    add_executable(LCSLauncher WIN32
         ${VCS_LAUNCHER_COMMON}
         platform/platform_win32.cpp
         render/font_dwrite.cpp
@@ -66,14 +66,14 @@ if(WIN32)
     )
     # the resource compiler doesn't report the files it embeds: a redrawn icon would otherwise not rebuild
     set_source_files_properties(launcher.rc PROPERTIES OBJECT_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/launcher.ico")
-    target_link_libraries(VCSLauncher PRIVATE d3d11 dxgi dwrite dwmapi ole32 shell32 uuid winmm advapi32)
-    target_compile_definitions(VCSLauncher PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
+    target_link_libraries(LCSLauncher PRIVATE d3d11 dxgi dwrite dwmapi ole32 shell32 uuid winmm advapi32)
+    target_compile_definitions(LCSLauncher PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
     if(MINGW)  # mingw-w64's headers default to Windows 7; the Windows SDK's (and the launcher) to Windows 10
-        target_compile_definitions(VCSLauncher PRIVATE _WIN32_WINNT=0x0A00 WINVER=0x0A00)
+        target_compile_definitions(LCSLauncher PRIVATE _WIN32_WINNT=0x0A00 WINVER=0x0A00)
     endif()
 elseif(APPLE)
     # macOS (docs/LAUNCHER.md "macOS"): Cocoa, Metal, Core Text - the system's frameworks, nothing downloaded.
-    # VCSLauncher.app in the repository root. The shader is the one ui.hlsl as MSL (tools/hlsl_msl.py, the compilers
+    # LCSLauncher.app in the repository root. The shader is the one ui.hlsl as MSL (tools/hlsl_msl.py, the compilers
     # tools/shader_tools.py builds), compiled by the OS when the launcher starts.
     enable_language(OBJCXX)
     find_package(Python3 REQUIRED COMPONENTS Interpreter)
@@ -110,7 +110,7 @@ elseif(APPLE)
         render/font_coretext.mm
         render/metal/renderer_metal.mm
         model/system_macos.mm)
-    add_executable(VCSLauncher MACOSX_BUNDLE
+    add_executable(LCSLauncher MACOSX_BUNDLE
         ${VCS_LAUNCHER_COMMON}
         ${_vcs_objcxx}
         model/process_posix.cpp
@@ -119,13 +119,13 @@ elseif(APPLE)
         "${VCS_ICNS}"
     )
     set_source_files_properties(${_vcs_objcxx} PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
-    target_link_libraries(VCSLauncher PRIVATE "-framework AppKit" "-framework Metal" "-framework QuartzCore"
+    target_link_libraries(LCSLauncher PRIVATE "-framework AppKit" "-framework Metal" "-framework QuartzCore"
                           "-framework CoreText" "-framework CoreGraphics" "-framework IOKit"
                           "-framework UniformTypeIdentifiers" "-framework Carbon")
-    target_compile_options(VCSLauncher PRIVATE -Wall -Wextra -Wno-missing-field-initializers -Wno-unused-parameter
+    target_compile_options(LCSLauncher PRIVATE -Wall -Wextra -Wno-missing-field-initializers -Wno-unused-parameter
                            -fvisibility=hidden)
-    target_link_options(VCSLauncher PRIVATE $<$<CONFIG:Release>:-Wl,-dead_strip>)
-    set_property(TARGET VCSLauncher PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+    target_link_options(LCSLauncher PRIVATE $<$<CONFIG:Release>:-Wl,-dead_strip>)
+    set_property(TARGET LCSLauncher PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
 else()
     # Linux. Everything comes from the distribution (python3 tools/build.py --check-deps lists the packages):
     # pkg-config modules for the window systems, fonts and D-Bus; Vulkan headers (the loader is opened at run time);
@@ -227,7 +227,7 @@ else()
         list(APPEND VCS_PROTOCOL_SOURCES "${VCS_PROTOCOL_DIR}/${_name}-protocol.c" "${VCS_PROTOCOL_DIR}/${_name}-client-protocol.h")
     endforeach()
 
-    add_executable(VCSLauncher
+    add_executable(LCSLauncher
         ${VCS_LAUNCHER_COMMON}
         platform/platform_linux.cpp
         platform/linux/x11.cpp
@@ -242,16 +242,16 @@ else()
         "${VCS_LAUNCHER_SHADERS}/launcher_icon.h"
         ${VCS_PROTOCOL_SOURCES}
     )
-    target_include_directories(VCSLauncher PRIVATE "${VCS_PROTOCOL_DIR}" "${VCS_VULKAN_INCLUDE}")
+    target_include_directories(LCSLauncher PRIVATE "${VCS_PROTOCOL_DIR}" "${VCS_VULKAN_INCLUDE}")
     if(VCS_HAVE_TOPLEVEL_ICON)
-        target_compile_definitions(VCSLauncher PRIVATE VCS_HAVE_TOPLEVEL_ICON=1)
+        target_compile_definitions(LCSLauncher PRIVATE VCS_HAVE_TOPLEVEL_ICON=1)
     endif()
-    target_link_libraries(VCSLauncher PRIVATE PkgConfig::VCS_LAUNCHER_LIBS ${CMAKE_DL_LIBS})
-    target_compile_options(VCSLauncher PRIVATE -Wall -Wextra -Wno-missing-field-initializers -fvisibility=hidden)
+    target_link_libraries(LCSLauncher PRIVATE PkgConfig::VCS_LAUNCHER_LIBS ${CMAKE_DL_LIBS})
+    target_compile_options(LCSLauncher PRIVATE -Wall -Wextra -Wno-missing-field-initializers -fvisibility=hidden)
     # small and self-contained: stripped; the C++ runtime linked in, so the binary needs only glibc's version of the
     # system it was built on (tools/release.py checks it: 2.35, Ubuntu 22.04) - not that system's libstdc++
-    target_link_options(VCSLauncher PRIVATE $<$<CONFIG:Release>:-s> -Wl,--as-needed -static-libstdc++ -static-libgcc)
-    set_property(TARGET VCSLauncher PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+    target_link_options(LCSLauncher PRIVATE $<$<CONFIG:Release>:-s> -Wl,--as-needed -static-libstdc++ -static-libgcc)
+    set_property(TARGET LCSLauncher PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
 endif()
 
 # the version (VERSION in the repository root, the one number of a release) in the exe's version information
@@ -261,27 +261,27 @@ string(REGEX MATCH "^([0-9]+)\\.([0-9]+)\\.([0-9]+)" _vcs_version_numbers "${VCS
 if(NOT _vcs_version_numbers)
     message(FATAL_ERROR "VERSION must start with major.minor.patch (it holds '${VCS_VERSION}')")
 endif()
-target_compile_definitions(VCSLauncher PRIVATE VCS_VERSION_MAJOR=${CMAKE_MATCH_1} VCS_VERSION_MINOR=${CMAKE_MATCH_2}
+target_compile_definitions(LCSLauncher PRIVATE VCS_VERSION_MAJOR=${CMAKE_MATCH_1} VCS_VERSION_MINOR=${CMAKE_MATCH_2}
                            VCS_VERSION_PATCH=${CMAKE_MATCH_3})
 # the text from a header: a quoted define on the command line loses its quotes in llvm-windres (llvm-mingw)
 file(CONFIGURE OUTPUT "${VCS_LAUNCHER_SHADERS}/launcher_version.h" CONTENT "#define VCS_VERSION_TEXT \"${VCS_VERSION}\"
 ")
 
-target_include_directories(VCSLauncher PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${VCS_ROOT}/src" "${VCS_LAUNCHER_SHADERS}")
+target_include_directories(LCSLauncher PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${VCS_ROOT}/src" "${VCS_LAUNCHER_SHADERS}")
 # next to tools/ and the source, where a release has it (the launcher finds the repository from its own folder)
-set_target_properties(VCSLauncher PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${VCS_ROOT}")
+set_target_properties(LCSLauncher PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${VCS_ROOT}")
 if(APPLE)
     set(VCS_VERSION_SHORT "${CMAKE_MATCH_1}.${CMAKE_MATCH_2}.${CMAKE_MATCH_3}")
     configure_file("${CMAKE_CURRENT_SOURCE_DIR}/Info.plist.in" "${CMAKE_CURRENT_BINARY_DIR}/Info.plist" @ONLY)
-    set_target_properties(VCSLauncher PROPERTIES MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_BINARY_DIR}/Info.plist")
+    set_target_properties(LCSLauncher PROPERTIES MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_BINARY_DIR}/Info.plist")
 endif()
 if(MSVC)
     # one self-contained exe: the static C++ runtime, nothing to install
-    set_property(TARGET VCSLauncher PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded")
-    target_compile_options(VCSLauncher PRIVATE /W3 /utf-8)
+    set_property(TARGET LCSLauncher PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded")
+    target_compile_options(LCSLauncher PRIVATE /W3 /utf-8)
 elseif(MINGW)
     # llvm-mingw: the same - libc++, libunwind and winpthread linked in, only the system's UCRT left (tools/release.py
     # checks the imports); wWinMain needs -municode
-    target_compile_options(VCSLauncher PRIVATE -Wall -Wno-missing-field-initializers -Wno-unknown-pragmas)
-    target_link_options(VCSLauncher PRIVATE -municode -static $<$<CONFIG:Release>:-s>)
+    target_compile_options(LCSLauncher PRIVATE -Wall -Wno-missing-field-initializers -Wno-unknown-pragmas)
+    target_link_options(LCSLauncher PRIVATE -municode -static $<$<CONFIG:Release>:-s>)
 endif()

@@ -151,7 +151,7 @@ namespace screens
             {
                 app.scanForDisc();
                 if (!app.disc.ok)
-                    toast("No Vice City Stories .iso in Downloads, Desktop, Documents or this folder.", theme::kAmber);
+                    toast("No Liberty City Stories .iso in Downloads, Desktop, Documents or this folder.", theme::kAmber);
             }
         }
 
@@ -164,7 +164,7 @@ namespace screens
             }
             float y = body.y;
             y = header({body.x, y, body.w, 0}, "STEP 2 OF 4", theme::kPink, "Your disc",
-                       "Your own copy of GTA: Vice City Stories for the PS2 (USA, SLUS-21590) as a disc image. The game is "
+                       "Your own copy of GTA: Liberty City Stories for the PS2 (USA, SLUS-21423) as a disc image. The game is "
                        "recompiled from it and reads its files from it while you play.");
 
             // the drop zone: it answers while a file is dragged over the window

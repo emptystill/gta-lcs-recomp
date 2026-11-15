@@ -22,7 +22,7 @@
 - [x] VU1: hctp's throughput-mode VU1 core (13 -> 23 VBlanks/s, GS discarded)
 - [x] IOP time batching (23 -> 60 VBlanks/s, GS discarded) = full speed without GS
 - [x] paraLLEl-GS integrated but opt-in: hangs Pascal GPUs into TDR resets
-- [x] GS usage survey (`VCS_GS_STATS`): see docs/game-internals.md
+- [x] GS usage survey (`VCS_GS_STATS`): see docs/vcs-reference/game-internals.md
 - [~] Hardware GS backend (`PS2X_GS=hw`, `src/lib/gs/gs_hw.cpp`; D3D11 since stage 3 of NATIVE_RENDERER.md, was OpenGL): runs at
       full speed and shows the loading screen. Fixed: overlapping render targets
       (back buffer FBP 140 = FBP 0 + 448 lines), stale page cache for CLUT loads.
@@ -51,7 +51,7 @@
 ## Phase 4 - audio, input, memory card, movies
 (Audio has been native since milestone 6 - the SPU2-emulation items below describe how it started; the current state
 and the 2026-10-26 audit are under "Milestone 6".)
-- [x] Input: keyboard + mouse + gamepad (docs/CONTROLS.md), verified in game: after the
+- [x] Input: keyboard + mouse + gamepad (docs/vcs-reference/CONTROLS.md), verified in game: after the
       intro cutscene the player controls Vic at Fort Baxter (HUD, radar, mission marker)
 - [x] Audio: SPU2 emulation (`ps2xIOP/.../iop_spu2.cpp`: 2x24 ADPCM voices, ADSR, loops,
       IRQ address, AutoDMA, IOP DMA 4/7) mixed to a 48 kHz host audio stream (SDL3 since stage 1 of NATIVE_RENDERER.md). Music, SFX and
@@ -397,7 +397,7 @@ dropped on uploads (lazy render-target patching).
       spots 80-100 fps, AI drive 68 fps (game 13.7 ms, worker 14.0 ms). Original timing unchanged (static
       reference scenes 0.00).
 - [x] User playtest (2026-10-24): missions play well in frame-rate independent timing at 60 and 100 fps.
-- [ ] Well past 100 fps everywhere (started 2026-10-25, docs/PERFORMANCE.md). Done: guest memory accesses with one
+- [ ] Well past 100 fps everywhere (started 2026-10-25, docs/vcs-reference/PERFORMANCE.md). Done: guest memory accesses with one
       compare and the scratchpad inline (game thread ~2x faster), lean pc and `__restrict ctx` in the recompiler, the EE
       clock no longer holding the game at ~100 fps, the flip's CSR read without the render-worker fence, the main loop
       unpaced for an unlimited cap. Uncapped (`--opt none`): Fort Baxter 111 -> 209 fps, city spots 118-166 -> 135-331,
@@ -692,7 +692,7 @@ dropped on uploads (lazy render-target patching).
       native renderer; not yet known whether it is new). Collision needs a look: whether the
       collision sectors / models are streamed in at those spots (CDSTREAM reads, IMG offsets),
       VU0 programs used by collision (`0x0000` in .vutext looked like line/sphere vs triangle
-      tests, docs/game-internals.md "VU microcode"), and float edge cases in the recompiled code
+      tests, docs/vcs-reference/game-internals.md "VU microcode"), and float edge cases in the recompiled code
       (FP contraction, round-to-zero, denormals). Compare with PS2X_HLE=0 to rule the renderer out.
 - [x] Settings menu (F2) flickered between two layouts while the mouse sat between rows, and a click on a toggle
       (Skip intro movies) did not register - **fixed 2026-10-24**: the menu was an auto-sized, centred window whose
@@ -743,7 +743,7 @@ dropped on uploads (lazy render-target patching).
   stick) with sensitivity / invert; the game's own vibration on the gamepad (it was dropped by the pad stub; 0-200%);
   master / movie volume and mono / swapped output; vertical sync (off / on / tearing for VRR); a frame-rate counter;
   mute or pause in the background; presets (Authentic, Balanced; Enhanced removed and Widescreen light renamed Balanced at 2x, 2026-11-14) and Reset all settings
-  (docs/CONTROLS.md, SETTINGS_MENU_WIDESCREEN.md "Player settings"). `tools/controls_check.py`: 21 checks, 0 failed;
+  (docs/vcs-reference/CONTROLS.md, SETTINGS_MENU_WIDESCREEN.md "Player settings"). `tools/controls_check.py`: 21 checks, 0 failed;
   regress step "controls". Defaults unchanged (the old fixed mapping, mouse camera off, vibration as on the PS2).
 - **Mouse look and driving keys** (2026-10-29, asked for by the user): on foot the mouse turns the follow camera itself
   (heading written in the game with the camera's source points, pitch through the stick's pitch speed with the game's
@@ -908,13 +908,13 @@ dropped on uploads (lazy render-target patching).
   and Screen edges, 21:9, 4:3 (unchanged); `tools/haze_check.py` (every piece anchored "stretch" in 376 frames, the
   HUD's right cluster at the right edge in all of them).
 
-- **Trainer** (2026-10-26, docs/TRAINER.md): an RDR2 Native Trainer style menu (F5 / Back + RB) - god mode, never
+- **Trainer** (2026-10-26, docs/vcs-reference/TRAINER.md): an RDR2 Native Trainer style menu (F5 / Back + RB) - god mode, never
   wanted, wanted level, money, every weapon and loadouts, unlimited ammo, no reload, spawning all 110 vehicles,
   vehicle invincibility / repair / flip / boost / paint, teleports to 13 districts and a saved position, time,
   freeze time, weather, game speed. `tools/trainer_check.py`: 30 checks, 0 failed (with all 110 vehicles).
   Mission launcher added the same day: 59 story missions by title, five side jobs (in their vehicle); 33 checks, 0
   failed.
-- **Free camera and Hide HUD** in the trainer (2026-10-30, docs/TRAINER.md "Camera", F6 / Back + LB): the active
+- **Free camera and Hide HUD** in the trainer (2026-10-30, docs/vcs-reference/TRAINER.md "Camera", F6 / Back + LB): the active
   CCam written after the game's update of it (game-internals.md 12b), real-time speed (20 m/s: 50.7 m in 2.5 s at 30 fps,
   40.3 m in 2 s at 60 fps), the world streamed in 640 m from the player, works driving and in cutscenes, "Teleport
   player here"; Hide HUD skips CHud::Draw. `VCS_FREECAM=0`: the game's camera untouched (checked). `trainer_check.py`
@@ -1338,14 +1338,14 @@ Python scripts still usable on their own. docs/LAUNCHER.md has the whole of it; 
 | `PS2X_HLE_SURVEY=1`, `PS2X_HLE_SURVEY_DUMP=n`, `PS2X_HLE_SURVEY_DUMP_EVERY=n` | VU1 program / layout survey, sample dumps |
 | `PS2X_HLE_STATS=1` | stage tables the native handler passes over |
 | `PS2X_HLE_LIT=0` | draw skinned / lit models through the VU1 program (world stays native) |
-| **F2** (or gamepad Back + Start) | settings menu (docs/SETTINGS_MENU_WIDESCREEN.md); its values live in vcs.ini next to vcs.exe |
+| **F2** (or gamepad Back + Start) | settings menu (docs/vcs-reference/SETTINGS_MENU_WIDESCREEN.md); its values live in vcs.ini next to vcs.exe |
 | `display.window=0\|1` in vcs.ini, `VCS_FULLSCREEN=0\|1` for one run, Alt+Enter | windowed / full screen (borderless) |
-| **F8** (`controls.screenshot_key`), `VCS_SCREENSHOT_DIR=<dir>` | screenshot of the window as shown (its resolution, menus / overlays included) to `screenshots/` next to vcs.exe, or that folder (docs/CONTROLS.md) |
+| **F8** (`controls.screenshot_key`), `VCS_SCREENSHOT_DIR=<dir>` | screenshot of the window as shown (its resolution, menus / overlays included) to `screenshots/` next to vcs.exe, or that folder (docs/vcs-reference/CONTROLS.md) |
 | `PS2X_HIDDEN_WINDOW=WxH` | a hidden test run's window at that size instead of 640x448 (a player's window: the screenshot key at 2560x1440) |
 | `VCS_TEST_VISIBLE=1` (test tools), `VCS_KEEP_SETTINGS=1` | a test run with its window shown (the Mac's): still pinned to the tests' timing, and vcs.ini is never rewritten - `toolchain.test_window` sets `VCS_KEEP_SETTINGS`, which keeps settings changed in the run for that run only, as a hidden run does (before 2026-11-14 shown test runs wrote controls_check's values into the player's vcs.ini) |
 | `display.aspect=43\|1610\|169\|219\|329\|0` in vcs.ini, `VCS_ASPECT=...` for one run | aspect ratio (Hor+ widescreen; 0 = match the window) |
 | `display.hud=0\|1` | widescreen HUD: keep 4:3 in the middle / stretch |
-| `window.*` in vcs.ini | where the window was last (monitor, position, size, maximized); written by the game, delete the lines to reset (docs/SETTINGS_MENU_WIDESCREEN.md) |
+| `window.*` in vcs.ini | where the window was last (monitor, position, size, maximized); written by the game, delete the lines to reset (docs/vcs-reference/SETTINGS_MENU_WIDESCREEN.md) |
 | `python tools/rig.py start --save DIR`, `python tools/rig.py <command>` | automation rig: start from a card copy; peek / poke / findvec / dump / scm / scripts / player / pause |
 | `python tools/tour.py [OUT] [--step 250] [--every K]` | world tour over the map (classes, map.png, screenshots, perf) |
 | `python tools/missions.py [OUT] [--only 45,46]`, `python tools/drive.py [OUT]` | mission smoke test; drive loop |

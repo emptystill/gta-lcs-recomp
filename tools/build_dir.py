@@ -12,7 +12,7 @@ PATH can be an empty or new folder (used as it is), a build folder made before (
 (other than build/ itself, which is `reset`).
 
 The choice is kept in .vcs-build-dir in this folder (VCS_BUILD_DIR overrides it for one run); every tool follows it
-(toolchain.BUILD), and vcs.exe is built at the top of the folder. `set` brings the game's settings (vcs.ini, with the
+(toolchain.BUILD), and lcs.exe is built at the top of the folder. `set` brings the game's settings (lcs.ini, with the
 disc) and the launcher's (launcher.ini) along; the old build folder stays as it was - the game is built again in the
 new one, and the old one can be deleted. The recompiled code (generated/, 0.2 GB) stays in the source folder.
 """
@@ -27,7 +27,7 @@ import doctor  # noqa: E402
 import toolchain as tc  # noqa: E402
 
 SUBFOLDER = "VCS-build"
-CARRIED = ("vcs.ini", "launcher.ini")  # settings that follow the build folder
+CARRIED = ("lcs.ini", "launcher.ini")  # settings that follow the build folder
 
 
 def norm(path):
@@ -36,7 +36,7 @@ def norm(path):
 
 def is_build_folder(path):
     """A folder a build was made in (by this or another source folder): its markers."""
-    return any(os.path.exists(os.path.join(path, m)) for m in ("build_info.json", "vcs.ini", os.path.join("release", "CMakeCache.txt")))
+    return any(os.path.exists(os.path.join(path, m)) for m in ("build_info.json", "lcs.ini", os.path.join("release", "CMakeCache.txt")))
 
 
 def resolve(path):
@@ -116,7 +116,7 @@ def set_dir(path):
     else:
         with open(tc.BUILD_POINTER, "w", encoding="utf-8") as f:
             f.write(target + "\n")
-    old_built = norm(target) != norm(old) and os.path.isfile(os.path.join(old, tc.exe("vcs")))
+    old_built = norm(target) != norm(old) and os.path.isfile(os.path.join(old, tc.exe("lcs")))
     print("[build_dir] the game is built in %s from now on%s" % (target, " (the default)" if result["default"] else ""))
     if carried:
         print("[build_dir] brought along: " + ", ".join(carried))

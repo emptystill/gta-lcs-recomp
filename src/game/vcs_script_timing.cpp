@@ -1,4 +1,4 @@
-// Mission scripts that count per frame, put on the game's time step (docs/game-internals.md 11f).
+// Mission scripts that count per frame, put on the game's time step (docs/vcs-reference/game-internals.md 11f).
 //
 // The script VM runs every script once per frame; a `WAIT 0` loop is one pass a frame. Most missions time things with
 // the timers (TIMERA / TIMERB), GET_GAME_TIMER or the timed opcodes (0x0031 - 0x0034: value * CTimer::ms_fTimeStep),

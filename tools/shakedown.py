@@ -11,7 +11,7 @@ the mission's fight in the shop starts). Passes when the interior shows (area 2,
 0xaa12). The game runs at 144 fps with frame-rate independent timing, as the user plays it. Results: OUT/result.json
 and the screenshots (default OUT: build/shakedown/<date-time>). Exit code 0 = pass.
 
-What broke (docs/game-internals.md 12): the recompiler tested the low word in compare-with-zero branches, so
+What broke (docs/vcs-reference/game-internals.md 12): the recompiler tested the low word in compare-with-zero branches, so
 CPed::ProcessControl read bit 31 of the ped flags as bFadeOut and deleted the shopkeeper the mission had just created;
 the mission audio monitor then dropped his line and the mission waited for it forever.
 """

@@ -280,7 +280,7 @@ packets, and the VU memory at MSCAL holds everything a draw needs):
 - `PS2X_HLE_SURVEY=1` (runtime `ps2_hle_survey.{h,cpp}`): per VU1 program / stage variant / UNPACK
   layout, calls, GS vertices and VU1 time; CALLed packets recorded as segments of the flattened
   chain; sample dumps for reverse engineering. `tools/vudis.py` disassembles VU code.
-  Finding: VU1 program 0x0030 (a dispatcher into stage routines, docs/game-internals.md) makes ~95% of
+  Finding: VU1 program 0x0030 (a dispatcher into stage routines, docs/vcs-reference/game-internals.md) makes ~95% of
   all GS vertices.
 - MSCAL hooks (`ps2hle::setMscalHooks`): a game handler runs before each VU1 program and may skip
   it; `ps2hle::gs()` + `GS::submitNative` record a native draw with the frontend's current GS state
@@ -324,7 +324,7 @@ packets, and the VU memory at MSCAL holds everything a draw needs):
 
 ### Stage 6 - Peds and vehicles (L) - skinned / lit models (table 0x16) done 2026-10-22
 
-Result: the lit pass (docs/game-internals.md "Lit models") is reproduced in C++ (`vcs_hle_world.cpp`:
+Result: the lit pass (docs/vcs-reference/game-internals.md "Lit models") is reproduced in C++ (`vcs_hle_world.cpp`:
 4-bone skinning, clip test on skinned positions, transform, fog, 4 directional lights + ambient)
 and checked bit-exact against the VU1 (`PS2X_HLE_VERIFY=1`, together with the world: 1,448,812
 packets / 65.3M vertices) except two lanes the lit transform's software pipeline leaves
@@ -458,7 +458,7 @@ then makes it hold at higher resolutions:
 640-wide ones: the drawn frame FBP 140, the shown copy FBP 0, the Z buffer FBP 280 - are drawn at the window's size
 (the letterboxed area at the 3D frames' aspect, `gsHwSetFrameSize`; it stays when a menu shows at 4:3), every other
 target (effect buffers) at 1x - except the reflection map, which the game names a window-scaled target
-(`gsHwSetTargetRole`, docs/FULLY_NATIVE.md step 3d; `PS2X_HW_REFLECTION_SCALE=0` = 1x). The radar has no target: it is
+(`gsHwSetTargetRole`, docs/vcs-reference/FULLY_NATIVE.md step 3d; `PS2X_HW_REFLECTION_SCALE=0` = 1x). The radar has no target: it is
 drawn in the HUD layer. So the frame is not a multiple of 640x448: at 16:9 1080p
 it is 1920x1080, 3 x 2.41 pixels per PS2 pixel.
 - Each target and depth buffer has its own scale (`Rt::scale`, `scaleFor`): creation, growth (rescaled when the
@@ -548,7 +548,7 @@ thread waits rather than get more than one frame ahead (`PS2X_RENDER_THREAD_AHEA
   ~5 ms); driving (AI car from Fort Baxter) 26-29 -> 44-54 fps - game code ~17-20 ms is now the limit, worker ~17 ms
   in parallel; reference scenes' flyover 42.5 -> 59.9 fps.
 
-### The GS stage (2026-10-25, docs/PERFORMANCE.md 7)
+### The GS stage (2026-10-25, docs/vcs-reference/PERFORMANCE.md 7)
 
 The render worker split in two (`PS2X_GS_THREAD=0` = one thread as before; on by default with the worker and the HW
 renderer). The worker keeps the VIF1 chains, RSL replay, VU1 programs and their native reproductions (skinning,
@@ -635,7 +635,7 @@ packet is checked), and Im2D line strips / lines (`recordPacked` mode 1, as `Sub
 `PS2X_HW_PATH2_CONTINUED=0` / `PS2X_HW_PATH2_LEAD=0` / `PS2X_HW_PATH2_LINES=0` = the front end;
 `PS2X_HW_FRONT_DRAW_LOG=<n>` logs the draws the front end still makes, with their packets.
 
-**PATH2 packets recorded whole (2026-10-24, docs/FULLY_NATIVE.md step 1).** The game's own 2D / effect packets take
+**PATH2 packets recorded whole (2026-10-24, docs/vcs-reference/FULLY_NATIVE.md step 1).** The game's own 2D / effect packets take
 the same route: `GS::processGIFPacket` hands a PATH2 packet to `submitPackedKick` first, which now also takes
 - Im2D's packet - one PACKED tag, ST / RGBAQ / **XYZ2** (`0x512`: a 32-bit Z, fog from the FOG register), the shape of
   every PATH2 packet that draws (game-internals.md 6f) - and
@@ -659,7 +659,7 @@ on HUD vertex positions had been taken into the HUD layer and squeezed (found at
   `PS2X_HW_SCALE` (or `scale=<1..8>` in vcs.ini next to vcs.exe) raises the whole picture's
   resolution; checked at 3x (gameplay still at the 30 fps cap). Native draws keep the PS2's
   1/16-pixel vertex snapping (~0.2 px at 3x).
-- Widescreen is not done yet; planned in docs/SETTINGS_MENU_WIDESCREEN.md. The game has its own
+- Widescreen is not done yet; planned in docs/vcs-reference/SETTINGS_MENU_WIDESCREEN.md. The game has its own
   widescreen mode (aspect global 0x487488, preference at *(0x48F3D0)+0x30, a HUD that follows it),
   which drives the camera, culling and both renderers - so no projection patching is needed.
 - MSAA / anisotropic filtering are not done: the GS emulation samples textures with explicit

@@ -1,4 +1,4 @@
-// Vehicle physics that acts a fixed amount every frame, put on the game's time step (docs/game-internals.md 4).
+// Vehicle physics that acts a fixed amount every frame, put on the game's time step (docs/vcs-reference/game-internals.md 4).
 //
 // The PS2 game ran at 30 fps, and some vehicle physics is applied once a frame without CTimer::ms_fTimeStep: at 144 fps
 // it acted 4.8 times as often per second. The cases here are scaled by the frame's step over the PS2's (50/30) when

@@ -3,7 +3,7 @@
 
     python tools/recompile.py ["path/to/Grand Theft Auto - Liberty City Stories (USA).iso"]
 
-Without an argument the disc is taken from VCS_ISO, iso=... in build/vcs.ini or vcs.ini, or a '*Liberty City
+Without an argument the disc is taken from VCS_ISO, iso=... in build/lcs.ini or lcs.ini, or a '*Liberty City
 Stories*.iso' in the repository root or iso/. `--check` says whether generated/ is current (generated/recompile_stamp.json: a
 hash of the recompiler, its config and the function map). Uses the committed function map (tc.GAME_DIR); Ghidra is only needed to redo the analysis
 (tools/ghidra_analyze.py). To recompile and build in one go: python tools/build.py --recompile

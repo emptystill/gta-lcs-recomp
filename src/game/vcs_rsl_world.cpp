@@ -68,7 +68,7 @@ namespace vcs::rslworld
             uint64_t flatHash = 0;  // VCS_RSL_ITEMS_VERIFY: the hash of the block as an item would have copied it (0: none)
         };
 
-        // ---- step 4c: draw items (docs/FULLY_NATIVE.md step 4) -------------------------------------------------------
+        // ---- step 4c: draw items (docs/vcs-reference/FULLY_NATIVE.md step 4) -------------------------------------------------------
         // A world / model draw call whose state flush is native writes no packets for itself: its flush (when it is all
         // CNTs), its GS registers and its block go into an item, and the packet buffer gets one 16-byte CNT tag whose two
         // VIFcodes are MARK (kItemMark + index) and a NOP holding kItemNop - its place in the chain. At the kick the item's
@@ -1019,7 +1019,7 @@ namespace vcs::rslworld
         }
 
         // ---- the game thread ----------------------------------------------------------------------------------------
-        // Step 4 (docs/FULLY_NATIVE.md): the guest pages a marked block is made of - a world REF's payload, a CALLed
+        // Step 4 (docs/vcs-reference/FULLY_NATIVE.md): the guest pages a marked block is made of - a world REF's payload, a CALLed
         // packet's tags and payloads - with their write-watch generations when it was last copied. Unchanged pages: the
         // block holds the bytes it held then (runtime/ps2_write_watch.h).
         struct PageSnapshot
@@ -2659,7 +2659,7 @@ namespace vcs::rslworld
             return ps2chain::kReplaceWithMark | static_cast<uint32_t>(g_building.draws.size() - 1u);
         }
 
-        // VCS_RSL_CENSUS=1 (docs/FULLY_NATIVE.md step 5): what the chain still carries outside marked / item blocks - each
+        // VCS_RSL_CENSUS=1 (docs/vcs-reference/FULLY_NATIVE.md step 5): what the chain still carries outside marked / item blocks - each
         // top-level tag by DMA id, the VIF command it starts with and where its data is, tags and quadwords per chain
         const char *censusWhere(uint32_t a)
         {
@@ -3057,7 +3057,7 @@ namespace vcs::rslworld
         g_world = !off("VCS_RSL_WORLD") && hook(runtime, kWorldDraw, g_worldOriginal, &worldHook);
         g_models = !off("VCS_RSL_MODELS") && hook(runtime, kModelDraw, g_modelOriginal, &modelHook) &&
                    hook(runtime, kModelDrawB, g_modelBOriginal, &modelBHook);
-        g_rasters = !off("VCS_RSL_RASTERS"); // textures named by raster (docs/FULLY_NATIVE.md step 3d)
+        g_rasters = !off("VCS_RSL_RASTERS"); // textures named by raster (docs/vcs-reference/FULLY_NATIVE.md step 3d)
         if (!g_world && !g_models && !g_rasters)
             return;
         g_verify = std::getenv("VCS_RSL_WORLD_VERIFY") != nullptr;

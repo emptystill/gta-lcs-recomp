@@ -1,4 +1,4 @@
-// VCS sound without the IOP (docs/NATIVE_PORT_ROADMAP.md milestone 6 step 2; docs/game-internals.md 9).
+// VCS sound without the IOP (docs/vcs-reference/NATIVE_PORT_ROADMAP.md milestone 6 step 2; docs/vcs-reference/game-internals.md 9).
 //
 // On the PS2 the game's sound runs in Rockstar's CDSTREAM.IRX on the IOP, driving the SPU2 through Sony's libsd.
 // This is that code ported to the host, function by function (module offsets in the comments; read with
@@ -134,7 +134,7 @@ namespace vcs
                 std::memcpy(module.image.data() + addr, elf.data() + offset, size);
                 sizes += size;
             }
-            return sizes == 0x63C0u + 0x1A70u + 0x370u; // SLUS-21590's module: .text + .rodata + .data
+            return sizes == 0x63C0u + 0x1A70u + 0x370u; // SLUS-21423's module: .text + .rodata + .data
         }
 
         // A playing stream's stop waits for the next refill IRQ, as on the IOP (Engine::musicCommand 0x80700)

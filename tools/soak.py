@@ -27,9 +27,9 @@ SPOTS = [(-600.0, 600.0), (325.0, 425.0), (75.0, 175.0), (-1175.0, -325.0), (575
 
 
 def game_pid(runner_pid):
-    """vcs.exe started by run.py (the rig's process)."""
+    """lcs.exe started by run.py (the rig's process)."""
     out = subprocess.run(["powershell", "-NoProfile", "-Command",
-                          "(Get-CimInstance Win32_Process -Filter 'ParentProcessId=%d' | Where-Object Name -eq 'vcs.exe')"
+                          "(Get-CimInstance Win32_Process -Filter 'ParentProcessId=%d' | Where-Object Name -eq 'lcs.exe')"
                           ".ProcessId" % runner_pid], capture_output=True, text=True).stdout.strip()
     return int(out.split()[0]) if out else None
 

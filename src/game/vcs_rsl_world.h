@@ -1,4 +1,4 @@
-// World and model draws from the RSL draw calls (docs/RSL_SUBMISSION.md phase 2: world sectors, model instances).
+// World and model draws from the RSL draw calls (docs/vcs-reference/RSL_SUBMISSION.md phase 2: world sectors, model instances).
 //
 // FUN_002F7EB0(geometry, qwc) - the RSL world draw (game-internals.md 6i) - ends by writing a REF to a sector's prebuilt
 // geometry in the streamed cells; FUN_002F7D58(packet) / FUN_002F80A0(packet) - model instances - end by writing a CALL
@@ -13,7 +13,7 @@
 // hashing or vertex conversion for a recorded block. A recording is used only while the block's bytes hash the same
 // and the VIF mode / cycle match; a block that keeps changing goes through the packet path for a while.
 //
-// Step 4 (docs/FULLY_NATIVE.md): a world / model block whose guest pages are unchanged (runtime/ps2_write_watch.h) since
+// Step 4 (docs/vcs-reference/FULLY_NATIVE.md): a world / model block whose guest pages are unchanged (runtime/ps2_write_watch.h) since
 // a copy the worker confirmed its recording for is not copied at all - the walker writes the MARK alone and the worker
 // replays the recording by key (or rebuilds the block from guest RAM, unchanged by construction). Textures are named by
 // raster here too (onDirect: where each upload's pixels are in the chain's copy). VCS_RSL_SKIP=0: copy every block;

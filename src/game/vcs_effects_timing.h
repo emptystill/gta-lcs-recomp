@@ -1,4 +1,4 @@
-// Visual effects that count frames, put on the PS2's 30 frames a second (docs/game-internals.md 4).
+// Visual effects that count frames, put on the PS2's 30 frames a second (docs/vcs-reference/game-internals.md 4).
 #pragma once
 
 class PS2Runtime;

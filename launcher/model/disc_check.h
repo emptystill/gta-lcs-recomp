@@ -1,4 +1,4 @@
-// Is a file the supported disc? The check vcs.exe makes (src/disc/vcs_disc_id.h), plus the reasons a player can act
+// Is a file the supported disc? The check lcs.exe makes (src/disc/vcs_disc_id.h), plus the reasons a player can act
 // on: another release, another game, an archive or a .bin / .chd that needs converting. tools/vcs_disc.py check is
 // the same for the command line.
 #pragma once

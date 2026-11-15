@@ -1,6 +1,6 @@
 # Launcher and releases
 
-`VCSLauncher.exe` (Linux: `VCSLauncher`), shipped in every Windows release, takes a player from "extracted the zip" to "playing" without a
+`LCSLauncher.exe` (Linux: `LCSLauncher`), shipped in every Windows release, takes a player from "extracted the zip" to "playing" without a
 terminal: it finds and checks the disc, installs what the build needs, recompiles and builds the game with a progress
 bar, and starts it. It is a front end over the Python tools in `tools/` - every button runs a script people can also
 run by hand - so the launcher and the README's manual install are one pipeline.
@@ -15,19 +15,19 @@ DECISIONS.md 2026-10-30 "A launcher for releases", 2026-11-01 "The launcher draw
 ## Why
 
 The manual install (README) is: Python with *Add to PATH*, Git (Visual Studio with two specific options until 2026-11-03), clone, copy
-the `.iso` in under the right name, a terminal, `python tools/build.py --recompile`, then find `build\vcs.exe`. Each
+the `.iso` in under the right name, a terminal, `python tools/build.py --recompile`, then find `build\lcs.exe`. Each
 step loses players, and the README's *Problems* table is mostly those steps going wrong. Distribution is source-only
 (DECISIONS.md 2026-10-21): the player's PC compiles the game, so the launcher is also a build front end.
 
 ## A release
 
 `python tools/release.py` (CI on a `v*` tag: `.github/workflows/launcher.yml`) writes
-`build/dist/VCS-Recomp-<version>-windows.zip` (82 MB) and its `.sha256`. One folder inside:
+`build/dist/LCS-Recomp-<version>-windows.zip` (82 MB) and its `.sha256`. One folder inside:
 
 | What | |
 |---|---|
-| `VCSLauncher.exe` | the launcher, one static exe (4 MB) |
-| `VERSION`, `RELEASE.json` | the release's number (the repository's `VERSION`, also built into VCSLauncher.exe's version information; a `v*` tag must match it); its repository, commit and file list (tools/update.py) |
+| `LCSLauncher.exe` | the launcher, one static exe (4 MB) |
+| `VERSION`, `RELEASE.json` | the release's number (the repository's `VERSION`, also built into LCSLauncher.exe's version information; a `v*` tag must match it); its repository, commit and file list (tools/update.py) |
 | `python/` | python.org's embeddable CPython (the version that made the release). Not on PATH: the build hands it to CMake (`-DPython3_EXECUTABLE`, `toolchain.python_defines`), which runs `tools/hlsl_dxbc.py` for the shaders - without it a PC with no Python of its own stopped at "Could NOT find Python3" (0.2.1, issues 67-73) |
 | `deps/` | the libraries CMake would download (tools/deps.py): SDL3, Dear ImGui, zlib, ELFIO, toml11, fmt, libdwarf, rabbitizer, nlohmann/json, and the FFmpeg LGPL build - 136 MB unpacked |
 | `THIRD_PARTY_LICENSES.txt` | their licences, collected from the libraries themselves |
@@ -66,17 +66,17 @@ update or a new folder.
 ## The Linux release (2026-11-03)
 
 `python3 tools/release.py --platform linux` (CI's `linux` job on a `v*` tag, on Ubuntu 22.04) writes
-`build/dist/VCS-Recomp-<version>-x86_64.AppImage` (36 MB) and its `.sha256`; CI's `publish` job puts it on the same
+`build/dist/LCS-Recomp-<version>-x86_64.AppImage` (36 MB) and its `.sha256`; CI's `publish` job puts it on the same
 GitHub release as the Windows zip, and only when both were made (DECISIONS.md 2026-11-03).
 
 | In the AppImage | |
 |---|---|
-| `AppRun` -> `usr/bin/VCSLauncher` | the launcher (2.4 MB: the C++ runtime linked in; needs glibc 2.35+) |
+| `AppRun` -> `usr/bin/LCSLauncher` | the launcher (2.4 MB: the C++ runtime linked in; needs glibc 2.35+) |
 | `gta-vcs-launcher.desktop`, `.png`, `.DirIcon` | the desktop entry and icon (the name is the Wayland app id) |
-| `usr/share/vcs-recomp/release/` | the release's files as in the zip, without Python (the system's `python3`) and FFmpeg (the system's): the source, `VERSION`, `RELEASE.json`, `deps/` (Linux's list: with Vulkan-Headers, volk and VMA; `deps.py --platform linux`), `THIRD_PARTY_LICENSES.txt` (with the AppImage runtime's) - 174 MB, 5,316 files unpacked |
+| `usr/share/lcs-recomp/release/` | the release's files as in the zip, without Python (the system's `python3`) and FFmpeg (the system's): the source, `VERSION`, `RELEASE.json`, `deps/` (Linux's list: with Vulkan-Headers, volk and VMA; `deps.py --platform linux`), `THIRD_PARTY_LICENSES.txt` (with the AppImage runtime's) - 174 MB, 5,316 files unpacked |
 
 - **The install folder.** The image is read-only and the game is built inside its release folder, so at start the
-  launcher compares the image's `RELEASE.json` with the one in `$XDG_DATA_HOME/VCSRecomp/install` (`VCS_INSTALL_DIR`)
+  launcher compares the image's `RELEASE.json` with the one in `$XDG_DATA_HOME/LCSRecomp/install` (`VCS_INSTALL_DIR`)
   and, when they differ, runs the image's `tools/update.py install --from <image> --to <folder>` as a task ("Putting
   the game's files in place") before anything else; the command-line forms wait for it. Files whose bytes are the same
   are left alone (their dates too), so an update rebuilds only what changed. From then on everything runs in that
@@ -144,7 +144,7 @@ motion is (2026-11-01, the user's "rethink everything"; before, a sidebar of pag
   switches with them. The icon (`launcher/make_icon.py`, which writes `launcher.ico`) is Home's backdrop in a rounded square: the
   striped sun behind the beach's towers, the horizon's line and the sun on the sea, in the dark palette. Each size is
   drawn for itself: 16 and 20 px only the sun, its stripes and the sea; towers from 24 px; up to 64 px every edge and
-  stripe on whole pixels; lit windows and stars only at 256. The same script draws vcs.exe's icon (`src/vcs.ico`): the
+  stripe on whole pixels; lit windows and stars only at 256. The same script draws lcs.exe's icon (`src/vcs.ico`): the
   scene by day - a white sky, an orange-to-pink sun, rose towers, no stars - so the game and the launcher don't look
   alike in Explorer or on the taskbar.
 - The first frame: the last doctor answer (`build/launcher_state.json`) gives the right mode at once; while this run's
@@ -158,13 +158,13 @@ What each step and sheet holds:
   the source folder. Warns for either under Program Files, in a OneDrive / Dropbox folder, on a network drive, in a
   path over 60 characters or with non-ASCII letters; less than 3 GB free on the build folder's drive; memory under
   8 GB.
-- **Disc**: the launcher's own check (`launcher/model/disc_check.cpp`, the same as vcs.exe's through
+- **Disc**: the launcher's own check (`launcher/model/disc_check.cpp`, the same as lcs.exe's through
   `src/disc/vcs_disc_id.h`): SYSTEM.CNF's boot file, then the SHA-1 of `SLUS_215.90` - about a second. What a player can
   act on: another release ("the European release of Vice City Stories (SLES_546.22)", "Liberty City Stories (USA)"),
   not a PS2 disc, a `.bin` / `.chd` / `.cso` / archive with how to convert it. A drop zone that answers while a file is
   dragged over the window (OLE drag and drop: it glows and breathes), the file dialog, a search of Downloads / Desktop /
   Documents / its folder (one level deep, DVD-sized `.iso` files, Vice City Stories names first), or **Copy from a DVD
-  drive** (tools/rip_disc.py). The choice goes into `build\vcs.ini` as `iso=` (vcs.exe's settings keep lines they don't
+  drive** (tools/rip_disc.py). The choice goes into `build\lcs.ini` as `iso=` (lcs.exe's settings keep lines they don't
   own); a relative `iso=` is read against the build folder, then the source folder.
 - **Build tools**: the processor (doctor's `check_cpu`: which build this PC gets - AVX2, AVX or SSE4,
   `toolchain.cpu_level`; a CPU without SSE4.2 can't build: `cpu_unsupported`, a red card), and tools/doctor.py
@@ -173,11 +173,11 @@ What each step and sheet holds:
   component - `-path` ignores `-requires`; the clang-cl the build would take: scoop's LLVM, then Visual Studio's, then
   PATH; `toolchain: "msvc"`; missing parts: *Install build tools* runs tools/setup_vs.py.
 - **Game**: built and current, or the reasons not (doctor's `check_build`: no exe, generated/ stale, no / other
-  `build_info.json`, source files newer than vcs.exe). Build type: Standard (ThinLTO) / Quick / Fastest (PGO), a
+  `build_info.json`, source files newer than lcs.exe). Build type: Standard (ThinLTO) / Quick / Fastest (PGO), a
   segmented control; unset, the current build's type is kept.
-- **Play**: `build\vcs.exe <iso>`, working folder `build\`, no console, output to `build\run\launcher_game.log`, in a
+- **Play**: `build\lcs.exe <iso>`, working folder `build\`, no console, output to `build\run\launcher_game.log`, in a
   job that outlives the launcher. The launcher minimises (or closes, or stays: *Settings*) and comes back when the game
-  ends; a non-zero exit is explained from vcs.exe's exit codes (`vcs_disc_id.h`: 2 no disc, 3 unreadable, 4 wrong disc,
+  ends; a non-zero exit is explained from lcs.exe's exit codes (`vcs_disc_id.h`: 2 no disc, 3 unreadable, 4 wrong disc,
   5 no window / graphics / sound; `0xC...` a crash, with the log).
 - **Saves**: the card's folder, Back up now, the backups with Restore (asks first; tools/backup.py). The list includes
   the game's own `auto-*` backups, made before it deletes or overwrites a save (game-internals.md 10f).
@@ -185,10 +185,10 @@ What each step and sheet holds:
   is found - a dot on the title bar's Settings marks it), Appearance (System / Light / Dark), Reduce motion, a desktop
   shortcut.
 - **Restart after an update** (2026-11-04): the update's done card offers **Restart** (Enter; the primary button) and
-  *Later*. Restart starts the new launcher - `VCSLauncher.exe` in the release folder (this one now runs as
-  `VCSLauncher.exe.old`), or `$APPIMAGE` on Linux (the new image renamed over the file) - detached, its output to
+  *Later*. Restart starts the new launcher - `LCSLauncher.exe` in the release folder (this one now runs as
+  `LCSLauncher.exe.old`), or `$APPIMAGE` on Linux (the new image renamed over the file) - detached, its output to
   `build/run/launcher_restart.log`, with `--after-update <old pid>`, and closes this one. The new launcher waits for that
-  process to end (at most 15 s) before anything else, so its start removes `VCSLauncher.exe.old` and an AppImage's old
+  process to end (at most 15 s) before anything else, so its start removes `LCSLauncher.exe.old` and an AppImage's old
   mount is gone; then it is the new version's window (an AppImage puts the new files in place first). After *Later*,
   Home's Updates card reads "Restart to finish" and Settings shows the installed version with the same Restart button.
   `update.py apply` marks a real update with `restart: true` in its result; "already the newest" has none and gets OK.
@@ -251,7 +251,7 @@ static exe, 17 s from scratch. Layers, each using only those below it:
 ### Linux (2026-11-01)
 
 The same launcher; what differs is in files of its own (DECISIONS.md 2026-11-01 "The launcher on Linux"). Built with
-`python3 tools/build.py --launcher` (the packages: docs/LINUX.md; `--check-deps` names them), `VCSLauncher` in the
+`python3 tools/build.py --launcher` (the packages: docs/LINUX.md; `--check-deps` names them), `LCSLauncher` in the
 repository root, ~1 MB stripped, 27 s from scratch on the dev laptop.
 
 - **Window**: X11 (Xlib) or Wayland (libwayland-client), picked at startup - Wayland when `WAYLAND_DISPLAY` is set,
@@ -285,7 +285,7 @@ repository root, ~1 MB stripped, 27 s from scratch on the dev laptop.
   closing the launcher stop the tree (SIGTERM, SIGKILL after 2 s), and `PR_SET_PDEATHSIG` stops it if the launcher
   dies; the game gets a session of its own and plays on. A waiter thread in `waitpid` and a reader in `poll` wake the
   UI. A death by signal N is exit code 128 + N.
-- **The rest** (`model/system_linux.cpp`, `platform/linux/dbus.cpp`): XDG folders (saves in `$XDG_DATA_HOME/VCSRecomp`,
+- **The rest** (`model/system_linux.cpp`, `platform/linux/dbus.cpp`): XDG folders (saves in `$XDG_DATA_HOME/LCSRecomp`,
   as the game), `xdg-open`, the file manager over D-Bus (`FileManager1.ShowItems`), a `.desktop` shortcut on the
   Desktop and in the applications menu (icon: `launcher/launcher.png`, from `make_icon.py`), logind's sleep inhibitor
   during a build, file dialogs from the portal (else zenity, else kdialog), errors before the window as a zenity box
@@ -298,7 +298,7 @@ repository root, ~1 MB stripped, 27 s from scratch on the dev laptop.
 
 ### macOS (2026-11-12)
 
-`VCSLauncher.app` (`python3 tools/build.py --launcher`; docs/MACOS.md). The same layers with macOS' pieces:
+`LCSLauncher.app` (`python3 tools/build.py --launcher`; docs/MACOS.md). The same layers with macOS' pieces:
 
 - **Window** (`platform/platform_macos.mm`): one `NSWindow` with a full-size content view and a transparent title bar.
   The UI draws its own title bar as everywhere, but macOS' traffic lights stay (top left: `screens/titlebar.cpp` leaves
@@ -322,8 +322,8 @@ repository root, ~1 MB stripped, 27 s from scratch on the dev laptop.
 - **Build tools step**: Apple's Command Line Tools - "Install the Command Line Tools" runs `build.py --install-deps`
   (`xcode-select --install`: macOS' own installer), then Check again. They are checked before `python3` is probed:
   without them `/usr/bin/python3` is a stub that opens that installer.
-- **A release** (`python3 tools/release.py --platform macos`): `VCS-Recomp-<v>-macos-arm64.dmg`, a disk image that
-  opens as one Finder window - `VCSLauncher.app` on the left, a link to Applications on the right, large icons, no
+- **A release** (`python3 tools/release.py --platform macos`): `LCS-Recomp-<v>-macos-arm64.dmg`, a disk image that
+  opens as one Finder window - `LCSLauncher.app` on the left, a link to Applications on the right, large icons, no
   toolbar - to drag the one onto the other (DECISIONS.md 2026-11-14). `tools/dmg.py` makes it: the layout is the
   image's `.DS_Store`, written by its own standard-library writer (no `dmgbuild`); the volume carries the launcher's
   icon (`.VolumeIcon.icns`, the custom-icon flag set with `SetFile` on the mounted read-write image); then `hdiutil
@@ -331,7 +331,7 @@ repository root, ~1 MB stripped, 27 s from scratch on the dev laptop.
   it, the link and the layout (`python3 tools/dmg.py show X.dmg` prints the layout). The app is signed ad-hoc
   (DECISIONS.md 2026-11-12), the release's files in `Contents/Resources/release` (the source, `deps/` for macOS,
   licences; no Python: the Command Line Tools' is used). At first start the launcher copies them into
-  `~/Library/Application Support/VCSRecomp/install` and builds the game there, as from an AppImage; it runs that copy's
+  `~/Library/Application Support/LCSRecomp/install` and builds the game there, as from an AppImage; it runs that copy's
   scripts with `python -B`, since a `__pycache__` written inside the bundle breaks its signature (it did, before
   2026-11-14). Update (`update.py apply`) downloads the new image, mounts it out of Finder's sight, copies the app out
   with `ditto` and puts it where the old one is (`VCS_APP_BUNDLE`, which the launcher passes to its tools); an app
@@ -341,8 +341,8 @@ repository root, ~1 MB stripped, 27 s from scratch on the dev laptop.
 ## How it fits together
 
 ```
-VCSLauncher.exe (launcher/: main.cpp, screens/ ui/ render/ platform/ core/, model/ tasks process disc_check system json)
-   ├─ itself: window, disc check, file / folder dialogs, vcs.ini's iso=, processes (Job Objects), shortcuts, the game
+LCSLauncher.exe (launcher/: main.cpp, screens/ ui/ render/ platform/ core/, model/ tasks process disc_check system json)
+   ├─ itself: window, disc check, file / folder dialogs, lcs.ini's iso=, processes (Job Objects), shortcuts, the game
    └─ python\python.exe -I tools\<tool>.py ...  with VCS_PROGRESS=json
          doctor.py --json     the state: folder, memory, cpu, compiler, downloads, disc, build, "next"
          build.py --recompile-if-needed <iso> --progress json [--opt X]
@@ -359,7 +359,7 @@ lines, `@vcs {...}` lines: `{"stage": id, "title": text}`, `{"progress": n, "tot
 `illegal_instruction`, `missing_dll` - and its log ends with how it ended, `describe_exit`), `{"result": "ok", ...}`.
 Everything else is log.
 
-**The game's link** (`toolchain._GameLink`, 2026-11-01): with ThinLTO the link of vcs.exe is the longest step of a
+**The game's link** (`toolchain._GameLink`, 2026-11-01): with ThinLTO the link of lcs.exe is the longest step of a
 build - the whole game is optimised and compiled to machine code there (133 s of a 5-minute rebuild on the dev PC),
 while Ninja's count stands at its last step ("423 of 425 steps, about 0s left"). Ninja prints a step when it *ends*
 (when its output is a pipe), so the link's start comes from a file it touches first: a PRE_LINK command of
@@ -380,11 +380,11 @@ recompiler, the runtime headers it compiles in, the translate / sync scripts; `r
 | Command | What |
 |---|---|
 | `python tools/doctor.py [--json] [--iso X]` | every check and the next step |
-| `python tools/build_dir.py [check PATH / set PATH / reset]` | where the game is built. PATH: a new or empty folder is used as it is, a build folder made before is used again, any other folder gets a `VCS-build` folder inside; refused inside the source folder (other than `build\`), on a file, at the top of a drive, where it can't be made or written (tried for real: the top of C: allows folders, not files). Kept in `.vcs-build-dir` (git-ignored; `VCS_BUILD_DIR` for one run); every tool follows it through `toolchain.BUILD`, CMake puts vcs.exe at its top (`VCS_GAME_DIR`), `vcs.ini` and `launcher.ini` come along on `set`. The old folder is left as it was. A tree set up from another source folder gets a fresh CMake cache (`toolchain.drop_foreign_cache`). generated/ stays in the source folder |
+| `python tools/build_dir.py [check PATH / set PATH / reset]` | where the game is built. PATH: a new or empty folder is used as it is, a build folder made before is used again, any other folder gets a `VCS-build` folder inside; refused inside the source folder (other than `build\`), on a file, at the top of a drive, where it can't be made or written (tried for real: the top of C: allows folders, not files). Kept in `.vcs-build-dir` (git-ignored; `VCS_BUILD_DIR` for one run); every tool follows it through `toolchain.BUILD`, CMake puts lcs.exe at its top (`VCS_GAME_DIR`), `lcs.ini` and `launcher.ini` come along on `set`. The old folder is left as it was. A tree set up from another source folder gets a fresh CMake cache (`toolchain.drop_foreign_cache`). generated/ stays in the source folder |
 | `python tools/build.py --recompile-if-needed [ISO] [--progress json]` | recompile only when stale, then build |
 | `python tools/build.py --launcher` | build the launcher (build/launcher, the exe in the root; no disc) |
 | `python tools/setup_vs.py status / install [--dry-run]` | Visual Studio Build Tools 2022 + clang: nothing there - Microsoft's bootstrapper (aka.ms, Authenticode-checked: valid and Microsoft's, or it isn't run) with the C++ workload, recommended parts and the clang components; a Visual Studio without clang / CMake - its installer's `modify --add` (the components only: the workload's ID differs between products); clang too old - `update`. Elevated via ShellExecuteEx `runas`; 1223 = declined, 3010 = restart needed |
-| `python tools/backup.py create / list / restore NAME [--force]` | the card zipped with a manifest of every entry's creation / modification time; restore backs up the current card first, recreates in creation order and puts the times back (SetFileTime); refused while vcs.exe runs |
+| `python tools/backup.py create / list / restore NAME [--force]` | the card zipped with a manifest of every entry's creation / modification time; restore backs up the current card first, recreates in creation order and puts the times back (SetFileTime); refused while lcs.exe runs |
 | `python tools/report.py [OUT]` | build logs, the newest four game logs (crash reports included), state files, doctor's JSON, Windows / CPU / GPU names; never the disc, generated code or the card |
 | `python tools/update.py check / apply [--zip F]` | GitHub's latest release vs RELEASE.json; apply replaces the release's files, removes the ones the new release dropped, keeps build/ and generated/ and anything added; files in use (the launcher, the running Python) are renamed `*.old` and removed next time, a file held open is tried again for a few seconds; a file it still can't write is skipped and named, `VERSION` / `RELEASE.json` stay the old ones and it fails with `update_incomplete` (the launcher offers the update again; issue 66); checks the `.sha256`; its result says `restart: true` when it put a new release in place (the launcher's Restart button) |
 | `python tools/rip_disc.py list / rip E: OUT.iso` | a disc's sectors (the size its ISO 9660 volume gives) to an .iso, retries, then the check |
@@ -430,7 +430,7 @@ runs the real window and frame loop without showing it and prints the frames dra
 - Release: `release.py --worktree` 1 min (deps cached), the guard refusing a planted disc image, MIPS ELF, generated
   file and SLUS name. From the zip, extracted into an empty folder: the launcher's first start (Disc step), then
   `--action build`: every step green, *Play* (see "Numbers"); `--play` started the game (hidden, VCS_DATA_DIR).
-- Update: 0.1.1-test applied over a 0.1.0-test folder: version, a dropped file removed, `build\vcs.ini` and a player's
+- Update: 0.1.1-test applied over a 0.1.0-test folder: version, a dropped file removed, `build\lcs.ini` and a player's
   own file kept, the in-use Python files set aside and gone at the next run; a clone refuses (`git_checkout`); the
   GitHub check answers "no release published yet" (404) for now.
 - Backups on a copy of the card (VCS_DATA_DIR): create, a slot file deleted, restore - files and both times identical.
@@ -486,7 +486,7 @@ On the dev laptop (Mint 22.3, XFCE on X11, i7-6600U, HD 520, Mesa 25), the launc
   pictures as Windows' (fonts aside: Noto Sans), **0 validation messages**.
 - X11, in a nested Xephyr with xfwm4 driven through XTest: caption drag moves the window exactly, the right edge resizes
   it exactly, double-click maximises and restores, minimise hides it (`_NET_WM_STATE_HIDDEN`), a click opens Settings,
-  the close button quits. The real window on the desktop: undecorated, centred, class `VCSLauncher`, the icon set.
+  the close button quits. The real window on the desktop: undecorated, centred, class `LCSLauncher`, the icon set.
 - Wayland, in a nested weston (X11 backend inside Xephyr, pixman, lavapipe) driven the same way: move, resize,
   maximise, close; fixed on the way: un-maximising kept the maximised size (a 0x0 configure now means the floating size).
   On the desktop's weston (GPU): HD 520, 60 Hz pacing, one draw call.
@@ -499,12 +499,12 @@ On the dev laptop (Mint 22.3, XFCE on X11, i7-6600U, HD 520, Mesa 25), the launc
 | | |
 |---|---|
 | Launcher build from scratch | **17 s** (configure 5 s, 28 steps 12 s; 2026-11-01); was 81 s with SDL3 + Dear ImGui |
-| VCSLauncher.exe | **1.0 MB**, static, no third-party code (was 4 MB) |
+| LCSLauncher.exe | **1.0 MB**, static, no third-party code (was 4 MB) |
 | Idle cost (`--hidden --quit-after 20`) | 62 frames in 20 s - the entrance animation and the doctor's run - then none; 94 ms of CPU in all (before Home moved) |
 | Home, moving (2026-11-01) | 783 frames in 20 s - the entrance, then ~33 a second; 0.16 ms of CPU a frame (about 0.5% of one core); every other screen still draws nothing when idle |
 | A frame | 0.67 ms CPU on average (the first ones, rasterising glyphs: up to 14 ms); one draw call, a few hundred instances |
 | Linux AppImage | 36 MB; made in 37 s; first start puts 174 MB in place in ~3 s; the game built from it in 18 min (laptop, ThinLTO); an update's start + rebuild 1.7 s |
-| Linux: build from scratch (laptop, clang 20, ThinLTO) | **27 s**; `VCSLauncher` 1.0 MB stripped (the X11 icon is 0.17 MB of it) |
+| Linux: build from scratch (laptop, clang 20, ThinLTO) | **27 s**; `LCSLauncher` 1.0 MB stripped (the X11 icon is 0.17 MB of it) |
 | Linux: idle (reduce motion, `--hidden --quit-after 20`) | 7 frames in 20 s (the entrance and the doctor's answer), then none; **5 ms of CPU in all** |
 | Linux: Home, moving (`--hidden --quit-after 10`, paced at 60 Hz) | 346 frames in 10 s (~33 a second after the entrance); 0.96 ms a frame on the laptop at its idle clock (0.33 of it the renderer: upload + submit); 40 ms of CPU a second |
 | `doctor.py` | 0.8 s |

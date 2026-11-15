@@ -53,7 +53,7 @@ def drives():
                 except OSError:
                     pass
                 if entry["boot"].upper() == vcs_disc.ELF_NAME:
-                    entry.update(ok=True, message="GTA: Vice City Stories (USA)")
+                    entry.update(ok=True, message="GTA: Liberty City Stories (USA)")
                 elif entry["boot"]:
                     other = vcs_disc.OTHER_RELEASES.get(entry["boot"].upper())
                     entry["message"] = "%s, not the supported disc" % (other or "another PS2 game")

@@ -1,4 +1,4 @@
-// Enhancements > World: traffic / pedestrian density and draw distance (docs/game-internals.md 6o, 12d).
+// Enhancements > World: traffic / pedestrian density and draw distance (docs/vcs-reference/game-internals.md 6o, 12d).
 //
 // Density. Mission scripts set the game's density multipliers all the time (0 to clear the streets, 10 for the
 // credits; CarDensityMultiplier 0x48A968, PedDensityMultiplier 0x487FF8), and saves keep them, so those stay the
@@ -255,7 +255,7 @@ namespace vcs::world
             g_orig.pedCapOut = static_cast<int>(rd32(ram, kPedCapOut));
             g_orig.pedCapIn = static_cast<int>(rd32(ram, kPedCapIn));
             g_orig.spawnChance = rd32(ram, kSpawnChance);
-            // the executable's values (docs/game-internals.md 12d); anything else: another build, leave it alone
+            // the executable's values (docs/vcs-reference/game-internals.md 12d); anything else: another build, leave it alone
             g_orig.valid = g_orig.carFactor == 0.7f && g_orig.pedFactor == 0.4f && g_orig.lodScale == 1.0f &&
                            g_orig.carCap == 16 && g_orig.pedCapOut == 25 && g_orig.pedCapIn == 30 &&
                            g_orig.spawnChance == 0x0F070400u;

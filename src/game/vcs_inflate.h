@@ -1,4 +1,4 @@
-// zlib 1.2.2's inflate_fast (FUN_00184428) natively (docs/game-internals.md 8, docs/PERFORMANCE.md): the busiest guest
+// zlib 1.2.2's inflate_fast (FUN_00184428) natively (docs/vcs-reference/game-internals.md 8, docs/vcs-reference/PERFORMANCE.md): the busiest guest
 // function while the game streams (sectors, models, textures are zlib streams). The same decoding on the same guest
 // memory - z_stream / inflate_state as the EE build lays them out - so the output and the state are byte for byte the
 // recompiled original's. Falls back to the original when a buffer is outside main RAM or the data is bad (the original

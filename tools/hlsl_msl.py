@@ -5,7 +5,7 @@ launcher's Metal renderer (launcher/CMakeLists.txt). Standard library only.
     python tools/hlsl_msl.py --glslang PATH --spirv-cross PATH --stage vert|frag --entry vs_main
                              --name kGsDrawVS_msl --out gs_draw_vs.msl.h [-D NAME=VALUE ...] SOURCE.hlsl
 
-The one HLSL source (docs/NATIVE_RENDERER.md) goes through glslang to SPIR-V - as tools/hlsl_spirv.py, with its
+The one HLSL source (docs/vcs-reference/NATIVE_RENDERER.md) goes through glslang to SPIR-V - as tools/hlsl_spirv.py, with its
 dual-source patch (the second colour output at Location 0 Index 1, MSL's [[color(0), index(1)]]) - and SPIRV-Cross to
 MSL. Metal has a table per kind (buffers, textures, samplers) and only 16 sampler slots, so the D3D11 registers map
 straight to the slots: cbuffer bN -> [[buffer(N)]], texture tN -> [[texture(N)]], sampler sN -> [[sampler(N)]]

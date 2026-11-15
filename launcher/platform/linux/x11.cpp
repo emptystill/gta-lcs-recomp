@@ -89,7 +89,7 @@ namespace platform::linux_
                 }
 
                 // names, class (the .desktop file's StartupWMClass), protocols
-                XClassHint cls{const_cast<char *>("VCSLauncher"), const_cast<char *>("VCSLauncher")};
+                XClassHint cls{const_cast<char *>("LCSLauncher"), const_cast<char *>("LCSLauncher")};
                 XSetClassHint(m_display, m_window, &cls);
                 XStoreName(m_display, m_window, title);
                 XChangeProperty(m_display, m_window, m_atoms.netWmName, m_atoms.utf8String, 8, PropModeReplace,

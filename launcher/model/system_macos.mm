@@ -115,7 +115,7 @@ namespace launcher
     {
         if (on && g_awake == kIOPMNullAssertionID)
             IOPMAssertionCreateWithName(kIOPMAssertionTypePreventUserIdleSystemSleep, kIOPMAssertionLevelOn,
-                                        CFSTR("Building GTA: Vice City Stories"), &g_awake);
+                                        CFSTR("Building GTA: Liberty City Stories"), &g_awake);
         else if (!on && g_awake != kIOPMNullAssertionID)
         {
             IOPMAssertionRelease(g_awake);

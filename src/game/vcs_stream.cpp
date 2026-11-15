@@ -1,4 +1,4 @@
-// VCS disc streaming without the IOP (docs/NATIVE_PORT_ROADMAP.md milestone 6 step 1; docs/game-internals.md 9).
+// VCS disc streaming without the IOP (docs/vcs-reference/NATIVE_PORT_ROADMAP.md milestone 6 step 1; docs/vcs-reference/game-internals.md 9).
 //
 // The game reads everything after boot through CDSTREAM.IRX's stream server (SIF RPC 0x65686577, EE client 0x505B48),
 // called from three EE functions:

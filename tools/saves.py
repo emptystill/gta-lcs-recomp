@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Memory card check through the game's own menus (milestone 2, docs/game-internals.md 10e).
+"""Memory card check through the game's own menus (milestone 2, docs/vcs-reference/game-internals.md 10e).
 
     python tools/saves.py [OUT] [--port N]
 
@@ -30,7 +30,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import rig  # noqa: E402
 
 ROOT = rig.ROOT
-FOLDER = ("mc0", "BASLUS-21590GTA40001")
+FOLDER = ("mc0", "BASLUS-21423GTA40001")
 
 
 def main():
@@ -106,7 +106,7 @@ def main():
         # back where the save put them is the check (a hung load leaves him at INITPLA's start); the full read is
         # reported when the log already has it
         tail = log_text()[mark:]
-        read_full = "'/BASLUS-21590GTA40001/1 Soldier' flags=0x1" in tail and "result=98300" in tail
+        read_full = "'/BASLUS-21423GTA40001/1 Soldier' flags=0x1" in tail and "result=98300" in tail
         _, pos, mission = g.player()
         back = abs(pos[0] - saved_pos[0]) < 30 and abs(pos[1] - saved_pos[1]) < 30
         checks["load"] = {"ok": back and not mission, "back_at_save": back, "slot1_read_logged": read_full,

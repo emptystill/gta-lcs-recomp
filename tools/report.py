@@ -4,7 +4,7 @@
     python tools/report.py [OUT.zip]        default: build/reports/report-<date>.zip
 
 What goes in: the build logs (configure, build, recompiler), the newest four build/run/*.log (the game's output, crash reports included:
-the crash handler writes to it), build/build_info.json, generated/recompile_stamp.json, build/vcs.ini and
+the crash handler writes to it), build/build_info.json, generated/recompile_stamp.json, build/lcs.ini and
 launcher.ini (settings), tools/doctor.py --json, Windows / CPU / GPU names. What never goes in: the disc, the
 executable or anything extracted or generated from it (generated/*.cpp), the memory card. Logs keep their last 2 MB.
 """
@@ -66,7 +66,7 @@ def main():
     out = a.out or os.path.join(tc.BUILD, "reports", "report-" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S") + ".zip")
     os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
     # the pipeline's logs (the recompiler's has counts and addresses, no code), the game's newest runs, the state files
-    files = [os.path.join(tc.BUILD, n) for n in BUILD_LOGS + ["build_info.json", "vcs.ini", "launcher.ini"]]
+    files = [os.path.join(tc.BUILD, n) for n in BUILD_LOGS + ["build_info.json", "lcs.ini", "launcher.ini"]]
     files.append(os.path.join(tc.ROOT, "generated", "recompile_stamp.json"))
     files += sorted(glob.glob(os.path.join(tc.BUILD, "run", "*.log")), key=os.path.getmtime, reverse=True)[:4]
     files = [p for p in files if os.path.isfile(p)]

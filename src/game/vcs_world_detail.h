@@ -1,4 +1,4 @@
-// Enhancements > World: traffic / pedestrian density and draw distance (docs/game-internals.md 6o, 12d).
+// Enhancements > World: traffic / pedestrian density and draw distance (docs/vcs-reference/game-internals.md 6o, 12d).
 #pragma once
 
 #include <cstdint>

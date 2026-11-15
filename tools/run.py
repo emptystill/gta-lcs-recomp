@@ -5,7 +5,7 @@
 
 Runs in build/run/ (so files the game or the debug switches write land there), logs stdout+stderr to
 build/run/<logname>.log and stops the game after <seconds> (0 = until it exits). Environment variables
-(PS2X_*, VCS_*) pass through; nothing else is set for the renderer: vcs.exe runs as a double click starts it. Exit code 124 means the time ran out, as with `timeout`.
+(PS2X_*, VCS_*) pass through; nothing else is set for the renderer: lcs.exe runs as a double click starts it. Exit code 124 means the time ran out, as with `timeout`.
 
 The window is shown (a run started by hand). --hidden: no window on the desktop, the physical keyboard / mouse /
 gamepad ignored, sound on, the control channel open - what the test tools use (tools/rig.py passes it; the user's

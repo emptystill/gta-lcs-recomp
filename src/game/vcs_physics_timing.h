@@ -1,4 +1,4 @@
-// Vehicle physics that acts a fixed amount every frame, put on the game's time step (docs/game-internals.md 4).
+// Vehicle physics that acts a fixed amount every frame, put on the game's time step (docs/vcs-reference/game-internals.md 4).
 #pragma once
 
 class PS2Runtime;

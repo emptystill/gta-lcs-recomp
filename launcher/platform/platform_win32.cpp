@@ -569,7 +569,7 @@ namespace platform
         wc.hInstance = instance;
         wc.hIcon = LoadIconW(instance, MAKEINTRESOURCEW(1));
         wc.hIconSm = wc.hIcon;
-        wc.lpszClassName = L"VCSLauncherWindow";
+        wc.lpszClassName = L"LCSLauncherWindow";
         if (!RegisterClassExW(&wc))
         {
             error = "RegisterClassExW failed";

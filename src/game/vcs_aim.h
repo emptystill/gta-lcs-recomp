@@ -1,4 +1,4 @@
-// Free aim (docs/CONTROLS.md "Free aim", game-internals.md 12c): with Keyboard > Free aim (or Gamepad > Free aim) on,
+// Free aim (docs/vcs-reference/CONTROLS.md "Free aim", game-internals.md 12c): with Keyboard > Free aim (or Gamepad > Free aim) on,
 // holding the target button with a gun aims where the mouse / right stick points instead of locking on to a ped.
 //
 // It is the game's own free aim (R1, then L3: a lock-on to an invisible dummy object that the left stick moves, the

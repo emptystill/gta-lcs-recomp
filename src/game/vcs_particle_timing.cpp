@@ -1,4 +1,4 @@
-// Particles on the game's time step instead of the frame (docs/game-internals.md 4, "Effects that run per frame").
+// Particles on the game's time step instead of the frame (docs/vcs-reference/game-internals.md 4, "Effects that run per frame").
 //
 // The PS2 ran the particle system at 30 fps, and two parts of it count frames instead of time:
 // 1. CParticle::Update (FUN_001E9C90) moves particles by the step, but changes each one once a frame by its own rates:

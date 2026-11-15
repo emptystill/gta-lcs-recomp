@@ -13,7 +13,7 @@ namespace vcs
 
     // Car reflections (no setting: Auto, main.cpp; VCS_REFLECTIONS for one run): how the reflection map (FBP 420, 128 wide) reads the frame. 0 Original (the GS's four
     // bilinear taps per map texel), 1 Smooth (a filter over each texel's whole footprint), 2 Auto (Smooth above 1x
-    // internal resolution, Original at 1x). docs/game-internals.md 6g. Any thread, any time.
+    // internal resolution, Original at 1x). docs/vcs-reference/game-internals.md 6g. Any thread, any time.
     void setReflectionFilter(int mode);
 
     // Game thread, before CCamera::IsSphereVisible (FUN_003816F8) runs on this camera: widens its side planes to the

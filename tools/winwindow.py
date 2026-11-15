@@ -6,7 +6,7 @@ import sys
 import time
 import zlib
 
-DEFAULT_TITLE = "GTA: Vice City Stories"
+DEFAULT_TITLE = "GTA: Liberty City Stories"
 
 
 def require_windows():
@@ -97,7 +97,7 @@ def capture_png(hwnd, path):
     return w, h
 
 
-# Virtual-key codes for the names the game's controls use (docs/CONTROLS.md); letters / digits / F1-F24 work too.
+# Virtual-key codes for the names the game's controls use (docs/vcs-reference/CONTROLS.md); letters / digits / F1-F24 work too.
 _VK = {"return": 0x0D, "enter": 0x0D, "shiftkey": 0x10, "shift": 0x10, "controlkey": 0x11, "ctrl": 0x11, "space": 0x20,
        "escape": 0x1B, "esc": 0x1B, "back": 0x08, "backspace": 0x08, "tab": 0x09, "left": 0x25, "up": 0x26, "right": 0x27,
        "down": 0x28}

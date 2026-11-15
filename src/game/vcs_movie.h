@@ -1,4 +1,4 @@
-// VCS movies (docs/NATIVE_PORT_ROADMAP.md milestone 5): STINGS.PSS and INTRO.PSS played natively.
+// VCS movies (docs/vcs-reference/NATIVE_PORT_ROADMAP.md milestone 5): STINGS.PSS and INTRO.PSS played natively.
 #pragma once
 
 class PS2Runtime;

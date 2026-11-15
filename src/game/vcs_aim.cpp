@@ -126,7 +126,7 @@ namespace vcs::aim
             wr32(ped + kPedFreeAimWord, on ? w | kFreeAimBit : w & ~kFreeAimBit);
         }
 
-        // Weapon types (docs/TRAINER.md): 19..29 pistols, shotguns, SMGs, rifles; 33..35 flame-thrower, M249, minigun.
+        // Weapon types (docs/vcs-reference/TRAINER.md): 19..29 pistols, shotguns, SMGs, rifles; 33..35 flame-thrower, M249, minigun.
         // Not 30..32 (the snipers and the rocket launcher aim through their scopes), 38 / 39 (camera, binoculars),
         // melee (1..11) or thrown (12..17).
         bool isGun(uint32_t type) { return (type >= 19 && type <= 29) || (type >= 33 && type <= 35); }

@@ -67,7 +67,7 @@ namespace launcher
             const char *what = vcs::disc::describeOtherRelease(upper);
             return fail("other_release",
                         std::string("this disc is ") + (*what ? what : "another game") + " (" + boot +
-                            "). Only GTA: Vice City Stories for the USA (SLUS-21590) is supported",
+                            "). Only GTA: Liberty City Stories for the USA (SLUS-21423) is supported",
                         boot);
         }
         vcs::IsoEntry elf;
@@ -116,10 +116,10 @@ namespace launcher
                     consider(it->path());
             }
         }
-        // the likeliest first: a name that says Vice City Stories
+        // the likeliest first: a name that says Liberty City Stories
         std::stable_sort(found.begin(), found.end(), [](const fs::path &a, const fs::path &b) {
-            const bool va = lower(pathText(a.filename())).find("vice city stories") != std::string::npos;
-            const bool vb = lower(pathText(b.filename())).find("vice city stories") != std::string::npos;
+            const bool va = lower(pathText(a.filename())).find("liberty city stories") != std::string::npos;
+            const bool vb = lower(pathText(b.filename())).find("liberty city stories") != std::string::npos;
             return va > vb;
         });
         return found;

@@ -1,36 +1,48 @@
-# AGENTS.md - working on the GTA: Vice City Stories native port
+# AGENTS.md - working on the GTA: Liberty City Stories native port
 
 Read this first. It is the contract for anyone (human or AI agent) changing this repository. The
 detailed knowledge lives in `docs/`:
 
 | Doc | What's in it |
 |---|---|
-| [docs/game-internals.md](docs/game-internals.md) | Everything known about how the game works inside: code map, boot, camera, renderer, VU1 pipeline, 2D, streaming, sound, memory card - with addresses and how each fact was found |
-| [docs/NATIVE_PORT_ROADMAP.md](docs/NATIVE_PORT_ROADMAP.md) | The plan to completion (milestones 1-8) and what "done" means |
-| [docs/PROGRESS.md](docs/PROGRESS.md) | Status per area, open bugs, and the table of debug switches (`PS2X_*`, `VCS_*`) |
-| [docs/DECISIONS.md](docs/DECISIONS.md) | Why things are the way they are; the user's decisions |
+| [docs/LCS.md](docs/LCS.md) | **Liberty City Stories**: disc, executable, status, how it was brought up (each fix and how it was found), open issues, the `LCS_*` switches, the log. Where LCS knowledge goes |
+| [docs/DECISIONS.md](docs/DECISIONS.md) | This project's decisions (the VCS port's are in vcs-reference) |
 | [docs/PS2RECOMP_PATCHES.md](docs/PS2RECOMP_PATCHES.md) | Every change to the vendored PS2Recomp runtime, with the reason |
-| [docs/NATIVE_RENDERER.md](docs/NATIVE_RENDERER.md) | The D3D11 renderer: layers, stages, HLE method |
-| [docs/SETTINGS_MENU_WIDESCREEN.md](docs/SETTINGS_MENU_WIDESCREEN.md) | Settings registry / menu, Hor+ widescreen |
-| [docs/FULLY_NATIVE.md](docs/FULLY_NATIVE.md) | The steps left until a normal frame is fully native, with their status - the working list |
-| [docs/PERFORMANCE.md](docs/PERFORMANCE.md) | Frame rate well past 100 fps everywhere: how it is measured, what was done (numbers), what is next |
-| [docs/RSL_SUBMISSION.md](docs/RSL_SUBMISSION.md) | Plan: render submission at the RSL level (milestone 7) - draws from the game's render calls instead of DMA packets |
-| [docs/DISC.md](docs/DISC.md), [docs/CONTROLS.md](docs/CONTROLS.md) | Disc layout; keyboard / gamepad mapping |
-| [docs/TRAINER.md](docs/TRAINER.md) | The trainer (F5): what it does, how (the game's script commands), its check |
-| [docs/LINUX.md](docs/LINUX.md) | The Linux build: packages, flags, the Vulkan backend, what differs from Windows, the work list |
-| [docs/MACOS.md](docs/MACOS.md) | The macOS build (Apple Silicon): Apple's tools only, the Metal backend, sse2neon, what differs, the work list |
-| [docs/LAUNCHER.md](docs/LAUNCHER.md) | The launcher and releases: what a release holds, the player's flow, the tools behind each button, the `@vcs` events, what was checked |
+| [docs/LINUX.md](docs/LINUX.md), [docs/MACOS.md](docs/MACOS.md) | The Linux and macOS builds |
+| [docs/LAUNCHER.md](docs/LAUNCHER.md) | The launcher and releases |
 
-**When you learn something about the game, write it into docs/game-internals.md in the same change.**
-Record addresses and how you found them. When something is weird, use judgment, fix or work around it,
-and write it down (game-internals for the game, PS2RECOMP_PATCHES for the runtime, DECISIONS for
-choices).
+From the Vice City Stories port, in `docs/vcs-reference/` - VCS's addresses, but the same engine: the map of what to
+look for in LCS and how it was done there:
+
+| Doc | What's in it |
+|---|---|
+| [docs/vcs-reference/game-internals.md](docs/vcs-reference/game-internals.md) | Everything known about how the game works inside: code map, boot, camera, renderer, VU1 pipeline, 2D, streaming, sound, memory card - with addresses and how each fact was found |
+| [docs/vcs-reference/NATIVE_PORT_ROADMAP.md](docs/vcs-reference/NATIVE_PORT_ROADMAP.md) | The plan to completion (milestones 1-8) and what "done" means |
+| [docs/vcs-reference/PROGRESS.md](docs/vcs-reference/PROGRESS.md) | Status per area, open bugs, and the table of debug switches (`PS2X_*`, `VCS_*`) |
+| [docs/vcs-reference/DECISIONS.md](docs/vcs-reference/DECISIONS.md) | Why things are the way they are; the user's decisions |
+| [docs/vcs-reference/NATIVE_RENDERER.md](docs/vcs-reference/NATIVE_RENDERER.md) | The D3D11 renderer: layers, stages, HLE method |
+| [docs/vcs-reference/SETTINGS_MENU_WIDESCREEN.md](docs/vcs-reference/SETTINGS_MENU_WIDESCREEN.md) | Settings registry / menu, Hor+ widescreen |
+| [docs/vcs-reference/FULLY_NATIVE.md](docs/vcs-reference/FULLY_NATIVE.md) | The steps left until a normal frame is fully native, with their status - the working list |
+| [docs/vcs-reference/PERFORMANCE.md](docs/vcs-reference/PERFORMANCE.md) | Frame rate well past 100 fps everywhere: how it is measured, what was done (numbers), what is next |
+| [docs/vcs-reference/RSL_SUBMISSION.md](docs/vcs-reference/RSL_SUBMISSION.md) | Plan: render submission at the RSL level (milestone 7) - draws from the game's render calls instead of DMA packets |
+| [docs/vcs-reference/DISC.md](docs/vcs-reference/DISC.md), [docs/vcs-reference/CONTROLS.md](docs/vcs-reference/CONTROLS.md) | Disc layout; keyboard / gamepad mapping |
+| [docs/vcs-reference/TRAINER.md](docs/vcs-reference/TRAINER.md) | The trainer (F5): what it does, how (the game's script commands), its check |
+
+**When you learn something about Liberty City Stories, write it into docs/LCS.md in the same change** (with its VCS
+twin's address when there is one). Record addresses and how you found them. When something is weird, use judgment, fix
+or work around it, and write it down (LCS.md for the game, PS2RECOMP_PATCHES for the runtime, docs/DECISIONS.md for
+choices). Never edit docs/vcs-reference/ except to fix links: it is the VCS port as it was.
 
 ## What the project is
 
-- GTA: Vice City Stories (PS2, SLUS-21590 USA) statically recompiled to C++ (PS2Recomp, vendored and
-  heavily modified in `third_party/PS2Recomp`), turned step by step into a native port: native D3D11
-  rendering of the game's models (`src/game/vcs_hle_world.cpp`), SDL3 platform layer, settings menu.
+- GTA: Liberty City Stories (PS2, SLUS-21423 USA v1.01) statically recompiled to C++ (PS2Recomp, vendored and
+  heavily modified in `third_party/PS2Recomp`). An independent project, started 2026-11-14 as a copy of the GTA: Vice
+  City Stories native port (same engine): everything that is not game-specific (runtime, renderer, platform, settings,
+  launcher, tools) carried over; the VCS game code is replaced part by part with LCS's (docs/DECISIONS.md).
+- The game is `build/lcs.exe` (Linux / macOS `build/lcs`), its settings `lcs.ini`, its data `%LOCALAPPDATA%/LCSRecomp`
+  (never the VCS port's `VCSRecomp`), the launcher `LCSLauncher`.
+- Still named after VCS, to be renamed later (DECISIONS.md): the `vcs::` namespace, the `VCS_*` / `PS2X_*` switches,
+  `tools/vcs_disc.py`, `src/disc/vcs_disc_id.h`, the launcher's `@vcs` events, the `.vcs-build-dir` file.
 - Windows, Linux (docs/LINUX.md: clang, Vulkan; a plain host build) and macOS on Apple Silicon (docs/MACOS.md: Apple
   clang, Metal). The Steam Deck is postponed.
 - Distribution is source-only, bring your own disc. **Never commit game code or data**: no ISO, no
@@ -44,15 +56,17 @@ choices).
 | Path | What |
 |---|---|
 | `src/main.cpp` | Launcher: ISO, settings registration, runtime start |
-| `src/game/` | Game-specific code: overrides / hooks (`vcs_overrides.cpp`), native draw HLE (`vcs_hle_world.cpp`), display (`vcs_display.cpp`), the trainer (`vcs_trainer.cpp`), frame timing (`vcs_framerate.cpp`, per-frame mission meters `vcs_script_timing.cpp`, particles `vcs_particle_timing.cpp`, lightning / clouds / shake / other effects `vcs_effects_timing.cpp`), the player's controls (`vcs_input.cpp`; free aim `vcs_aim.cpp`; the pause menu's keys and mouse `vcs_frontend.cpp`), the game's music / effects levels as settings (`vcs_volume.cpp`), button prompts by device (`vcs_prompts.cpp`, its glyphs `vcs_glyph_art.cpp`), traffic / pedestrian density and draw distance (`vcs_world_detail.cpp`), the NPC drive-by's fire rate (`vcs_driveby.cpp`), mission scripts stuck above 30 fps (`vcs_script_fixes.cpp`) |
+| `src/game/lcs_*` | Liberty City Stories' own code: `lcs_overrides.cpp` (`applyLcs`, the LCS override block: every LCS hook, with its `LCS_*` switch) |
+| `src/game/vcs_*` | The VCS port's game code, **off for LCS** (registered for VCS's executable only) and kept as the model until each part has an `lcs_*` replacement, then deleted. Shared pieces still in use: `vcs_stream.cpp` (`StreamLayout`). What they are: overrides / hooks (`vcs_overrides.cpp`), native draw HLE (`vcs_hle_world.cpp`), display (`vcs_display.cpp`), the trainer (`vcs_trainer.cpp`), frame timing (`vcs_framerate.cpp`, per-frame mission meters `vcs_script_timing.cpp`, particles `vcs_particle_timing.cpp`, lightning / clouds / shake / other effects `vcs_effects_timing.cpp`), the player's controls (`vcs_input.cpp`; free aim `vcs_aim.cpp`; the pause menu's keys and mouse `vcs_frontend.cpp`), the game's music / effects levels as settings (`vcs_volume.cpp`), button prompts by device (`vcs_prompts.cpp`, its glyphs `vcs_glyph_art.cpp`), traffic / pedestrian density and draw distance (`vcs_world_detail.cpp`), the NPC drive-by's fire rate (`vcs_driveby.cpp`), mission scripts stuck above 30 fps (`vcs_script_fixes.cpp`) |
 | `src/render/`, `src/rhi/`, `src/platform/` | Presenter + shaders (HLSL; DXBC by fxc, SPIR-V by `tools/hlsl_spirv.py`, MSL by `tools/hlsl_msl.py`), the RHI (backends `d3d11/`, `vulkan/`, `metal/`, `null/`; only they see a graphics API), SDL3 platform layer |
 | `src/sound/` | Sony's libsd on the host (the native sound driver in `src/game/vcs_sound.cpp` drives the SPU2 through it) |
-| `src/settings/`, `src/ui/` | Settings registry + vcs.ini, the in-game settings menu (F2), the trainer menu (F5) |
+| `src/settings/`, `src/ui/` | Settings registry + lcs.ini, the in-game settings menu (F2), the trainer menu (F5) |
 | `src/debug/` | Crash handler, watchdog, sampling profiler, self-test, memory watch, the F3 game-state panel (`game_info.cpp`, also `gamectl.py gameinfo`) |
 | `third_party/PS2Recomp/ps2xRuntime` | The runtime (EE, VIF, VU1, GS HW backend, IOP host, stubs); our changes marked `[gta-recomp]` |
-| `game/vcs/` | Recompiler config, function map, VU1 upload list |
+| `game/lcs/` | Recompiler config (`overrides.toml` -> generated `game.toml`), function map (`functions.csv`; `manual_functions.csv` for ones found by hand), VU1 upload list |
+| `game/vcs/` | The VCS port's config, for reference (not used) |
 | `tools/` | Python 3 tools (standard library only) - see below |
-| `launcher/` | `VCSLauncher.exe` / Linux `VCSLauncher` / macOS `VCSLauncher.app` (a CMake project of its own, no third-party code: its own window - Win32, X11 / Wayland or Cocoa -, renderer - D3D11, Vulkan or Metal, one `ui.hlsl` -, DirectWrite / FreeType / Core Text text, its own icons, animated UI, after uppies): disc, build tools, build, play - a front end over `tools/` (docs/LAUNCHER.md) |
+| `launcher/` | `LCSLauncher.exe` / Linux `LCSLauncher` / macOS `LCSLauncher.app` (a CMake project of its own, no third-party code: its own window - Win32, X11 / Wayland or Cocoa -, renderer - D3D11, Vulkan or Metal, one `ui.hlsl` -, DirectWrite / FreeType / Core Text text, its own icons, animated UI, after uppies): disc, build tools, build, play - a front end over `tools/` (docs/LAUNCHER.md) |
 
 ## Build and run
 
@@ -69,7 +83,7 @@ python tools/bench.py [OUT]                  # game-thread benchmark: fixed city
 python tools/cruise.py run [OUT] [ENV=VAL]   # stutter rig: the car along a fixed route at 144 km/h, every frame timed;
                                              # hitches with their texture / main-thread / game-thread cause (PERFORMANCE.md 21)
 python tools/clean.py [--apply] [--keep-days 7]   # delete test output in build/ (lists first; builds, saves, baselines kept)
-python tools/build.py --launcher             # the launcher (VCSLauncher(.exe) in the root; no disc, ~20 s the first time)
+python tools/build.py --launcher             # the launcher (LCSLauncher(.exe) in the root; no disc, ~20 s the first time)
 python3 tools/build.py --install-deps        # Linux: the missing packages through pkexec (what the launcher's button runs)
 python tools/build.py --recompile-if-needed  # recompile only when generated/ is stale (generated/recompile_stamp.json)
 python tools/doctor.py [--json]              # folder, compiler, disc, build state, the next step (the launcher reads --json)
@@ -77,7 +91,7 @@ python tools/build_dir.py [check|set P|reset] # the build folder elsewhere (.vcs
                                              # the test tools keep writing to build\ in the source folder
 python tools/release.py [--ref vX | --worktree]   # the Windows release zip (build/dist); refuses game files. The number is
                                              # VERSION (root; 0.3.0): bump it before tagging - the tag must match;
-                                             # the notes: docs/releases/<tag>.md (else GitHub generates them)
+                                             # the notes: docs/vcs-reference/releases/<tag>.md (else GitHub generates them)
 python3 tools/release.py --platform linux [--worktree --allow-new-glibc]   # the Linux AppImage (CI builds it on
                                              # Ubuntu 22.04 for glibc 2.35; a v* tag publishes zip + AppImage together)
 python3 tools/release.py --platform macos [--worktree]   # the macOS .dmg: the app next to an Applications link
@@ -120,6 +134,11 @@ python tools/irxdis.py --decompile X.IRX OUT.c                # an IOP module as
 python tools/eedecomp.py 0x2f7d58 [...] [--out FILE]          # game functions as C (the analysed EE project; analysis only)
 ```
 
+**For LCS today**: the build, run, gamectl (press / screenshot / perf / peek), eedecomp, xmatch, doctor, clean and backup
+tools work. The game checks above (bench, cruise, tour, saves, soak, memcheck, shakedown, haze / hose / trainer / finale
+/ controls / hud / menu / prompts checks, soundcheck, framerate_audit, scenes, the rig's script commands) drive VCS's
+missions, memory and script VM at VCS's addresses: each needs its LCS addresses before it means anything here.
+
 The rig (`src/debug/rig.cpp`, `tools/rig.py`) drives the game through its own script VM: `Game.teleport`,
 `set_time`, `weather`, `invincible`, `mission(n)` and raw `scm(bytes)` (assembler: `rig.Scm`, VCS opcode numbers
 from the Sanny Builder Library, checked against the handler table - game-internals.md 11). `build/rig/saves/` holds
@@ -131,13 +150,13 @@ player's card; `rig.default_save`).
   `VCS_TEST_VISIBLE=1` shows the window when asked. `run.py` on its own shows the window: the user starts the game
   with it too.
 - `VCS_DATA_DIR=<dir>` gives a run its own memory card / cache. **Never run tests against the user's
-  card** (`%LOCALAPPDATA%/VCSRecomp/mc0`) when they could write to it; copy it with
+  card** (`%LOCALAPPDATA%/LCSRecomp/mc0`) when they could write to it; copy it with
   `robocopy /E /COPY:DAT /DCOPY:T` (keeps creation times, which the card order depends on).
-- `vcs.ini` next to `vcs.exe` holds the user's settings; environment overrides (`VCS_ASPECT=169`)
+- `lcs.ini` next to `lcs.exe` holds the user's settings; environment overrides (`VCS_ASPECT=169`)
   apply to one run without touching it.
 - Rebuild costs: a change to `ps2_memory.h`, `gs_backend.h`, `ps2_hle_survey.h` or anything the
   generated code includes rebuilds everything (~6-10 min); runtime-only changes ~1 min; `src/` only
-  seconds. Prefer `src/game/vcs_overrides.cpp` for experiments.
+  seconds. Prefer `src/game/lcs_overrides.cpp` for experiments.
 - Test output (screenshots, logs, card copies) goes under `build/<tool>/<name>`; it adds up (23 GB by 2026-10-23,
   mostly screenshots). Run `python tools/clean.py --apply --keep-days 7` after a session of test runs. A capture
   worth keeping as a reference goes to `build/scenes/reference` (scenes compare) or `build/regress/baseline`.
@@ -154,11 +173,11 @@ player's card; `rig.default_save`).
   that differs: `__MINGW32__` / CMake's `MINGW`; `_MSC_VER` means clang-cl only. libc++ on Windows has a slow
   `steady_clock::now`, timed waits that spin their last millisecond and a CRITICAL_SECTION `recursive_mutex`: hot code
   uses `ps2x::hostNow` / `waitUntil` / `waitFor` / `RecursiveMutex` (`runtime/ps2_host_std.h`, PERFORMANCE.md 29).
-- A successful build writes `iso=<disc>` into the `vcs.ini` next to `vcs.exe` when that file has none, so the exe
+- A successful build writes `iso=<disc>` into the `lcs.ini` next to `lcs.exe` when that file has none, so the exe
   started on its own finds the disc.
 - The launcher (`launcher/`, docs/LAUNCHER.md) only runs `tools/`: build logic stays in Python, so a change to the
   pipeline is a change to the scripts. The tools print `@vcs {json}` event lines (`toolchain.event` / `stage` / `fail`
-  with a code) the launcher reads; keep them when changing a tool's output. `VCSLauncher.exe --screenshot F.png
+  with a code) the launcher reads; keep them when changing a tool's output. `LCSLauncher.exe --screenshot F.png
   [--screen home|task|sheet:saves|gallery... --demo error --frames N --action build]` renders its window offscreen
   (tests, docs; `--screen gallery` shows every widget); `--hidden --quit-after S` runs the real loop unshown and prints
   its cost; `--self-test` is CI's check. The launcher's UI is immediate mode: never open a file dialog inside a frame
@@ -168,13 +187,14 @@ player's card; `rig.default_save`).
 ## Release notes
 
 Each release's notes are `docs/releases/v<VERSION>.md`. CI publishes them as the release's text and sets the title
-itself ("GTA Vice City Stories Launcher vX"), so the file has no heading. Follow `docs/releases/v0.2.1.md`'s format
-(the user's choice, 2026-11-04):
+itself ("GTA Liberty City Stories Launcher vX"), so the file has no heading. Follow the VCS port's format
+(`docs/vcs-reference/releases/v0.2.1.md`; that user's choice, 2026-11-04). LCS has no release yet (VERSION 0.1.0):
 
 - **Sources:** `git log <previous tag>..HEAD`, with the commit bodies. Group the changes by what a player notices, not
   by commit. Leave out anything a player never sees (tools, CI, docs, test rigs) unless it changes how they build,
   update or report a problem.
-- **Layout:** the first line is `**Full Changelog**: https://github.com/gothamor/gta-vcs-recomp/compare/vPREV...vNEW`.
+- **Layout:** the first line is `**Full Changelog**: https://github.com/<owner>/<repo>/compare/vPREV...vNEW`
+  (the LCS repository on GitHub, once there is one).
   Sections are plain lines, not Markdown headings, each followed by bullets. The biggest change comes first as
   `New: <what it is>`. Then come sections named by topic (`The car camera`), then `Fixes`, then `Launcher` (or `Also`).
   The last line is an `Updating:` paragraph: the Windows steps in the launcher, that saves aren't touched, extracting
@@ -203,7 +223,7 @@ itself ("GTA Vice City Stories Launcher vX"), so the file has no heading. Follow
 3. **Floating point**: no FP contraction in generated / VU code; VU maths rounds toward zero
    (`FE_TOWARDZERO` where reproducing it). Bit-exactness depends on both.
 4. **Never run `PS2X_GS=gpu`** (paraLLEl-GS) on the dev machine: it hangs the GTX 1080 Ti into a TDR
-   reset and blanks the user's screen. `hw` (D3D11) is vcs.exe's own default.
+   reset and blanks the user's screen. `hw` (D3D11) is lcs.exe's own default.
 5. **Patch scripts**: shell heredocs on this machine turn `\n` inside Python strings into real
    newlines and corrupt C++ string literals. Use the Edit tool, or write the script to a file first.
 6. **Scripts are Python 3, standard library only**, runnable from any shell; extend `tools/*.py`
@@ -244,8 +264,8 @@ itself ("GTA Vice City Stories Launcher vX"), so the file has no heading. Follow
 - A tool fails within a second, its log empty (a player's report, 2026-10-31): a crash before the first line - the log
   now ends with the exit code (`0xC000001D` illegal instruction: a build for a newer CPU, `PS2X_CPU`; DECISIONS.md).
 - `[main] fatal exception: No mapping for the Unicode character exists in the target multi-byte code page`, or a path
-  full of `?`s: a non-ASCII folder seen through the ANSI code page - vcs.exe's UTF-8 manifest missing or ignored
-  (`src/vcs.manifest`, DECISIONS.md 2026-11-01).
+  full of `?`s: a non-ASCII folder seen through the ANSI code page - lcs.exe's UTF-8 manifest missing or ignored
+  (`src/lcs.manifest`, DECISIONS.md 2026-11-01).
 - A save gone after saving (an empty slot file, or the whole save folder deleted): a card name the host could not
   store, or a failed card write - the game deletes its save folder after one (game-internals.md 10f). The card is
   zipped into `<data>/backups/auto-*.zip` before every change (`[MC] card backup` in the log).
@@ -260,7 +280,7 @@ itself ("GTA Vice City Stories Launcher vX"), so the file has no heading. Follow
 
 ## Working style for long autonomous runs
 
-- Follow docs/NATIVE_PORT_ROADMAP.md milestone by milestone without pausing for routine decisions;
+- Follow docs/vcs-reference/NATIVE_PORT_ROADMAP.md milestone by milestone without pausing for routine decisions;
   record decisions in DECISIONS.md and progress / numbers in PROGRESS.md.
 - Measure before and after anything on the hot path (perf lines from `gamectl.py perf`, scenes'
   `perf_*.txt`); keep the numbers in the docs.

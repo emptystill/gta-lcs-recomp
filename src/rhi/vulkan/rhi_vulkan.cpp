@@ -1290,8 +1290,8 @@ namespace rhi
                         std::fprintf(stderr, "[rhi] Vulkan validation layer not installed (vulkan-validationlayers)\n");
                 }
                 VkApplicationInfo app{VK_STRUCTURE_TYPE_APPLICATION_INFO};
-                app.pApplicationName = "Vice City Stories";
-                app.pEngineName = "vcs-recomp";
+                app.pApplicationName = "Liberty City Stories";
+                app.pEngineName = "lcs-recomp";
                 app.apiVersion = VK_API_VERSION_1_3;
                 VkInstanceCreateInfo ci{VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
                 ci.pApplicationInfo = &app;
@@ -3106,7 +3106,7 @@ namespace rhi
         if (volkInitialize() != VK_SUCCESS || volkGetInstanceVersion() < VK_API_VERSION_1_3)
             return {};
         VkApplicationInfo app{VK_STRUCTURE_TYPE_APPLICATION_INFO};
-        app.pApplicationName = "Vice City Stories";
+        app.pApplicationName = "Liberty City Stories";
         app.apiVersion = VK_API_VERSION_1_3;
         VkInstanceCreateInfo ci{VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
         ci.pApplicationInfo = &app;

@@ -64,7 +64,7 @@ namespace launcher
         // the repository (where tools/build.py is) and its build folder
         std::filesystem::path root, build;
         // Linux AppImage (tools/release.py): the release's files inside the read-only image; root is then the install
-        // folder they are copied to ($XDG_DATA_HOME/VCSRecomp/install, VCS_INSTALL_DIR) - empty otherwise
+        // folder they are copied to ($XDG_DATA_HOME/LCSRecomp/install, VCS_INSTALL_DIR) - empty otherwise
         std::filesystem::path payload;
         bool installing() const { return task && task->kind == "install" && !task->finished; }
         // a release that updates itself: Windows (a release folder or not: update.py says), a Linux AppImage
@@ -85,7 +85,7 @@ namespace launcher
         bool doctorFailed() const { return doctorDone && !doctorRunning && !doctor.isObject(); }
         void refresh();
 
-        // the disc: checked here (instantly), remembered as iso= in build/vcs.ini
+        // the disc: checked here (instantly), remembered as iso= in build/lcs.ini
         std::filesystem::path iso;
         DiscResult disc;
         bool discChecked = false, discFound = false; // found = picked by the scan, not the player
@@ -115,7 +115,7 @@ namespace launcher
         bool updateQuiet = false;
         // an update put in place (update.py apply said restart): the version; this launcher is the old one until then
         std::string updatedTo;
-        std::filesystem::path restartTarget() const; // the new launcher: root's VCSLauncher.exe, or $APPIMAGE
+        std::filesystem::path restartTarget() const; // the new launcher: root's LCSLauncher.exe, or $APPIMAGE
         // the new launcher started (--after-update <our pid>: it waits for us to end); the caller closes this one
         bool restart(std::string &error);
 

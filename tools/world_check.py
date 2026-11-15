@@ -142,7 +142,7 @@ def main():
                 row["perf"].get("game_ms", 0)), flush=True)
             return row
 
-        # original: from the defaults whatever the player's vcs.ini holds (hidden runs read it, never write it)
+        # original: from the defaults whatever the player's lcs.ini holds (hidden runs read it, never write it)
         for key in ("enhance.traffic", "enhance.peds", "enhance.draw_distance"):
             setting(key, 100)
         g.wait_frames(5)

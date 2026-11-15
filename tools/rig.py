@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Automation rig client (docs/NATIVE_PORT_ROADMAP.md milestone 1; src/debug/rig.cpp is the game side).
+"""Automation rig client (docs/vcs-reference/NATIVE_PORT_ROADMAP.md milestone 1; src/debug/rig.cpp is the game side).
 
     python tools/rig.py start [--save DIR] [--seconds N] [--name NAME]   launch with the control channel
     python tools/rig.py peek ADDR [BYTES] | peekf ADDR [COUNT] | poke ADDR HEX | pokef ADDR F...
@@ -59,7 +59,7 @@ def copy_card(src, dst):
 
 
 class Scm:
-    """Bytecode for the game's script VM (docs/game-internals.md section 11). Opcodes are the VCS numbers
+    """Bytecode for the game's script VM (docs/vcs-reference/game-internals.md section 11). Opcodes are the VCS numbers
     (Sanny Builder Library vcs.json, checked against the handler table); arguments carry a type byte."""
     PLAYER = b"\xcf\xa5"  # global 0x2A5: the player (VCS uses one handle for the player and the player's char)
     LOCAL0 = b"\x0d"      # local variable 0 (outputs)

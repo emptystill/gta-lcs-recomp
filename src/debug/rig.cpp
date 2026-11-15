@@ -304,7 +304,7 @@ namespace vcs::rig
 
     namespace
     {
-        // ---- The game's script VM (docs/game-internals.md section 11) -------------------------------------------
+        // ---- The game's script VM (docs/vcs-reference/game-internals.md section 11) -------------------------------------------
         constexpr uint32_t kScriptSpacePtr = 0x0048741Cu; // -> ScriptSpace (MAIN.SCM from file offset 8)
         constexpr uint32_t kActiveScripts = 0x004CD3C4u;  // CRunningScript list heads (+0 next, +4 prev)
         constexpr uint32_t kIdleScripts = 0x004CD3C8u;

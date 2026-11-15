@@ -1,4 +1,4 @@
-// Shows the game's picture in the window through the RHI (stage 2 of docs/NATIVE_RENDERER.md): the swapchain, the
+// Shows the game's picture in the window through the RHI (stage 2 of docs/vcs-reference/NATIVE_RENDERER.md): the swapchain, the
 // letterboxed picture, Dear ImGui on top, and off-screen screenshots. Main thread only.
 #pragma once
 
@@ -61,11 +61,11 @@ namespace present
     // 16:9 monitor sits in the 32:9 strip, between the bars, not over them.
     void fitRect(float aspect, float frameAspect, float width, float height, float &x0, float &y0, float &w, float &h);
 
-    // Brightness probe (automation rig, docs/NATIVE_PORT_ROADMAP.md milestone 1): the picture's middle region
+    // Brightness probe (automation rig, docs/vcs-reference/NATIVE_PORT_ROADMAP.md milestone 1): the picture's middle region
     // (HUD margins left out) shrunk to 32x24 and read back; mean luma 0..255. Stalls the GPU briefly: opt-in.
     bool frameLuma(const Picture &picture, int srcWidth, int srcHeight, float &mean);
 
-    // Display aspect of the game picture (docs/SETTINGS_MENU_WIDESCREEN.md): 4:3 as on a PS2's TV, or the widescreen
+    // Display aspect of the game picture (docs/vcs-reference/SETTINGS_MENU_WIDESCREEN.md): 4:3 as on a PS2's TV, or the widescreen
     // ratio. displayAspect(false) is for frames without 3D (loading screens, menus): always 4:3. Any thread.
     void setDisplayAspect(float aspect);
     float displayAspect(bool showing3d);

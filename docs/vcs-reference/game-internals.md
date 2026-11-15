@@ -986,7 +986,7 @@ end, Im2D primitives drawn with the depth test off get the HUD's z (`VCS_HUD_RW=
   are bilinear-filtered (TEX1 MMAG / MMIN linear) and drawn smaller than their texels (a clock digit: 15 x 21.5
   texels into about 5 x 9 pixels).
 
-Milestone 3 step 2 builds on this (docs/NATIVE_RENDERER.md "HUD layer"): `vcs_hud.cpp` collects the HUD context's Im2D
+Milestone 3 step 2 builds on this (docs/vcs-reference/NATIVE_RENDERER.md "HUD layer"): `vcs_hud.cpp` collects the HUD context's Im2D
 primitives each frame, groups them into elements (boxes closer than 12 px across / 3 px down: a line of text, the
 radar and its blips, the clock / weapon / money cluster) and gives each an anchor from where it sits on the 4:3
 screen: left edge when its middle is left of 280 and it starts before 160, right edge when its middle is right of 360
@@ -1238,7 +1238,7 @@ section: flyover render 14.6 ms (GPU clipping 14.1, VU1 17.7), cutscene 11.8 (11
 frame time at the 30 fps cap again. The intro office, which the stage-5 notes called black on the VU clipper, draws
 correctly on it.
 
-### 6i. RSL submission: how a frame's packets are built (2026-10-24, docs/RSL_SUBMISSION.md phase 0)
+### 6i. RSL submission: how a frame's packets are built (2026-10-24, docs/vcs-reference/RSL_SUBMISSION.md phase 0)
 
 Found by decompiling the candidates (`tools/eedecomp.py`, headless Ghidra on the analysed EE project; output in
 `build/analysis/decomp/`), a scan of the code for the packet buffer object, and two runtime measurements:
@@ -1272,7 +1272,7 @@ write it (the scan: `0x2F0360..0x2FB690`, `0x1CEF18`, `0x266868`, `0x2A92C0`, `0
   MIPTBP2 for the draw. The texture's CLUT is uploaded with it, so while driving every bind uploads texture + CLUT
   (~390k uploads / 5 s, nearly all the same slots again). The header packet ends with the IMAGE GIFtag; the pixels
   follow in the next DIRECT: a REF straight to the raster in RAM whose VIFcodes are `NOP; DIRECTHL n` with n = its
-  qwc (how docs/FULLY_NATIVE.md step 3d names textures by raster). T4 textures (the radar tiles among them) are sent
+  qwc (how docs/vcs-reference/FULLY_NATIVE.md step 3d names textures by raster). T4 textures (the radar tiles among them) are sent
   as CT16, and their CLUT goes into the same GS page right after (other blocks).
 - **Draws**, each starting with the state flush and the GS-register queue:
   - `FUN_002F7D58(packet)`: a **model instance** - CALL to the model's prebuilt packet in the model heap (444 calls a
@@ -1305,7 +1305,7 @@ plus `memmove` 3.8% (the runtime flattening the ~4.7 MB chain when it is kicked)
 ~3 ms of a ~19 ms frame**, goes into building and handing over packets. The rest is spread thin (no other function
 above 2.3%).
 
-**Coverage of the draw functions** (docs/RSL_SUBMISSION.md phase 1a, `VCS_RSL_SHADOW=1`, `src/debug/rsl_shadow.cpp`):
+**Coverage of the draw functions** (docs/vcs-reference/RSL_SUBMISSION.md phase 1a, `VCS_RSL_SHADOW=1`, `src/debug/rsl_shadow.cpp`):
 before-hooks record every call of the draw functions with its argument and the cursor at entry; as the runtime copies
 the frame's chain (`runtime/ps2_chain_observer.h`) each packet-buffer tag is placed in the record whose range holds
 it. Every draw wrote exactly its own tag - a model instance a CALL to its packet, a world draw a REF to its geometry
@@ -1361,14 +1361,14 @@ block at `entry + 4` of the material and CALLs it on later frames: the cursor no
 `0x240D14` (returns to `0x240D1C`), `FUN_002F7B30` from `0x240D1C` (returns to `0x240D24`), the range copied by
 `FUN_0045CE10` at `0x240D9C`. Code that writes something frame-specific into
 the packet buffer while a sector is cached therefore has it sent again in later frames - the draw items of
-docs/FULLY_NATIVE.md step 4c stay packets there.
+docs/vcs-reference/FULLY_NATIVE.md step 4c stay packets there.
 
 **A world block** (the REF payload of `FUN_002F7EB0`, sector geometry in the streamed cells; listed from a RAM dump,
 2026-10-24) is one shape throughout: per packet `UNPACK V4-32 x1 -> TOP+0` (the header: count, nloop), `STMASK`,
 `STROW`, `UNPACK V3-16 x n -> TOP+1` (positions, masked: w from ROW), `STMASK`, `STROW`, `UNPACK V2-8 usn x n -> TOP+0x48`
 (UVs, masked), `UNPACK V4-5 x n -> TOP+0x8F` (colours), `MSCAL 6` (program 0x0030) - no constants; everything else the
 world program reads is VU-resident state from the draw's flush (6d table 0x19). Sizes seen: 208-2,340 qwords, packets
-of up to 70 vertices. Phase 2 draws these from recordings (docs/RSL_SUBMISSION.md).
+of up to 70 vertices. Phase 2 draws these from recordings (docs/vcs-reference/RSL_SUBMISSION.md).
 
 **A model packet** (the CALL of `FUN_002F7D58` / `FUN_002F80A0`; decompiled with `tools/eedecomp.py`, packets listed
 from a RAM dump and checked by the phase 2 recorder, 2026-10-24):
@@ -2365,7 +2365,7 @@ mission's runtime IP is 0x3CAE3 + (IP - its start)) and reproduced with the rig.
   `WRONGCD` / `NOCD` / `CDERROR`) at the top right - an F12 dump of the stuck frame; the LoadingScreen function
   (FUN_0021E170) and the menu draw are not called. So it is the game's own picture, which the original would show the
   same way. With the flags set (rig `poke` of the globals) the same run rolls the credits and ends at the building.
-- The fix is in the trainer (docs/TRAINER.md): a Last Stand it launched that passes (its script seen in 0x22F5E..
+- The fix is in the trainer (docs/vcs-reference/TRAINER.md): a Last Stand it launched that passes (its script seen in 0x22F5E..
   0x22F97) and ends without the story's condition gets the credits 5.5 s after the end: a script `credits` started at
   0x24DC3 whose RETURN lands on the main script's TERMINATE_THIS_SCRIPT at 0x16E90 (11b); story globals are left as
   they are. `tools/finale_check.py` plays the end both ways (`--story`).

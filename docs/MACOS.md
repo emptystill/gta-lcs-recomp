@@ -8,9 +8,9 @@ and Linux, for **Apple Silicon** (M1 and newer). The game and the launcher draw 
 
 ```
 python3 tools/build.py --check-deps                    # the Command Line Tools there?
-python3 tools/build.py --recompile "<your disc>.iso"   # disc -> generated C++ -> build/vcs
+python3 tools/build.py --recompile "<your disc>.iso"   # disc -> generated C++ -> build/lcs
 python3 tools/build.py --quick                         # day-to-day rebuilds (no LTO)
-python3 tools/build.py --launcher                      # VCSLauncher.app in the repository root
+python3 tools/build.py --launcher                      # LCSLauncher.app in the repository root
 python3 tools/run.py 0 play                            # play (window; build/run/play.log)
 ```
 
@@ -40,8 +40,8 @@ part of that check:
   (`USE_SSE2NEON`, `third_party/PS2Recomp/CMakeLists.txt`) with `SSE2NEON_PRECISE_MINMAX / DIV / SQRT / DP`: PS2
   floats with an all-ones exponent are NaN on the host and go through `minps` / `maxps`, whose NaN rule the precise
   path keeps. The rounding mode is FPCR instead of MXCSR (`ps2x::fpControl`, `runtime/ps2_host_std.h`).
-- The game is `build/vcs`, its settings `build/vcs.ini`. Saves and caches go to
-  `~/Library/Application Support/VCSRecomp`; `VCS_DATA_DIR` works as everywhere.
+- The game is `build/lcs`, its settings `build/lcs.ini`. Saves and caches go to
+  `~/Library/Application Support/LCSRecomp`; `VCS_DATA_DIR` works as everywhere.
 
 ## Running
 
@@ -64,7 +64,7 @@ part of that check:
   (`[rhi] metal per frame: ...`).
 - **Crashes**: SIGSEGV / SIGBUS / SIGILL / SIGFPE print `[crash]` lines with each frame as `module+offset (symbol)` and
   an `atos -o <module> -l <load address> <addresses>` line that gives files and lines (`src/debug/crash.cpp`). Or
-  `lldb -- build/vcs <iso>`.
+  `lldb -- build/lcs <iso>`.
 - **Profiler**: `VCS_PROFILE=5` works as on Linux (`src/debug/profiler.cpp`): the sampler suspends each sampled thread
   through its Mach port, reads its PC and resumes it; `VCS_PROFILE_THREAD`, `VCS_PROFILE_SPIKES`,
   `VCS_PROFILE_GUEST_FILE` too. Mach-O's `dladdr` has no symbol sizes, so a generated function reaches up to the next
@@ -74,7 +74,7 @@ part of that check:
 
 ## The launcher
 
-`VCSLauncher.app` (`python3 tools/build.py --launcher`, ~20 s plus the shader tools the first time): Cocoa, Metal and
+`LCSLauncher.app` (`python3 tools/build.py --launcher`, ~20 s plus the shader tools the first time): Cocoa, Metal and
 Core Text, no third-party code (docs/LAUNCHER.md "macOS"). The window keeps macOS' traffic lights over the UI's own
 title bar. Its Build tools step installs the Command Line Tools (`build.py --install-deps` runs `xcode-select
 --install`). `--self-test` and `--screenshot` work as on the other platforms.
@@ -106,13 +106,13 @@ title bar. Its Build tools step installs the Command Line Tools (`build.py --ins
 | Picture: Windows D3D11 reference vs macOS Metal (`scenes.py compare`) | Metal's capture made (`build/scenes/mac_metal`: loading, flyover, office cutscene, gameplay with the HUD, the pause map - all right by eye); the compare needs a reference capture from Windows |
 | `--iop-tests` on macOS | done: 0 failures |
 | The rig on macOS (2026-11-13, M1, window shown, from the user's Fort Baxter card - `build/rig/saves/fortbaxter`, a copy of their Mac save "1 Cleaning House") | controls_check 77 / 77 (after a fix to the check itself, below), hud_check, menu_check 33 / 33, prompts_check, trainer_check 41 / 41, saves.py (save, Load Game, delete, card backup), shakedown, haze_check: all pass. Quick tour (`--every 9 --limit 18`): 15 ok, 2 relocated, 1 falling at (-925, 1175) - the same as Windows (the known spot, PROGRESS.md). controls_check's "mouse pitch at once" assumed the camera at its lowest after its teleport; here it stayed up and the step ran into the game's upper limit (+0.252 for +0.3): the check now puts it at its lowest first. "A gun on a vehicle: the game's limit" read +67.5 deg once in three runs (5 frames after a large turn): timing, passed the other two. Not run yet: regress (needs Windows' baseline), soundcheck, soak, finale_check, cruise |
-| The changes of 2026-11-13 / 14 on macOS (M1, quick build after `--recompile-if-needed`, window shown) | Full screen by default: a fresh copy with no vcs.ini starts full screen at the panel's own pixels (2880x1800), vertical sync on, 59 fps; shown test runs stay a window. MMI fix (issue 80): `VCS_SELFTEST=1` 0 failures - all seven macros through sse2neon, 0 of 64 inputs differ. Light trails: night downtown, the `[gs-hw] motion blur` ghost 33.3 ms behind at 30, 60 and 120 fps (3 / 4 / 7 pictures kept), the same frame rate with `PS2X_HW_BLUR_HISTORY=0`; at 3x scale + 4x MSAA (GPU-bound, ~23 fps) 22.3 against 23.6 fps without the history - the copy is still made each frame though nothing reads it below ~40 fps. Radio (issue 117): stations off the air count 30.0 a second at 60 and 120 fps (109 with `VCS_MUSIC_TIMESTEP=0`). hud_check and menu_check (33 / 33) pass |
-| The changes of 2026-11-14 (sprint camera, particles / effects on the time step, the weaker blur, Reduce Post Processing Effects) on macOS (M1, quick build, window shown) | Builds without a warning or a recompile. `framerate_audit.py --only particles,effects --steps 30,60,144`: exhaust 267 / 273 / 271 ms, rain 1080 a second, PS2 frames, clouds, video flips, dash and lightning rolls the same at all three; explosions 3033 / 3017 / 3007 ms, 91 steps (a first 30 fps run read 3.28 s: the molotovs set off longer explosions near the spot in that run; a second gave 3033 ms). controls_check 78 / 78 twice (the sprint check -0.62 rad); a first run failed the two "in a car, free aim" checks once (drive-by camera mode 32, the camera not following) and stopped on the aim's lost target - not seen again in two runs. At 144 fps at night the blend is FIX 12 from the history; with Reduce Post Processing Effects on FIX 16 from the last frame, back to the history when off; the menu's Effects label shows whole. Found: shown test runs (`VCS_TEST_VISIBLE=1`, how this Mac runs them) rewrote the player's vcs.ini and ran at the player's timing - fixed (`VCS_KEEP_SETTINGS`, `toolchain.test_window`); vcs.ini unchanged byte for byte across controls_check since |
+| The changes of 2026-11-13 / 14 on macOS (M1, quick build after `--recompile-if-needed`, window shown) | Full screen by default: a fresh copy with no lcs.ini starts full screen at the panel's own pixels (2880x1800), vertical sync on, 59 fps; shown test runs stay a window. MMI fix (issue 80): `VCS_SELFTEST=1` 0 failures - all seven macros through sse2neon, 0 of 64 inputs differ. Light trails: night downtown, the `[gs-hw] motion blur` ghost 33.3 ms behind at 30, 60 and 120 fps (3 / 4 / 7 pictures kept), the same frame rate with `PS2X_HW_BLUR_HISTORY=0`; at 3x scale + 4x MSAA (GPU-bound, ~23 fps) 22.3 against 23.6 fps without the history - the copy is still made each frame though nothing reads it below ~40 fps. Radio (issue 117): stations off the air count 30.0 a second at 60 and 120 fps (109 with `VCS_MUSIC_TIMESTEP=0`). hud_check and menu_check (33 / 33) pass |
+| The changes of 2026-11-14 (sprint camera, particles / effects on the time step, the weaker blur, Reduce Post Processing Effects) on macOS (M1, quick build, window shown) | Builds without a warning or a recompile. `framerate_audit.py --only particles,effects --steps 30,60,144`: exhaust 267 / 273 / 271 ms, rain 1080 a second, PS2 frames, clouds, video flips, dash and lightning rolls the same at all three; explosions 3033 / 3017 / 3007 ms, 91 steps (a first 30 fps run read 3.28 s: the molotovs set off longer explosions near the spot in that run; a second gave 3033 ms). controls_check 78 / 78 twice (the sprint check -0.62 rad); a first run failed the two "in a car, free aim" checks once (drive-by camera mode 32, the camera not following) and stopped on the aim's lost target - not seen again in two runs. At 144 fps at night the blend is FIX 12 from the history; with Reduce Post Processing Effects on FIX 16 from the last frame, back to the history when off; the menu's Effects label shows whole. Found: shown test runs (`VCS_TEST_VISIBLE=1`, how this Mac runs them) rewrote the player's lcs.ini and ran at the player's timing - fixed (`VCS_KEEP_SETTINGS`, `toolchain.test_window`); lcs.ini unchanged byte for byte across controls_check since |
 | ARM memory ordering: a ThreadSanitizer run | done (200 s: boot, flyover, intro): one report - the pause menu reading a guest byte on the main thread (`vcs_frontend.cpp:92`) while the game thread writes it, an intended peek (one byte can't tear; at worst a frame late). Nothing on the render worker / GS stage handoffs. Gameplay not covered (no card) |
 | Performance: `bench.py` | done (ThinLTO, M1, new game - no card): 60 fps at a 60 cap at every spot and on the drive; game thread 3.7-4.5 ms, render worker 2.3-3.6 ms, GS stage 2.1-3.9 ms a frame |
 | `preserve_none` on arm64 | measured, left off: exceptions unwind through it on Darwin, but the game thread was 4.28 ms against 4.05 without (`ps2_guest_cc.h`) |
 | NEON path for `vu1v` | not needed now: `vu1_programs=0` in play (the native draws replace them) |
 | `cruise.py` (stutter), fewer pass suspends | to do (cruise needs a card) |
 | Profiler (Mach thread sampling) | done |
-| Release: `release.py --platform macos` (an ad-hoc signed `VCSLauncher.app` in a disk image, next to a link to Applications - `tools/dmg.py`), `update.py`, a CI job | done here (2026-11-14): the image (45 MB; the zip before it was 66) made, self-tested as a player starts it, mounted and checked (signature, link, layout) and opened in Finder: the two icons side by side, the volume with the launcher's icon. Found on the way: the self-test's `update.py install` wrote `__pycache__` into the bundle and broke its signature - the zip had shipped that way; the launcher now runs the bundle's scripts with `-B`. `update.py apply --zip X.dmg` replaces a bundle in place (not run against a real GitHub release yet); the CI job is written but hasn't run on GitHub |
+| Release: `release.py --platform macos` (an ad-hoc signed `LCSLauncher.app` in a disk image, next to a link to Applications - `tools/dmg.py`), `update.py`, a CI job | done here (2026-11-14): the image (45 MB; the zip before it was 66) made, self-tested as a player starts it, mounted and checked (signature, link, layout) and opened in Finder: the two icons side by side, the volume with the launcher's icon. Found on the way: the self-test's `update.py install` wrote `__pycache__` into the bundle and broke its signature - the zip had shipped that way; the launcher now runs the bundle's scripts with `-B`. `update.py apply --zip X.dmg` replaces a bundle in place (not run against a real GitHub release yet); the CI job is written but hasn't run on GitHub |
 | The tools on macOS' own Python (3.9.6, the Command Line Tools') | every tool parses; doctor.py runs |

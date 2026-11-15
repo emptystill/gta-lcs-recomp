@@ -15,9 +15,9 @@ BEGIN
     BEGIN
         BLOCK "040904b0"
         BEGIN
-            VALUE "FileDescription", "GTA: Vice City Stories PC port - launcher"
+            VALUE "FileDescription", "GTA: Liberty City Stories PC port - launcher"
             VALUE "ProductName", "VCS Recomp"
-            VALUE "OriginalFilename", "VCSLauncher.exe"
+            VALUE "OriginalFilename", "LCSLauncher.exe"
             VALUE "FileVersion", VCS_VERSION_TEXT
             VALUE "ProductVersion", VCS_VERSION_TEXT
             VALUE "LegalCopyright", "GPL-3.0. Unofficial; Grand Theft Auto is property of Rockstar Games / Take-Two Interactive"

@@ -4,7 +4,7 @@
     python -I tools/eedis.py <elf> <start_hex> [end_hex | +len_hex]
     python -I tools/eedis.py <elf> <name_or_addr_inside_function>     (whole function)
 
-The ELF is staged by vcs.exe at %LOCALAPPDATA%/LCSRecomp/cache/SLUS_214.23.
+The ELF is staged by lcs.exe at %LOCALAPPDATA%/LCSRecomp/cache/SLUS_214.23.
 Output is derived from game code: keep listings under build/analysis/.
 R5900-only opcodes (MMI, LQ/SQ, VU0 macro) show as '.word'. Needs capstone.
 """

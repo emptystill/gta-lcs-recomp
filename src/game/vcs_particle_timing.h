@@ -1,4 +1,4 @@
-// Particles on the game's time step instead of the frame (docs/game-internals.md 4, "Effects that run per frame").
+// Particles on the game's time step instead of the frame (docs/vcs-reference/game-internals.md 4, "Effects that run per frame").
 #pragma once
 
 class PS2Runtime;

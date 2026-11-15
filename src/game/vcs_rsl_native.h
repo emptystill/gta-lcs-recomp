@@ -1,4 +1,4 @@
-// Native versions of RSL packet emitters (docs/RSL_SUBMISSION.md, game-internals.md 6i "The state flush").
+// Native versions of RSL packet emitters (docs/vcs-reference/RSL_SUBMISSION.md, game-internals.md 6i "The state flush").
 //
 // FUN_002F8710 - the state flush every RSL draw runs first - writes the dirty render state into the packet buffer as
 // VIF UNPACKs / CALLs (matrices, viewport, lights, fog, depth range) and queues dirty GS registers. Recompiled it was
@@ -22,7 +22,7 @@ namespace vcs::rslnative
     void install(PS2Runtime &runtime); // main thread, before runtime.run()
     void onFrameKick(const uint8_t *rdram); // game thread, at the frame kick
 
-    // What one flush writes (the draw items of docs/FULLY_NATIVE.md step 4 use it without the packet buffer): its packet
+    // What one flush writes (the draw items of docs/vcs-reference/FULLY_NATIVE.md step 4 use it without the packet buffer): its packet
     // bytes (DMA tags with their data), the GS registers it queues, the dirty word it leaves.
     struct Flush
     {

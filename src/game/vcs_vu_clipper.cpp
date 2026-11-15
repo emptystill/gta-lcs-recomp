@@ -1,6 +1,6 @@
 // VCS world pipeline, clipper path (VU1 program 0x0030: clip test 0x0c38, fog 0x11f8, 0x13d8, prelit colour 0x2700,
 // kick 0x15b0 -> 0x1638 per-triangle clipper with 0x1b10 / 0x1f68 and the emitters 0x23c0 / 0x2520 / 0x2608),
-// reproduced from the disassembly (build/analysis/vu1_code_full.txt; docs/game-internals.md 6h). Checked against the
+// reproduced from the disassembly (build/analysis/vu1_code_full.txt; docs/vcs-reference/game-internals.md 6h). Checked against the
 // VU1's XGKICKs with PS2X_HLE_VERIFY=1.
 #include "vcs_vu_clipper.h"
 #include "vcs_vu_math.h"

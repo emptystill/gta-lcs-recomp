@@ -5,13 +5,13 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>GTA Vice City Stories</string>
+	<string>GTA Liberty City Stories</string>
 	<key>CFBundleExecutable</key>
-	<string>VCSLauncher</string>
+	<string>LCSLauncher</string>
 	<key>CFBundleIconFile</key>
 	<string>launcher.icns</string>
 	<key>CFBundleIdentifier</key>
-	<string>io.github.gothamor.vcs-launcher</string>
+	<string>io.github.lcs-recomp.launcher</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>

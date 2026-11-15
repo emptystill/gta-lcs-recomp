@@ -20,7 +20,7 @@ import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # The build folder: build/ in the repository, or one chosen elsewhere (another drive...) - VCS_BUILD_DIR for one run,
-# or kept in .vcs-build-dir (tools/build_dir.py, the launcher's Folder step). The built game, its vcs.ini, the CMake
+# or kept in .vcs-build-dir (tools/build_dir.py, the launcher's Folder step). The built game, its lcs.ini, the CMake
 # trees and the logs live there; the source and generated/ stay here. The test tools keep their output in build/.
 DEFAULT_BUILD = os.path.join(ROOT, "build")
 BUILD_POINTER = os.path.join(ROOT, ".vcs-build-dir")
@@ -84,14 +84,14 @@ def ghidra_home(env_var="GHIDRA_HOME"):
 
 
 def game_exe(build_dir):
-    """vcs.exe of a build tree: the main one (build/release) puts it at the top of build/ (CMakeLists.txt), others
+    """lcs.exe of a build tree: the main one (build/release) puts it at the top of build/ (CMakeLists.txt), others
     (build/pgo-gen) in their own runtime folder."""
     if os.path.normcase(os.path.abspath(build_dir)) == os.path.normcase(os.path.abspath(BUILD_DIR)):
-        return exe(os.path.join(BUILD, "vcs"))
-    return exe(os.path.join(build_dir, "third_party", "PS2Recomp", "ps2xRuntime", "vcs"))
+        return exe(os.path.join(BUILD, "lcs"))
+    return exe(os.path.join(build_dir, "third_party", "PS2Recomp", "ps2xRuntime", "lcs"))
 
 
-# where vcs.exe was built before it moved to build/ (2026-10-29): build.py takes the player's vcs.ini from there
+# where lcs.exe was built before it moved to build/ (2026-10-29): build.py takes the player's lcs.ini from there
 OLD_GAME_DIR = os.path.join(BUILD_DIR, "third_party", "PS2Recomp", "ps2xRuntime")
 
 
@@ -138,7 +138,7 @@ def fail(message, code="error", log=None):
 
 
 def ini_value(path, key):
-    """`key=value` from an ini-style file (vcs.ini), None when absent."""
+    """`key=value` from an ini-style file (lcs.ini), None when absent."""
     try:
         with open(path, encoding="utf-8", errors="replace") as f:
             for line in f:
@@ -150,14 +150,14 @@ def ini_value(path, key):
     return None
 
 
-# vcs.ini next to vcs.exe (the player's settings and iso=), and the repository root's (older setups)
-GAME_INI = os.path.join(BUILD, "vcs.ini")
-ROOT_INI = os.path.join(ROOT, "vcs.ini")
+# lcs.ini next to lcs.exe (the player's settings and iso=), and the repository root's (older setups)
+GAME_INI = os.path.join(BUILD, "lcs.ini")
+ROOT_INI = os.path.join(ROOT, "lcs.ini")
 
 
 def find_iso(given=None):
-    """The disc image: `given`, VCS_ISO, iso=... in build/vcs.ini (the one vcs.exe reads) or the repository root's
-    vcs.ini, or a '*Liberty City Stories*.iso' in the repository root or its iso/ folder."""
+    """The disc image: `given`, VCS_ISO, iso=... in build/lcs.ini (the one lcs.exe reads) or the repository root's
+    lcs.ini, or a '*Liberty City Stories*.iso' in the repository root or its iso/ folder."""
     if given:
         if not os.path.isfile(given):
             fail("disc image not found: " + given, "disc_not_found")
@@ -229,9 +229,9 @@ def test_window(env, visible=False):
     ignored, driven through the control channel (tools/gamectl.py). Sound stays on (PS2X_AUDIO=1; the user mutes the
     game in Windows). visible=True: a run started by hand (run.py without --hidden), the player's own game in a
     window. VCS_TEST_VISIBLE=1 only shows a test run's window (the Mac's test runs, the user's choice): the run is
-    still a test - the player's vcs.ini is never rewritten (VCS_KEEP_SETTINGS) and the timing is pinned as below.
+    still a test - the player's lcs.ini is never rewritten (VCS_KEEP_SETTINGS) and the timing is pinned as below.
     Before 2026-11-14 a shown test run was treated as a run by hand: controls_check's volume levels, bindings and
-    "Reset all settings" landed in the player's vcs.ini, and the checks ran at the player's frame rate."""
+    "Reset all settings" landed in the player's lcs.ini, and the checks ran at the player's frame rate."""
     if visible:
         env.pop("PS2X_HIDDEN", None)
         # players start in full screen (2026-11-13); a shown test run stays a window at its own size
@@ -1199,7 +1199,7 @@ def configure(env, force=False, build_dir=BUILD_DIR, defines=None):
         import shader_tools
         cmd += shader_tools.cmake_defines(env)
     if os.path.normcase(os.path.abspath(build_dir)) == os.path.normcase(BUILD_DIR):
-        cmd.append("-DVCS_GAME_DIR=" + BUILD.replace(os.sep, "/"))  # vcs.exe at the top of the build folder
+        cmd.append("-DVCS_GAME_DIR=" + BUILD.replace(os.sep, "/"))  # lcs.exe at the top of the build folder
     print("[build] configuring " + show(build_dir) + "".join(" %s=%s" % kv for kv in (defines or {}).items()))
     stage("configure", "Configuring the build (CMake)")
     log = os.path.join(BUILD, "configure.log")

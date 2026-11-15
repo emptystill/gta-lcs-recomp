@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Last Stand's end (mission 100, DIA_C5; game-internals.md 11g, docs/TRAINER.md): the final cutscene, then the credits.
+"""Last Stand's end (mission 100, DIA_C5; game-internals.md 11g, docs/vcs-reference/TRAINER.md): the final cutscene, then the credits.
 
     python tools/finale_check.py [OUT] [--story] [--full] [--port 47673]
 

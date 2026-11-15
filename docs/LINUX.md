@@ -9,7 +9,7 @@ postponed; nothing here blocks it.
 
 ```
 python3 tools/build.py --check-deps                    # what is missing, and the command that installs it
-python3 tools/build.py --recompile "<your disc>.iso"   # disc -> generated C++ -> build/vcs
+python3 tools/build.py --recompile "<your disc>.iso"   # disc -> generated C++ -> build/lcs
 python3 tools/build.py --quick                         # day-to-day rebuilds (no LTO)
 python3 tools/run.py 0 play                            # play (window; build/run/play.log)
 ```
@@ -45,17 +45,17 @@ build (FetchContent), so no Vulkan SDK is needed.
 - **Memory**: a unity batch of generated code takes up to ~2 GB to compile. CMake allows one compile job, and one
   ThinLTO job at the link, per 2 GB of RAM (at most one per core): `VCS_COMPILE_JOBS` and `PS2X_LTO_JOBS` in the CMake
   cache override this.
-- The game is `build/vcs` and its settings are `build/vcs.ini`. Saves and caches go to `$XDG_DATA_HOME/VCSRecomp`
-  (`~/.local/share/VCSRecomp`); `VCS_DATA_DIR` works as on Windows.
+- The game is `build/lcs` and its settings are `build/lcs.ini`. Saves and caches go to `$XDG_DATA_HOME/LCSRecomp`
+  (`~/.local/share/LCSRecomp`); `VCS_DATA_DIR` works as on Windows.
 
 ## The launcher
 
-Players get it as an AppImage with every release (`VCS-Recomp-<v>-x86_64.AppImage`, glibc 2.35+: Ubuntu 22.04,
+Players get it as an AppImage with every release (`LCS-Recomp-<v>-x86_64.AppImage`, glibc 2.35+: Ubuntu 22.04,
 Debian 12 and newer; docs/LAUNCHER.md "The Linux release"); it puts the release's files in
-`~/.local/share/VCSRecomp/install` and builds the game there. On Debian / Ubuntu releases whose clang is older than 19
+`~/.local/share/LCSRecomp/install` and builds the game there. On Debian / Ubuntu releases whose clang is older than 19
 the package step adds LLVM's repository (apt.llvm.org) first (`tools/linux_packages.py`).
 
-`python3 tools/build.py --launcher` builds `VCSLauncher` (repository root): the same launcher as on Windows - setup,
+`python3 tools/build.py --launcher` builds `LCSLauncher` (repository root): the same launcher as on Windows - setup,
 build, play - native on X11 and Wayland, drawing with Vulkan and FreeType (docs/LAUNCHER.md "Linux"). Its build tools
 step installs missing packages through `pkexec` (`python3 tools/build.py --install-deps`, the desktop's password
 prompt) or opens a terminal with the command. `VCS_LAUNCHER_VIDEO=x11|wayland`, `VCS_LAUNCHER_VK_DEBUG=1` and
@@ -87,11 +87,11 @@ prompt) or opens a terminal with the command. `VCS_LAUNCHER_VIDEO=x11|wayland`, 
 - **Crashes**: SIGSEGV / SIGBUS / SIGILL / SIGFPE print `[crash]` lines with each frame as `module+offset (symbol)`,
   and an `llvm-symbolizer -e <module> <offsets>` line that gives files and lines (`src/debug/crash.cpp`; the exe is
   linked `-rdynamic`, and the runtime and our code carry line tables). The process then dies of the signal itself, so
-  the exit status and core dumps stay as they would be. For anything harder: `gdb --args build/vcs <iso>`
+  the exit status and core dumps stay as they would be. For anything harder: `gdb --args build/lcs <iso>`
   (`tools/minidbg.py` is Windows only).
 - **Profiler**: `VCS_PROFILE=5` works as on Windows (`src/debug/profiler.cpp`: one SIGPROF per sample instead of
   SuspendThread), including `VCS_PROFILE_THREAD`, `VCS_PROFILE_SPIKES` and `VCS_PROFILE_GUEST_FILE`.
-  `VCS_PROFILE_CALLERS` and `VCS_PROFILE_LINES` are Windows only: `perf record -g build/vcs <iso>` covers them.
+  `VCS_PROFILE_CALLERS` and `VCS_PROFILE_LINES` are Windows only: `perf record -g build/lcs <iso>` covers them.
 - **Vulkan**: `PS2X_RHI_DEBUG=1` turns on the Khronos validation layer and prints its messages as `[rhi] vulkan`.
   `VK_KHRONOS_VALIDATION_VALIDATE_SYNC=true` adds the synchronization checks. `PS2X_RHI_STATS=1` prints draws,
   descriptor writes, passes, suspended passes, barriers, upload volume and the CPU's waits (fence, acquire, submit,

@@ -7,11 +7,11 @@ Python), everything but the game.
     --ref TAG       the source at a tag or commit (git archive; default HEAD)
     --worktree      the working tree as it is, uncommitted files included (tracked + untracked, not ignored) - tests
     --version X     the release's number (default: VERSION in the repository; a version tag must match it)
-    --launcher EXE  a VCSLauncher.exe built elsewhere (CI); default: python tools/build.py --launcher
+    --launcher EXE  a LCSLauncher.exe built elsewhere (CI); default: python tools/build.py --launcher
     --python X.Y.Z  the embeddable Python to bundle (default: the version running this)
 
-Writes build/dist/VCS-Recomp-<version>-windows.zip and its .sha256. Inside, one folder:
-    VCSLauncher.exe, VERSION, RELEASE.json (version, repository, file list for tools/update.py),
+Writes build/dist/LCS-Recomp-<version>-windows.zip and its .sha256. Inside, one folder:
+    LCSLauncher.exe, VERSION, RELEASE.json (version, repository, file list for tools/update.py),
     python/ (python.org's embeddable CPython), deps/ (tools/deps.py fetch), THIRD_PARTY_LICENSES.txt, the source.
 Never game code or data (DECISIONS.md, source-only): before zipping, every file is checked - no disc images, no
 PS2 executables (MIPS ELF), nothing from generated/, build/ or the Ghidra project - and the release stops if one is.
@@ -19,21 +19,21 @@ Every file in the zip is dated a day before the commit (zip_time): never in the 
 
     python3 tools/release.py --platform linux [--ref TAG | --worktree] [--launcher BIN] [--allow-new-glibc]
 
-Writes build/dist/VCS-Recomp-<version>-x86_64.AppImage and its .sha256: one file that runs on any x86-64 desktop with
+Writes build/dist/LCS-Recomp-<version>-x86_64.AppImage and its .sha256: one file that runs on any x86-64 desktop with
 glibc 2.35 or newer (Ubuntu 22.04, Debian 12 and later; the launcher must be built on such a system - CI's
-ubuntu-22.04 - or the release refuses it, --allow-new-glibc for a test). Inside (AppDir): usr/bin/VCSLauncher, the
-desktop entry and icon, and usr/share/vcs-recomp/release/ - the same files as the zip but Python and FFmpeg (the
+ubuntu-22.04 - or the release refuses it, --allow-new-glibc for a test). Inside (AppDir): usr/bin/LCSLauncher, the
+desktop entry and icon, and usr/share/lcs-recomp/release/ - the same files as the zip but Python and FFmpeg (the
 system's) - which the launcher copies at start to the folder the game is built in (tools/update.py install). Made by
 appimagetool with the type 2 runtime (static: no libfuse2 needed), both pinned below by version and SHA-256.
 
     python3 tools/release.py --platform macos [--ref TAG | --worktree] [--launcher APP]
 
-Writes build/dist/VCS-Recomp-<version>-macos-arm64.dmg and its .sha256 (docs/MACOS.md): a disk image that opens as
-a Finder window with VCSLauncher.app next to a link to Applications, to drag it there (tools/dmg.py; DECISIONS.md
+Writes build/dist/LCS-Recomp-<version>-macos-arm64.dmg and its .sha256 (docs/MACOS.md): a disk image that opens as
+a Finder window with LCSLauncher.app next to a link to Applications, to drag it there (tools/dmg.py; DECISIONS.md
 2026-11-14). The app is signed ad-hoc (DECISIONS.md 2026-11-12), with the release's files in
 Contents/Resources/release - the source, VERSION, RELEASE.json, deps/ for macOS (FFmpeg's source and the shader
 compilers' included), licences; no Python (the Command Line Tools' is used). The launcher copies them at start to
-~/Library/Application Support/VCSRecomp/install, as the AppImage does. The image is checked once made: mounted, the
+~/Library/Application Support/LCSRecomp/install, as the AppImage does. The image is checked once made: mounted, the
 app's signature verified inside it, the link and the window's layout there.
 """
 import argparse
@@ -98,7 +98,7 @@ def copy_source(stage, ref, worktree):
 
 
 def build_launcher():
-    exe = os.path.join(tc.ROOT, "VCSLauncher.exe" if tc.IS_WINDOWS else "VCSLauncher.app" if tc.IS_MACOS else "VCSLauncher")
+    exe = os.path.join(tc.ROOT, "LCSLauncher.exe" if tc.IS_WINDOWS else "LCSLauncher.app" if tc.IS_MACOS else "LCSLauncher")
     if subprocess.run([sys.executable, tc.tool("build.py"), "--launcher"]).returncode != 0:
         tc.fail("the launcher didn't build")
     return exe
@@ -178,10 +178,10 @@ def guard(stage):
 
 
 def self_test(stage):
-    """The release's own launcher, with its own Python and scripts, checks itself (VCSLauncher.exe --self-test: the
+    """The release's own launcher, with its own Python and scripts, checks itself (LCSLauncher.exe --self-test: the
     scripts it runs are there, the bundled Python runs them, doctor.py answers). A release that fails isn't zipped."""
     out = os.path.join(DIST, "selftest.txt")
-    code = subprocess.run([os.path.join(stage, "VCSLauncher.exe"), "--self-test", "--out", out], cwd=stage).returncode
+    code = subprocess.run([os.path.join(stage, "LCSLauncher.exe"), "--self-test", "--out", out], cwd=stage).returncode
     report = "(no output)"
     if os.path.isfile(out):
         with open(out, encoding="utf-8", errors="replace") as f:
@@ -283,19 +283,19 @@ def glibc_needed(binary):
 
 def app_dir(stage, launcher, version):
     """The AppImage's tree: AppRun (the launcher), the desktop entry and icon at the top (appimagetool's contract), the
-    launcher in usr/bin, the release's files in usr/share/vcs-recomp/release (returned; filled by the caller)."""
+    launcher in usr/bin, the release's files in usr/share/lcs-recomp/release (returned; filled by the caller)."""
     os.makedirs(os.path.join(stage, "usr", "bin"))
-    shutil.copy2(launcher, os.path.join(stage, "usr", "bin", "VCSLauncher"))
-    os.chmod(os.path.join(stage, "usr", "bin", "VCSLauncher"), 0o755)
-    os.symlink("usr/bin/VCSLauncher", os.path.join(stage, "AppRun"))
+    shutil.copy2(launcher, os.path.join(stage, "usr", "bin", "LCSLauncher"))
+    os.chmod(os.path.join(stage, "usr", "bin", "LCSLauncher"), 0o755)
+    os.symlink("usr/bin/LCSLauncher", os.path.join(stage, "AppRun"))
     with open(os.path.join(stage, APP_ID + ".desktop"), "w", encoding="utf-8") as f:
-        f.write("[Desktop Entry]\nType=Application\nName=GTA: Vice City Stories\n"
+        f.write("[Desktop Entry]\nType=Application\nName=GTA: Liberty City Stories\n"
                 "Comment=The PS2 classic, recompiled for this PC: build it from your disc and play\n"
-                "Exec=VCSLauncher\nIcon=%s\nCategories=Game;\nTerminal=false\nStartupWMClass=VCSLauncher\n"
+                "Exec=LCSLauncher\nIcon=%s\nCategories=Game;\nTerminal=false\nStartupWMClass=LCSLauncher\n"
                 "X-AppImage-Version=%s\n" % (APP_ID, version))
     shutil.copy2(os.path.join(tc.ROOT, "launcher", "launcher.png"), os.path.join(stage, APP_ID + ".png"))
     os.symlink(APP_ID + ".png", os.path.join(stage, ".DirIcon"))
-    payload = os.path.join(stage, "usr", "share", "vcs-recomp", "release")
+    payload = os.path.join(stage, "usr", "share", "lcs-recomp", "release")
     os.makedirs(payload)
     return payload
 
@@ -322,7 +322,7 @@ def self_test_appimage(appimage):
 
 
 def release_linux(a, ref, version):
-    name = "VCS-Recomp-%s-x86_64" % version
+    name = "LCS-Recomp-%s-x86_64" % version
     stage = os.path.join(DIST, name + ".AppDir")
     if os.path.isdir(stage):
         shutil.rmtree(stage)
@@ -385,7 +385,7 @@ def self_test_app(app):
     shutil.rmtree(folder, ignore_errors=True)
     out = os.path.join(DIST, "selftest.txt")
     env = dict(os.environ, VCS_INSTALL_DIR=folder)
-    code = subprocess.run([os.path.join(app, "Contents", "MacOS", "VCSLauncher"), "--self-test", "--out", out],
+    code = subprocess.run([os.path.join(app, "Contents", "MacOS", "LCSLauncher"), "--self-test", "--out", out],
                           env=env).returncode
     report = "(no output)"
     if os.path.isfile(out):
@@ -400,14 +400,14 @@ def self_test_app(app):
 
 
 def release_macos(a, ref, version):
-    name = "VCS-Recomp-%s-macos-arm64" % version
+    name = "LCS-Recomp-%s-macos-arm64" % version
     stage = os.path.join(DIST, name)
     if os.path.isdir(stage):
         shutil.rmtree(stage)
     launcher = a.launcher or build_launcher()
-    if not os.path.isfile(os.path.join(launcher, "Contents", "MacOS", "VCSLauncher")):
+    if not os.path.isfile(os.path.join(launcher, "Contents", "MacOS", "LCSLauncher")):
         tc.fail("not an app bundle: " + launcher, "release_failed")
-    app = os.path.join(stage, "VCSLauncher.app")
+    app = os.path.join(stage, "LCSLauncher.app")
     shutil.copytree(launcher, app, symlinks=True)
     payload = os.path.join(app, "Contents", "Resources", "release")
     shutil.rmtree(payload, ignore_errors=True)  # a launcher that was packaged before
@@ -439,7 +439,7 @@ def release_macos(a, ref, version):
     icon = os.path.join(app, "Contents", "Resources", "launcher.icns")
     try:
         dmg.create(stage, out, "VCS Launcher %s" % version, icon if os.path.isfile(icon) else None)
-        problems = dmg.check(out, "VCSLauncher.app")
+        problems = dmg.check(out, "LCSLauncher.app")
     except (RuntimeError, ValueError, OSError) as e:
         tc.fail("the disk image: %s" % e, "release_failed")
     if problems:
@@ -503,7 +503,7 @@ def main():
     if a.platform == "macos":
         release_macos(a, ref, version)
         return
-    name = "VCS-Recomp-%s-windows" % version
+    name = "LCS-Recomp-%s-windows" % version
     stage = os.path.join(DIST, name)
     if os.path.isdir(stage):
         shutil.rmtree(stage, onerror=lambda f, p, _: (os.chmod(p, 0o666), f(p)))
@@ -515,7 +515,7 @@ def main():
         f.write(version + "\n")
     launcher = a.launcher or build_launcher()
     check_launcher_imports(launcher)
-    shutil.copy2(launcher, os.path.join(stage, "VCSLauncher.exe"))
+    shutil.copy2(launcher, os.path.join(stage, "LCSLauncher.exe"))
     print("[release] python %s (embeddable)" % a.python)
     bundle_python(stage, a.python)
     print("[release] libraries (deps/)")

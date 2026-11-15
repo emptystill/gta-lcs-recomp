@@ -1,4 +1,4 @@
-// See vcs_freecam.h and docs/TRAINER.md.
+// See vcs_freecam.h and docs/vcs-reference/TRAINER.md.
 #include "game/vcs_freecam.h"
 
 #include "game/vcs_aim.h"

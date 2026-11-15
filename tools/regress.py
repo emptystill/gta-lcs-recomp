@@ -280,7 +280,7 @@ def step_meters(out, quick):
 
 
 def step_controls(out, quick):
-    """The player's controls and settings (docs/CONTROLS.md, src/game/vcs_input.cpp, 2026-10-28): tools/controls_check.py
+    """The player's controls and settings (docs/vcs-reference/CONTROLS.md, src/game/vcs_input.cpp, 2026-10-28): tools/controls_check.py
     (the bindings in the pad report and the game, presets, reset, vibration, menu screenshots)."""
     sys.path.insert(0, TOOLS)
     import controls_check as cc  # noqa: E402

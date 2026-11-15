@@ -71,7 +71,7 @@ def add_llvm_repo(codename, version):
     line = "deb [signed-by=%s] https://apt.llvm.org/%s/ llvm-toolchain-%s-%s main\n" % (LLVM_KEYRING, codename, codename,
                                                                                        version)
     with open(LLVM_SOURCES, "w", encoding="utf-8") as f:
-        f.write("# added by GTA: Vice City Stories (PC port), tools/linux_packages.py: the game needs clang %s+\n%s"
+        f.write("# added by GTA: Liberty City Stories (PC port), tools/linux_packages.py: the game needs clang %s+\n%s"
                 % (version, line))
     os.chmod(LLVM_SOURCES, 0o644)
     run(["apt-get", "update"])

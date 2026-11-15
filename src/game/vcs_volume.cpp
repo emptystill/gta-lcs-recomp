@@ -1,4 +1,4 @@
-// The game's own Music / SFX volume as settings, kept in step with its pause menu (docs/game-internals.md 9c).
+// The game's own Music / SFX volume as settings, kept in step with its pause menu (docs/vcs-reference/game-internals.md 9c).
 //
 // The game keeps each level, 0..127, twice: in cSampleManager (0x4CDA08: +4 effects, +5 music), which the sound code
 // uses and the pause menu's Audio page draws as eight bars (16 a step, the last step to 127), and in the menu's prefs
@@ -8,7 +8,7 @@
 //
 // The settings hold the level in percent of 127. A changed setting is written to both places at the next frame kick; a
 // change made in the pause menu (the setters called from its Audio page, return addresses 0x2AEF84 / 0x2AEF9C) is
-// taken into the setting and vcs.ini. Every other call of the setters gets the setting's level, so loading a save or
+// taken into the setting and lcs.ini. Every other call of the setters gets the setting's level, so loading a save or
 // a new game keeps the player's levels, as PC games keep their settings across saves.
 //
 // VCS_GAME_VOLUME=0 leaves the game's levels alone (no hooks, no sync): the settings then do nothing.

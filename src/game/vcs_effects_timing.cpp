@@ -1,4 +1,4 @@
-// Visual effects that count frames, put on the PS2's 30 frames a second (docs/game-internals.md 4, "Effects that run
+// Visual effects that count frames, put on the PS2's 30 frames a second (docs/vcs-reference/game-internals.md 4, "Effects that run
 // per frame"; particles are vcs_particle_timing.cpp).
 //
 // The PS2 ran these once per 1/30 s. Above that they ran faster, flickered more or ended sooner. Two tools:

@@ -1,4 +1,4 @@
-// The one supported disc: what identifies it, shared by vcs.exe (src/main.cpp) and the launcher (launcher/), so the
+// The one supported disc: what identifies it, shared by lcs.exe (src/main.cpp) and the launcher (launcher/), so the
 // two can't disagree. tools/vcs_disc.py holds the same values for the build (KNOWN_BUILDS).
 #pragma once
 
@@ -13,7 +13,7 @@ namespace vcs::disc
     constexpr const char *kGameName = "GTA: Liberty City Stories"; // the window's title
     constexpr const char *kSupported = "GTA: Liberty City Stories for the USA (SLUS-21423)";
 
-    // vcs.exe's exit codes for a start that never reached the game (the launcher names the reason)
+    // lcs.exe's exit codes for a start that never reached the game (the launcher names the reason)
     enum ExitCode : int
     {
         kExitOk = 0,

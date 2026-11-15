@@ -5,7 +5,7 @@ Vulkan renderer (launcher/CMakeLists.txt). Standard library only.
     python tools/hlsl_spirv.py --glslang PATH --stage vert|frag --entry vs_main --name kGsDrawVS_spv
                                --out gs_draw_vs.spv.h [-D NAME=VALUE ...] [--target-env vulkan1.1] SOURCE.hlsl
 
-The same HLSL as fxc's DXBC (one source, docs/NATIVE_RENDERER.md). glslang compiles it; the bindings follow the D3D11
+The same HLSL as fxc's DXBC (one source, docs/vcs-reference/NATIVE_RENDERER.md). glslang compiles it; the bindings follow the D3D11
 registers (src/rhi/vulkan/rhi_vulkan.cpp has the layout): cbuffer bN -> binding N, texture tN -> 16 + N, sampler
 sN -> 32 + N, all in set 0.
 

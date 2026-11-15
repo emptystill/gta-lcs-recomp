@@ -7,7 +7,7 @@
                                                   first); refused while the game runs unless --force
 
 <data> is VCS_DATA_DIR or the game's own folder (%LOCALAPPDATA%\\LCSRecomp, ~/.local/share/LCSRecomp). The card's
-order matters to the game (docs/game-internals.md 10c): each save folder's `.ps2x-order` file is backed up with it,
+order matters to the game (docs/vcs-reference/game-internals.md 10c): each save folder's `.ps2x-order` file is backed up with it,
 and a restore puts back every file's modification and (Windows) creation time, in the original creation order.
 """
 import argparse
@@ -116,9 +116,9 @@ def listing():
 
 def game_running():
     if not tc.IS_WINDOWS:
-        return subprocess.run(["pgrep", "-x", "vcs"], capture_output=True).returncode == 0
-    out = subprocess.run(["tasklist", "/FI", "IMAGENAME eq vcs.exe", "/NH"], capture_output=True, text=True).stdout
-    return "vcs.exe" in out.lower()
+        return subprocess.run(["pgrep", "-x", "lcs"], capture_output=True).returncode == 0
+    out = subprocess.run(["tasklist", "/FI", "IMAGENAME eq lcs.exe", "/NH"], capture_output=True, text=True).stdout
+    return "lcs.exe" in out.lower()
 
 
 def set_times(path, ctime, mtime, is_dir):

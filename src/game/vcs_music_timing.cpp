@@ -1,4 +1,4 @@
-// The radio's progress while it isn't heard, put on the game's time step (docs/game-internals.md 9, GitHub issue 117).
+// The radio's progress while it isn't heard, put on the game's time step (docs/vcs-reference/game-internals.md 9, GitHub issue 117).
 //
 // The music manager (0x4E41E0) keeps a 12-byte record per stream from +0x18: the stream's length (+0x18), the position
 // it was stopped at (+0x1C) and a count (+0x20). Its per-frame service (FUN_00189AD0, and FUN_001896A0 while a

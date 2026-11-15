@@ -4,9 +4,9 @@
 Through the game's control channel when it is open (no focus needed, works hidden; see tools/gamectl.py),
 otherwise by focusing the window and sending the key (Windows).
 
-    python tools/sendkey.py Return [--hold 150] [--times 1] [--title "GTA: Vice City Stories"]
+    python tools/sendkey.py Return [--hold 150] [--times 1] [--title "GTA: Liberty City Stories"]
 
-Key names: Return, ShiftKey, Space, Escape, Up / Down / Left / Right, letters, digits, F1-F24 (see docs/CONTROLS.md
+Key names: Return, ShiftKey, Space, Escape, Up / Down / Left / Right, letters, digits, F1-F24 (see docs/vcs-reference/CONTROLS.md
 for what they do in game: Return = Start, ShiftKey = Cross, F = Triangle, WASD = left stick, IJKL = right stick).
 """
 import argparse

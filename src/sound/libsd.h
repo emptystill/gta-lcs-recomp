@@ -1,5 +1,5 @@
 // Sony's IOP sound library (LIBSD.IRX, "libsd") reproduced on the host, driving a native SPU2 core
-// (docs/NATIVE_PORT_ROADMAP.md milestone 6 step 2; docs/game-internals.md 9).
+// (docs/vcs-reference/NATIVE_PORT_ROADMAP.md milestone 6 step 2; docs/vcs-reference/game-internals.md 9).
 //
 // Same entry encoding and register effects as the IRX (read from its code, tools/irxdis.py --decompile): entries are
 // core | voice << 1 | param << 8 (+0x80 for per-core volumes), addresses are bytes in SPU2 RAM. Differences, by

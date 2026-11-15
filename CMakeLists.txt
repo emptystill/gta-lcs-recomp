@@ -98,11 +98,11 @@ endif()
 add_subdirectory(third_party/PS2Recomp)
 
 if(VCS_HAVE_GENERATED)
-    set_target_properties(ps2EntryRunner PROPERTIES OUTPUT_NAME "vcs")
-    # The main build tree (build/release) puts vcs.exe, its DLLs and vcs.ini at the top of build/ instead of
+    set_target_properties(ps2EntryRunner PROPERTIES OUTPUT_NAME "lcs")
+    # The main build tree (build/release) puts lcs.exe, its DLLs and lcs.ini at the top of build/ instead of
     # build/release/third_party/PS2Recomp/ps2xRuntime; other trees (PGO training's build/pgo-gen) keep theirs.
     # VCS_GAME_DIR: the build folder chosen elsewhere (tools/toolchain.py passes it for the main tree; docs/LAUNCHER.md).
-    set(VCS_GAME_DIR "" CACHE PATH "Where vcs.exe, its DLLs and vcs.ini go (empty: build/ for build/release)")
+    set(VCS_GAME_DIR "" CACHE PATH "Where lcs.exe, its DLLs and lcs.ini go (empty: build/ for build/release)")
     string(TOLOWER "${CMAKE_BINARY_DIR}" _vcs_binary_dir)
     string(TOLOWER "${CMAKE_SOURCE_DIR}/build/release" _vcs_main_tree)
     if(VCS_GAME_DIR)
@@ -112,8 +112,8 @@ if(VCS_HAVE_GENERATED)
     endif()
     target_include_directories(ps2EntryRunner PRIVATE "${CMAKE_SOURCE_DIR}/src")
     target_link_libraries(ps2EntryRunner PRIVATE vcs_host) # main.cpp: settings menu (Dear ImGui), presenter aspect
-    # Windows: our manifest in place of the linker's, for the UTF-8 code page (non-ASCII folders; src/vcs.manifest)
-    # ... and the exe's icon and version information (src/vcs.rc): VERSION in the repository root, as a header only
+    # Windows: our manifest in place of the linker's, for the UTF-8 code page (non-ASCII folders; src/lcs.manifest)
+    # ... and the exe's icon and version information (src/lcs.rc): VERSION in the repository root, as a header only
     # the resource file sees - a compile definition would rebuild every generated file at each new version
     if(WIN32)
         set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/VERSION")
@@ -127,10 +127,10 @@ if(VCS_HAVE_GENERATED)
 #define VCS_VERSION_PATCH ${CMAKE_MATCH_3}
 #define VCS_VERSION_TEXT \"${VCS_VERSION}\"
 ")
-        target_sources(ps2EntryRunner PRIVATE "${CMAKE_SOURCE_DIR}/src/vcs.rc")
+        target_sources(ps2EntryRunner PRIVATE "${CMAKE_SOURCE_DIR}/src/lcs.rc")
         # the resource compiler doesn't report the files it embeds
-        set_source_files_properties("${CMAKE_SOURCE_DIR}/src/vcs.rc" TARGET_DIRECTORY ps2EntryRunner
-            PROPERTIES OBJECT_DEPENDS "${CMAKE_SOURCE_DIR}/src/vcs.manifest;${CMAKE_SOURCE_DIR}/src/vcs.ico;${CMAKE_BINARY_DIR}/vcs_version/vcs_version.h"
+        set_source_files_properties("${CMAKE_SOURCE_DIR}/src/lcs.rc" TARGET_DIRECTORY ps2EntryRunner
+            PROPERTIES OBJECT_DEPENDS "${CMAKE_SOURCE_DIR}/src/lcs.manifest;${CMAKE_SOURCE_DIR}/src/lcs.ico;${CMAKE_BINARY_DIR}/vcs_version/vcs_version.h"
                        INCLUDE_DIRECTORIES "${CMAKE_BINARY_DIR}/vcs_version")
         if(MSVC)
             target_link_options(ps2EntryRunner PRIVATE /MANIFEST:NO)  # lld in mingw mode makes none of its own

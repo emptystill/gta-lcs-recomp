@@ -5,7 +5,8 @@ This tree is a copy of the GTA: Vice City Stories native port (2026-11-14), turn
 build, so the recompiler, the runtime, the platform layer and most tools carry over unchanged; the game code in
 `src/game/` knows VCS's addresses and is off for LCS until each part has its LCS addresses.
 
-Everything else in `docs/` describes VCS and is kept as the map of what to look for: the same kinds of functions,
+An independent project since (docs/DECISIONS.md): the game is `lcs.exe` / `lcs.ini`, the launcher `LCSLauncher`. The
+VCS port's documentation is in `docs/vcs-reference/`, kept as the map of what to look for: the same kinds of functions,
 data and fixes are expected in LCS at other addresses.
 
 ## The disc
@@ -46,7 +47,7 @@ data and fixes are expected in LCS at other addresses.
 - Set off in `src/main.cpp`: the player's bindings (`VCS_INPUT_MAP=0`: the runtime's own pad mapping; the bindings also
   write VCS's camera / aim / radio memory), the game's volume levels (`VCS_GAME_VOLUME=0`), the trainer (not installed).
 - Data folder: `%LOCALAPPDATA%\LCSRecomp` (VCS: `VCSRecomp`), so LCS never touches a VCS memory card.
-- The launcher (`launcher/`) still names VCS everywhere: not used for LCS yet (the tools are run directly).
+- The launcher (`LCSLauncher`) names LCS; its look (sunset, palm trees, pink) is still Vice City's.
 
 ## Status (2026-11-14)
 
@@ -101,3 +102,5 @@ Open:
 - 2026-11-14: tree copied, tools pointed at SLUS_214.23 / `game/lcs`, Ghidra + analyzer run, overrides found.
 - 2026-11-14: legal screen (movies skipped) -> loading screen (runtime heap) -> intro cutscene and gameplay (LCS
   stream protocol, 0x20CE98).
+- 2026-11-14: independent identity (docs/DECISIONS.md, phase 1): `lcs.exe`, `lcs.ini`, `LCSLauncher`, data in
+  `LCSRecomp` (the launcher's own backups had still pointed at `VCSRecomp`), VCS docs to `docs/vcs-reference/`.

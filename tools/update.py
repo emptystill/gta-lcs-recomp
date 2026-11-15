@@ -4,25 +4,25 @@
     python tools/update.py check               the newest release vs this one (RELEASE.json's version)
     python tools/update.py apply [--zip FILE]  download the newest release's zip (or use FILE) and put it in place
     python3 tools/update.py apply [--appimage FILE]   Linux: the newest AppImage (or FILE) in place of the running one
-    python3 tools/update.py install --from DIR --to FOLDER   Linux / macOS: an AppImage's (or VCSLauncher.app's)
+    python3 tools/update.py install --from DIR --to FOLDER   Linux / macOS: an AppImage's (or LCSLauncher.app's)
                                                release files into the folder the game is built in (the launcher runs it
                                                at start when they differ)
-    python3 tools/update.py apply [--zip FILE]   macOS: the newest release's VCSLauncher.app in place of the running
+    python3 tools/update.py apply [--zip FILE]   macOS: the newest release's LCSLauncher.app in place of the running
                                                one ($VCS_APP_BUNDLE, set by the launcher); FILE: its .dmg (or a zip)
 
 apply replaces the release's files with the new release's, removes the files the old release had and the new one
-doesn't (RELEASE.json lists them), and keeps everything else: build/ (the built game, vcs.ini, the launcher's
+doesn't (RELEASE.json lists them), and keeps everything else: build/ (the built game, lcs.ini, the launcher's
 settings), generated/, your disc, anything you added. The game then needs building again (the launcher says so;
 it is incremental). A git clone isn't a release: update it with git pull.
 
 Linux releases are an AppImage (tools/release.py): a read-only image holding the launcher and the release's files.
-The game is built in a folder of its own ($XDG_DATA_HOME/VCSRecomp/install, VCS_INSTALL_DIR), which the launcher fills
+The game is built in a folder of its own ($XDG_DATA_HOME/LCSRecomp/install, VCS_INSTALL_DIR), which the launcher fills
 from the image with `install` - only files whose bytes changed are written, so a rebuild after an update stays
 incremental. `apply` there replaces the AppImage file itself ($APPIMAGE, set by the AppImage runtime); the next start
 of the launcher puts the new files in place.
 
-macOS releases are a disk image (.dmg, tools/dmg.py) holding VCSLauncher.app, whose Contents/Resources/release has the
-release's files; the game is built in ~/Library/Application Support/VCSRecomp/install, filled with `install` as from an
+macOS releases are a disk image (.dmg, tools/dmg.py) holding LCSLauncher.app, whose Contents/Resources/release has the
+release's files; the game is built in ~/Library/Application Support/LCSRecomp/install, filled with `install` as from an
 AppImage. `apply` mounts the image out of Finder's sight, copies the app out with ditto (its signature and modes stay)
 and replaces the app bundle where it is (the old one moved aside first, then removed); the next start puts the new
 files in place. An app macOS runs from a quarantined download in place
@@ -65,7 +65,7 @@ def version_key(v):
 
 def latest(repo):
     req = urllib.request.Request("https://api.github.com/repos/%s/releases/latest" % repo,
-                                 headers={"Accept": "application/vnd.github+json", "User-Agent": "vcs-recomp-update"})
+                                 headers={"Accept": "application/vnd.github+json", "User-Agent": "lcs-recomp-update"})
     try:
         with urllib.request.urlopen(req, timeout=30) as r:
             data = json.load(r)
@@ -208,15 +208,15 @@ def apply_appimage(mine, appimage_path=None):
 
 
 def apply_app(mine, zip_path=None):
-    """macOS: the new release's VCSLauncher.app in place of the running one ($VCS_APP_BUNDLE). Its files go into the
+    """macOS: the new release's LCSLauncher.app in place of the running one ($VCS_APP_BUNDLE). Its files go into the
     install folder when the launcher next starts (install below)."""
     import subprocess
     bundle = os.environ.get("VCS_APP_BUNDLE", "")
     if not bundle or not os.path.isdir(os.path.join(bundle, "Contents")):
-        tc.fail("not started from VCSLauncher.app ($VCS_APP_BUNDLE isn't set): a git clone updates with git pull",
+        tc.fail("not started from LCSLauncher.app ($VCS_APP_BUNDLE isn't set): a git clone updates with git pull",
                 "git_checkout")
     if "/AppTranslocation/" in bundle:
-        tc.fail("macOS runs the launcher from a read-only copy of the download: move VCSLauncher.app to Applications "
+        tc.fail("macOS runs the launcher from a read-only copy of the download: move LCSLauncher.app to Applications "
                 "(drag it there in Finder), start it from there, then update again", "app_translocated")
     version = None
     if not zip_path:
@@ -244,14 +244,14 @@ def apply_app(mine, zip_path=None):
             with dmg.attached(zip_path) as mount:
                 app = dmg.find_app(mount)
                 if not app or subprocess.run(["/usr/bin/ditto", app,
-                                              os.path.join(unpacked, "VCSLauncher.app")]).returncode != 0:
-                    tc.fail("no VCSLauncher.app could be copied from " + zip_path, "error")
+                                              os.path.join(unpacked, "LCSLauncher.app")]).returncode != 0:
+                    tc.fail("no LCSLauncher.app could be copied from " + zip_path, "error")
         except RuntimeError as e:
             tc.fail("could not open the disk image %s: %s" % (zip_path, e), "error")
     new = dmg.find_app(unpacked)
     release = os.path.join(new, "Contents", "Resources", "release", "RELEASE.json")
     if not os.path.isfile(release):
-        tc.fail("not a macOS release (no VCSLauncher.app with its files): " + zip_path, "error")
+        tc.fail("not a macOS release (no LCSLauncher.app with its files): " + zip_path, "error")
     with open(release, encoding="utf-8") as f:
         version = version or json.load(f).get("version", "?")
     old = bundle.rstrip("/") + ".old"
@@ -272,7 +272,7 @@ def apply_app(mine, zip_path=None):
 
 
 def install(source, target):
-    """An AppImage's release files (source: its usr/share/vcs-recomp/release) into the install folder: the files whose
+    """An AppImage's release files (source: its usr/share/lcs-recomp/release) into the install folder: the files whose
     bytes differ written, the ones the previous release had and this one doesn't removed (RELEASE.json lists them),
     build/ and generated/ left alone. RELEASE.json last, so an interrupted install is redone."""
     new = None

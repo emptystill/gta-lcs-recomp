@@ -405,7 +405,7 @@ namespace vcs::rslnative
                 return;
             }
             if (out.cntOnly && vcs::rslworld::flushAsOp(rdram, out.bytes, out.size))
-                commitState(rdram, out); // step 5a: its bytes as a state op (docs/FULLY_NATIVE.md)
+                commitState(rdram, out); // step 5a: its bytes as a state op (docs/vcs-reference/FULLY_NATIVE.md)
             else
                 commit(rdram, cursor, out);
             ++g_stats.native;

@@ -2,7 +2,7 @@
 // Render targets hold PS2 rows top-down (texture row = PS2 row); colours and alpha are 0..255 values / 255.
 // DUAL_SOURCE=1 also outputs the blend factor C as the second colour (Src1Alpha blending).
 // SAMPLE_MODE: the pixel shader built for one way of reading the texture, picked per draw by gs_hw.cpp (drawSampleMode):
-// only that path's code, so fewer registers and no branches between paths (docs/PERFORMANCE.md 18). The same code as the
+// only that path's code, so fewer registers and no branches between paths (docs/vcs-reference/PERFORMANCE.md 18). The same code as the
 // per-draw choice below, so the same pixels.
 //   0 every way, chosen per draw from the constants (PS2X_HW_SPECIALISE=0; PS2X_HW_GATHER=verify)
 //   1 no texture   2 nearest (fetchTexel)   3 the GS's bilinear by four loads   4 the hardware sampler (anisotropic option)
@@ -82,7 +82,7 @@ VSOut vs_main(VSIn i)
     return o;
 }
 
-// Native draws (packet-level HLE, docs/NATIVE_RENDERER.md stage 4+): the VU1 work on the GPU. One constant block
+// Native draws (packet-level HLE, docs/vcs-reference/NATIVE_RENDERER.md stage 4+): the VU1 work on the GPU. One constant block
 // for every kind; nat[31] = GS XYOFFSET in pixels (xy), Z format scale (z), filled by the renderer.
 cbuffer Native : register(b1)
 {
@@ -129,7 +129,7 @@ struct WorldIn
     uint col : COLOR0;      // the V4-5 colour's expanded bytes
 };
 
-// VCS prelit world (VU1 0x0030 with stages 0x0da / 0x4e0 / 0x2b6): see docs/game-internals.md
+// VCS prelit world (VU1 0x0030 with stages 0x0da / 0x4e0 / 0x2b6): see docs/vcs-reference/game-internals.md
 VSOut vs_world(WorldIn i)
 {
     VSOut o = (VSOut)0;
@@ -150,7 +150,7 @@ struct LitIn
     float3 nrm : NORMAL;     // skinned normal
 };
 
-// VCS lit / skinned models (VU1 0x0030 with stages 0x5a5 / 0x0da / 0x4ff / 0x2b6): see docs/game-internals.md
+// VCS lit / skinned models (VU1 0x0030 with stages 0x5a5 / 0x0da / 0x4ff / 0x2b6): see docs/vcs-reference/game-internals.md
 VSOut vs_lit(LitIn i)
 {
     VSOut o = (VSOut)0;
@@ -173,7 +173,7 @@ int wrapc(int c, int size, int mode, int mn, int mx)
     int r = (c & mn) | mx;                       // REGION_REPEAT
     // REPEAT. GS sizes are powers of two: a mask, the same result as the modulo for every c; native effect buffers need
     // not be. The modulo is two integer divisions per coordinate and tap (~2 ms of the helicopter's dust at 3x,
-    // docs/PERFORMANCE.md section 15)
+    // docs/vcs-reference/PERFORMANCE.md section 15)
     [branch] if (mode == 0)
     {
         [branch] if ((size & (size - 1)) == 0) r = c & (size - 1);
@@ -238,7 +238,7 @@ static bool g_gatherMismatch = false; // PS2X_HW_GATHER=verify (sampleTex mode 4
 // m_gatherSampler). The top-left texel is wrapped / clamped here, so the gather point is a texel corner inside the
 // texture, where the hardware's footprint is exact; the right / bottom neighbour wraps or clamps in the sampler. The
 // same values as fetchTexel's four loads, without their per-tap wrap arithmetic (the helicopter's dust: ~60 screens of
-// textured overdraw a frame, docs/game-internals.md 6j).
+// textured overdraw a frame, docs/vcs-reference/game-internals.md 6j).
 float4 sampleGather(float2 uv)
 {
     const float2 p = uv - 0.5;
@@ -278,7 +278,7 @@ float4 sampleBilinear(float2 uv)
 // reflections: Smooth" (gs_hw.cpp gsHwSetTargetFilter). Instead of the GS's four taps out of the ~5 x 3.5 frame pixels
 // a map texel stands for, a tent filter over the texel's footprint and its neighbours' (half-width filterSize.xy,
 // source texels) at the source's own resolution: a car panel's reflection, one map texel, follows the picture smoothly
-// as the camera moves instead of jumping with whatever single pixel lands on the tap (docs/game-internals.md 6g). At
+// as the camera moves instead of jumping with whatever single pixel lands on the tap (docs/vcs-reference/game-internals.md 6g). At
 // most 16 taps per axis (every pixel up to ~1440p, a stride above).
 // Only the target pixels that are ever read get the filter: the paint reads the map one target pixel per PS2 texel
 // (fetchTexel: the pixel at the texel's centre), so a map drawn above 1x has ~16k such pixels of its 100k+; the others

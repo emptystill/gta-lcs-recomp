@@ -1,5 +1,5 @@
 // Sony's IOP sound library on the host - see sound/libsd.h. Each function follows LIBSD.IRX's code (module offsets
-// in the comments; docs/game-internals.md 9 has how it was read).
+// in the comments; docs/vcs-reference/game-internals.md 9 has how it was read).
 #include "sound/libsd.h"
 
 #include "ps2x/iop/iop_spu2.h"

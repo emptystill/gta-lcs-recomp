@@ -216,7 +216,7 @@ before (14 / 34 there). Scenes: static pictures identical.
 What the first stage does now (`--opt none`, uncapped drive, worker 3.8-4.4 ms a frame against the game thread's
 6-8 ms): idle ~58% of the time; of the rest, about a third is copying - the RSL replay writing recorded unpacks into VU
 memory, `GS::submitNative` / `submitPackedKick` putting draws on the GS stage's ring, VIF DIRECT data to the GIF. Those
-copies are what step 4 of docs/FULLY_NATIVE.md removes (draws replayed without going through VU memory); smaller
+copies are what step 4 of docs/vcs-reference/FULLY_NATIVE.md removes (draws replayed without going through VU memory); smaller
 trims there are worth little while the game thread is the slower of the two. The 16 KB save of VU memory before each
 native re-draw (restored if it falls back) is not visible in the profile.
 
@@ -954,7 +954,7 @@ Retina window. `tools/bench.py` from a new game (this Mac has no Fort Baxter car
 - **The heavy views (~120 fps)**: the game thread's chain submission there (1.4-1.6 ms: the VIF1 chain copy, the walker
   and the RSL observer, the write-watch fold) and the render worker's first stage (6 ms: RSL replay copying recorded
   unpacks into VU memory - ~12% of its busy time while driving - and the native draws' setup). Step 5 of
-  docs/FULLY_NATIVE.md (state and textures as item ops) takes the chain's share down; the replay's VU-memory round
+  docs/vcs-reference/FULLY_NATIVE.md (state and textures as item ops) takes the chain's share down; the replay's VU-memory round
   trip needs the native handlers to take their inputs from the recordings (as the world handler's mesh already does)
   - with care for the fields an UNPACK leaves alone, which later packets read.
 - **Game thread** (guest code ~64-80% of it, flat: the top function 1.4%): deeper codegen (guest registers kept in host

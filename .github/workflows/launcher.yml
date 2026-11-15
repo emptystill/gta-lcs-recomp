@@ -60,7 +60,7 @@ jobs:
 
       - name: Self-test
         run: |
-          ./VCSLauncher --self-test --out "$RUNNER_TEMP/selftest.txt"; code=$?
+          ./LCSLauncher --self-test --out "$RUNNER_TEMP/selftest.txt"; code=$?
           cat "$RUNNER_TEMP/selftest.txt"
           exit $code
 
@@ -71,7 +71,7 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/shots"
           for screen in home gallery setup:disc setup:tools sheet:settings; do
-            ./VCSLauncher --screenshot "$RUNNER_TEMP/shots/${screen/:/-}.png" --screen "$screen" 2>&1 | tee -a "$RUNNER_TEMP/shots/log.txt"
+            ./LCSLauncher --screenshot "$RUNNER_TEMP/shots/${screen/:/-}.png" --screen "$screen" 2>&1 | tee -a "$RUNNER_TEMP/shots/log.txt"
           done
           if grep -q '^\[vulkan\]' "$RUNNER_TEMP/shots/log.txt"; then echo "validation messages above"; exit 1; fi
 
@@ -86,7 +86,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         env:
           APPIMAGE_EXTRACT_AND_RUN: "1"
-        run: python3 tools/release.py --platform linux --ref ${{ github.ref_name }} --launcher VCSLauncher
+        run: python3 tools/release.py --platform linux --ref ${{ github.ref_name }} --launcher LCSLauncher
 
       - uses: actions/upload-artifact@v4
         if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
@@ -123,7 +123,7 @@ jobs:
         shell: pwsh
         run: |
           $out = Join-Path $env:RUNNER_TEMP 'selftest.txt'
-          $p = Start-Process -FilePath .\VCSLauncher.exe -ArgumentList '--self-test','--out',$out -Wait -PassThru
+          $p = Start-Process -FilePath .\LCSLauncher.exe -ArgumentList '--self-test','--out',$out -Wait -PassThru
           Get-Content $out
           if ($p.ExitCode -ne 0) { exit 1 }
 
@@ -141,7 +141,7 @@ jobs:
 
       - name: Release zip
         if: startsWith(github.ref, 'refs/tags/v')
-        run: python tools/release.py --ref ${{ github.ref_name }} --launcher VCSLauncher.exe
+        run: python tools/release.py --ref ${{ github.ref_name }} --launcher LCSLauncher.exe
 
       - uses: actions/upload-artifact@v4
         if: startsWith(github.ref, 'refs/tags/v')
@@ -151,7 +151,7 @@ jobs:
             build/dist/*.zip
             build/dist/*.zip.sha256
 
-  # macOS on Apple Silicon (docs/MACOS.md): VCSLauncher.app with Apple's clang, Metal and Core Text; its shader through
+  # macOS on Apple Silicon (docs/MACOS.md): LCSLauncher.app with Apple's clang, Metal and Core Text; its shader through
   # glslang + SPIRV-Cross built from pinned sources (tools/shader_tools.py, cached). A virtual Mac may have no Metal
   # device: the self-test then reports the renderer as skipped (VCS_SELFTEST_NO_GPU) instead of failing.
   macos:
@@ -174,7 +174,7 @@ jobs:
 
       - name: Self-test
         run: |
-          ./VCSLauncher.app/Contents/MacOS/VCSLauncher --self-test --out "$RUNNER_TEMP/selftest.txt"; code=$?
+          ./LCSLauncher.app/Contents/MacOS/LCSLauncher --self-test --out "$RUNNER_TEMP/selftest.txt"; code=$?
           cat "$RUNNER_TEMP/selftest.txt"
           exit $code
 
@@ -189,7 +189,7 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/shots"
           for screen in home gallery setup:disc setup:tools sheet:settings; do
-            ./VCSLauncher.app/Contents/MacOS/VCSLauncher --screenshot "$RUNNER_TEMP/shots/${screen/:/-}.png" --screen "$screen"
+            ./LCSLauncher.app/Contents/MacOS/LCSLauncher --screenshot "$RUNNER_TEMP/shots/${screen/:/-}.png" --screen "$screen"
           done
 
       - uses: actions/upload-artifact@v4
@@ -202,7 +202,7 @@ jobs:
       # too, as an artifact: only a tag publishes
       - name: Release app
         if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
-        run: python3 tools/release.py --platform macos --ref ${{ github.ref_name }} --launcher VCSLauncher.app
+        run: python3 tools/release.py --platform macos --ref ${{ github.ref_name }} --launcher LCSLauncher.app
 
       - uses: actions/upload-artifact@v4
         if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
@@ -236,4 +236,4 @@ jobs:
           notes="docs/releases/${{ github.ref_name }}.md"
           if [ -f "$notes" ]; then notes_arg=(--notes-file "$notes"); else notes_arg=(--generate-notes); fi
           gh release create "${{ github.ref_name }}" dist/* --repo "${{ github.repository }}" \
-            --title "GTA Vice City Stories Launcher ${{ github.ref_name }}" "${notes_arg[@]}"
+            --title "GTA Liberty City Stories Launcher ${{ github.ref_name }}" "${notes_arg[@]}"

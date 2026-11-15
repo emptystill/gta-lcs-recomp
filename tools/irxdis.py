@@ -43,7 +43,7 @@ NAMES = {
     "sysclib": {12: "memcpy", 13: "memmove", 14: "memset", 23: "strcmp", 27: "strcpy", 30: "strlen", 36: "strncpy",
                 19: "sprintf"},
     # libsd, in LIBSD.IRX's export order (4 = sceSdInit): told apart by CDSTREAM's calls - 36 x SetParam(entry, value),
-    # GetParam(core | voice << 1 | 0x500 = ENVX), Set{Trans,IRQ}Callback (21 / 22) as docs/game-internals.md 9 has them
+    # GetParam(core | voice << 1 | 0x500 = ENVX), Set{Trans,IRQ}Callback (21 / 22) as docs/vcs-reference/game-internals.md 9 has them
     "libsd": {4: "sceSdInit", 5: "sceSdSetParam", 6: "sceSdGetParam", 7: "sceSdSetSwitch", 8: "sceSdGetSwitch",
               9: "sceSdSetAddr", 10: "sceSdGetAddr", 11: "sceSdSetCoreAttr", 12: "sceSdGetCoreAttr", 13: "sceSdNote2Pitch",
               14: "sceSdPitch2Note", 15: "sceSdProcBatch", 16: "sceSdProcBatchEx", 17: "sceSdVoiceTrans",

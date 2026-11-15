@@ -1,5 +1,5 @@
-// VCS 2D at the RenderWare level (docs/NATIVE_PORT_ROADMAP.md milestone 3 step 2): the HUD, text, radar and menus as
-// the game hands them to RenderWare's Im2D, before they become GS packets. See docs/game-internals.md 6f.
+// VCS 2D at the RenderWare level (docs/vcs-reference/NATIVE_PORT_ROADMAP.md milestone 3 step 2): the HUD, text, radar and menus as
+// the game hands them to RenderWare's Im2D, before they become GS packets. See docs/vcs-reference/game-internals.md 6f.
 //
 // Im2D (FUN_002fbe08 / FUN_002fbe68) takes 16-byte vertices: u, v (u16 fractions), RGBA (bytes), x, y (s16 pixels in
 // 640x448), z (u32; the HUD's is 0xfffffe, the far plane). The game's 2D pass (FUN_0021f348) draws the sky and clouds,
@@ -12,7 +12,7 @@
 // (far plane = HUD) left it out, at the 4:3 position on a 16:9 picture. Without a depth test the z changes nothing
 // else; depth-tested HUD draws keep theirs (the radar map is masked to its circle by depth). VCS_HUD_RW=0 turns it off.
 //
-// Native HUD (docs/NATIVE_RENDERER.md "HUD layer"): the HUD context's primitives are collected per frame, grouped into
+// Native HUD (docs/vcs-reference/NATIVE_RENDERER.md "HUD layer"): the HUD context's primitives are collected per frame, grouped into
 // elements and anchored (resolveAnchors); at the frame kick their vertex positions go to the renderer, which asks
 // classify() about each 2D primitive it gets. Named ones are squeezed towards their anchor in widescreen (HUD "Screen
 // edges"; otherwise all to the middle) and drawn over the picture at the window's size (VCS_HUD_NATIVE=0: into the

@@ -87,7 +87,7 @@ namespace
     // ---- LCS_HWBP=<guest addr>[,<guest addr>]: a hardware write breakpoint (x86 debug registers) on EE RAM, in every
     // host thread - catches writers the guest write watch (VCS_WATCH) cannot see: runtime stubs, DMA, host threads.
     // A thread re-applies it every 5 ms (threads started later get it too); a hit prints the writing thread and RIP
-    // (resolve with llvm-symbolizer / addr2line on vcs.exe, the printed base is vcs.exe's). Debugging only.
+    // (resolve with llvm-symbolizer / addr2line on lcs.exe, the printed base is lcs.exe's). Debugging only.
     uintptr_t g_hwbp[2] = {};
     uintptr_t g_exeBase = 0;
     PS2Runtime *g_hwbpRuntime = nullptr;

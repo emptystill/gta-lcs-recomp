@@ -1,4 +1,4 @@
-// Mission scripts that count per frame, put on the game's time step (docs/game-internals.md 11f).
+// Mission scripts that count per frame, put on the game's time step (docs/vcs-reference/game-internals.md 11f).
 #pragma once
 
 class PS2Runtime;

@@ -9,7 +9,7 @@ Checks: the folder (where the game is built: write access, synced / network fold
 memory, the processor (which build it gets: AVX2, AVX or SSE4 - toolchain.cpu_level), the compiler (Windows: llvm-mingw, or that the build
 downloads it - with VCS_TOOLCHAIN=msvc Visual Studio with the C++ tools and its clang-cl; Linux: build.py --check-deps), git
 when the dependencies aren't bundled (deps/), the disc (tools/vcs_disc.py check), and the state of the build:
-whether generated/ is current (recompile.py's stamp) and whether build/vcs.exe matches the source (build/build_info.json,
+whether generated/ is current (recompile.py's stamp) and whether build/lcs.exe matches the source (build/build_info.json,
 file times). "next" says what to do: disc, tools, build or play. Nothing here changes anything.
 """
 import argparse
@@ -278,7 +278,7 @@ def _quiet_find_iso():
 
 
 # what the game's build depends on, besides generated/ (recompile.py's stamp covers that): newer files here than
-# build/vcs.exe mean a build is due. Only these folders, so the check stays fast.
+# build/lcs.exe mean a build is due. Only these folders, so the check stays fast.
 BUILD_INPUTS = ["src", "third_party/PS2Recomp/ps2xRuntime", "third_party/PS2Recomp/ps2xIOP", "CMakeLists.txt"]
 
 

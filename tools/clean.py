@@ -5,7 +5,7 @@
     python tools/clean.py --apply              delete it
     python tools/clean.py --apply --keep-days 7    ... but keep anything changed in the last 7 days
 
-Kept always (PROTECTED): the game at the top of build/ (vcs.exe, its DLLs, vcs.pdb, vcs.ini), the builds (release,
+Kept always (PROTECTED): the game at the top of build/ (lcs.exe, its DLLs, lcs.pdb, lcs.ini), the builds (release,
 tools, analyzer, iop_tests), the downloaded CMake / Ninja (build-tools), the ELF / VU1 extracts, analysis dumps,
 the rig's card copies (build/rig/saves), the regression baseline, the reference scenes capture
 (build/scenes/reference), the PGO profile and the cached compiler environment. Outside build/ nothing is touched:
@@ -65,9 +65,9 @@ def writable_retry(func, path, _):
 
 
 def is_game_file(name):
-    """The game at the top of build/: vcs.exe, its symbols, its DLLs and the player's vcs.ini (build.py)."""
+    """The game at the top of build/: lcs.exe, its symbols, its DLLs and the player's lcs.ini (build.py)."""
     lower = name.lower()
-    return lower in ("vcs", "vcs.exe", "vcs.pdb", "vcs.ini") or lower.endswith(".dll")
+    return lower in ("lcs", "lcs.exe", "lcs.pdb", "lcs.ini") or lower.endswith(".dll")
 
 
 def candidates(build, protected, keep_after):

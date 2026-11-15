@@ -1,4 +1,4 @@
-// VCS frame rate and game timing (docs/NATIVE_PORT_ROADMAP.md milestone 4, docs/game-internals.md 4).
+// VCS frame rate and game timing (docs/vcs-reference/NATIVE_PORT_ROADMAP.md milestone 4, docs/vcs-reference/game-internals.md 4).
 #pragma once
 
 class PS2Runtime;

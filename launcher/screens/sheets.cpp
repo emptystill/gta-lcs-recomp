@@ -209,7 +209,7 @@ namespace screens
             if (action(r, y, "Add a shortcut to the desktop", ButtonStyle::Secondary, theme::icon::kLink))
             {
                 std::string error;
-                toast(app.shortcut(error) ? "Shortcut \"GTA Vice City Stories\" added to the desktop" : "No shortcut: " + error,
+                toast(app.shortcut(error) ? "Shortcut \"GTA Liberty City Stories\" added to the desktop" : "No shortcut: " + error,
                       error.empty() ? 0 : theme::kRed);
             }
             text(r, y, "The game's own settings - graphics, widescreen, controls, sound - are in the game: press F2 while playing.", theme::kFaint);

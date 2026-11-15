@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """Draws the launcher's icon (launcher.ico): Home's backdrop in a rounded square - Vice City at dusk, a striped hot-pink
 sun going down behind the art deco towers of the beach, a line of light on the horizon and the sun on the sea. Colours
-are the dark palette's (launcher/ui/theme.h). And the game's (src/vcs.ico, vcs.exe's): the same scene by day, in the
+are the dark palette's (launcher/ui/theme.h). And the game's (src/lcs.ico, lcs.exe's): the same scene by day, in the
 light palette's pinks with an orange sun and no stars, so the two programs don't look alike in Explorer or the taskbar.
 Standard library only.
 
     python launcher/make_icon.py            writes launcher/launcher.ico (16, 20, 24, 32, 40, 48, 64, 256 px),
                                             launcher/launcher.png (256 px: the Linux .desktop entry's icon) and
-                                            src/vcs.ico (the same sizes)
+                                            src/lcs.ico (the same sizes)
     python launcher/make_icon.py --png DIR  also writes each size as DIR/launcher_<size>.png and DIR/game_<size>.png
     python launcher/make_icon.py --header OUT.h   only the X11 window icon (_NET_WM_ICON: 32, 64, 128 px as
                                             ARGB) as a C header - launcher/CMakeLists.txt runs it on Linux
     python launcher/make_icon.py --icns OUT.icns  only the macOS app icon (PNG entries 16 - 256 px) - the
-                                            launcher's CMakeLists.txt runs it on macOS for VCSLauncher.app
+                                            launcher's CMakeLists.txt runs it on macOS for LCSLauncher.app
 
 Drawn here rather than kept as artwork, so the repository holds the source of every byte. Small sizes draw less (no
 windows or stars below 128 px, no towers below 24) and up to 64 px put the scene's edges and the sun's stripes on whole
@@ -52,7 +52,7 @@ class Palette:
 DUSK = Palette(night=0x0A0A0B, sky=0x140A0F, horizon=0x3A0E24, sea=0x0F080B, pink=0xFF2E8B, pink_hi=0xFF62A8,
                skyline=0x0B0709, lights=0xFFB8D6, sun_top=lambda p: mix(p.pink_hi, WHITE, 0.22),  # backdrop.cpp's sun
                far=0.55, sea_far=0x0A0A0B, stars=True)
-# The game (vcs.exe): the same scene by day, from kLightPalette's pinks - a plain white sky (the user's choice), rose
+# The game (lcs.exe): the same scene by day, from kLightPalette's pinks - a plain white sky (the user's choice), rose
 # towers, a sea that keeps enough colour at the bottom edge to stand apart from a white desktop or Explorer window
 DAY = Palette(night=0xFFFFFF, sky=0xFFFFFF, horizon=0xFFFFFF, sea=0xFFB3CF, pink=0xEC1A62, pink_hi=0xFF4C84,
               skyline=0xD9618F, lights=0xFFF1F6, sun_top=lambda p: mix(rgb(0xFFB547), p.pink_hi, 0.35),
@@ -289,7 +289,7 @@ def main():
     here = os.path.dirname(os.path.abspath(__file__))
     sizes = [16, 20, 24, 32, 40, 48, 64, 256]
     for name, pal, out, png in (("launcher", DUSK, os.path.join(here, "launcher.ico"), os.path.join(here, "launcher.png")),
-                                ("game", DAY, os.path.join(here, "..", "src", "vcs.ico"), None)):
+                                ("game", DAY, os.path.join(here, "..", "src", "lcs.ico"), None)):
         images = [render(s, pal=pal) for s in sizes]
         if "--png" in sys.argv:
             folder = sys.argv[sys.argv.index("--png") + 1]

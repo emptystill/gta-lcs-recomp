@@ -1,4 +1,4 @@
-// The trainer's free camera (docs/TRAINER.md "Camera"): fly anywhere while the game keeps running and the player stands
+// The trainer's free camera (docs/vcs-reference/TRAINER.md "Camera"): fly anywhere while the game keeps running and the player stands
 // still.
 //
 // CCamera::Process (FUN_00378dd8) runs the active camera's update, CCam::Process (FUN_00294540), then

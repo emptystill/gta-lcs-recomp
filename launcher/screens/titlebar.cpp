@@ -92,8 +92,8 @@ namespace screens
 #endif
         logo(left.x + px(9), bar.cy(), px(8));
         core::cutLeft(left, px(28));
-        const float nameW = measure(kFontSemibold, px(12.5f), "Vice City Stories");
-        label(kFontSemibold, px(12.5f), {left.x, bar.y, nameW + px(2), h}, focused ? theme::kText : theme::kDim, "Vice City Stories");
+        const float nameW = measure(kFontSemibold, px(12.5f), "Liberty City Stories");
+        label(kFontSemibold, px(12.5f), {left.x, bar.y, nameW + px(2), h}, focused ? theme::kText : theme::kDim, "Liberty City Stories");
         label(kFontBody, px(12.5f), {left.x + nameW + px(8), bar.y, px(200), h}, theme::kFaint,
               "PC port  \xC2\xB7  " + app.sourceVersion);
 

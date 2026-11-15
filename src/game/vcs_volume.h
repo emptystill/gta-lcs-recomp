@@ -1,4 +1,4 @@
-// The game's own Music / SFX volume (its pause menu's Audio page) as settings (docs/game-internals.md 9c).
+// The game's own Music / SFX volume (its pause menu's Audio page) as settings (docs/vcs-reference/game-internals.md 9c).
 #pragma once
 
 #include <cstdint>
@@ -14,6 +14,6 @@ namespace vcs::volume
     void install(PS2Runtime &runtime);
     // At the frame kick (game thread): writes a changed setting into the game, notices the pause menu's changes.
     void onGameFrame(uint8_t *rdram);
-    // Host frame: the pause menu's changes into the settings (and vcs.ini).
+    // Host frame: the pause menu's changes into the settings (and lcs.ini).
     void onHostFrame();
 }

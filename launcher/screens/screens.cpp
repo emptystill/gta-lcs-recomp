@@ -374,7 +374,7 @@ namespace screens
     {
         shell.pending = [] {
             fs::path picked;
-            if (platform::openFileDialog(picked, "Choose your GTA: Vice City Stories disc image",
+            if (platform::openFileDialog(picked, "Choose your GTA: Liberty City Stories disc image",
                                          {{"PS2 disc image (*.iso)", "*.iso"}, {"All files", "*"}}))
             {
                 shell.app->chooseDisc(picked);
@@ -400,7 +400,7 @@ namespace screens
     {
         shell.pending = [] {
             fs::path picked;
-            const fs::path suggested = launcher::knownFolder(launcher::Folder::Documents) / "Grand Theft Auto - Vice City Stories (USA).iso";
+            const fs::path suggested = launcher::knownFolder(launcher::Folder::Documents) / "Grand Theft Auto - Liberty City Stories (USA).iso";
             if (platform::saveFileDialog(picked, "Save the disc image as", suggested, {{"Disc image (*.iso)", "*.iso"}}, "iso"))
                 shell.app->startRip(shell.ripDrive, picked);
         };

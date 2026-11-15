@@ -186,7 +186,7 @@ namespace launcher
         const fs::path icon = workingDir / "launcher" / "launcher.png";
         std::string entry = "[Desktop Entry]\n"
                             "Type=Application\n"
-                            "Name=GTA: Vice City Stories\n"
+                            "Name=GTA: Liberty City Stories\n"
                             "Comment=" + description + "\n"
                             "Exec=" + desktopExecArg(pathText(target)) + "\n"
                             "Path=" + pathText(workingDir) + "\n";
@@ -195,7 +195,7 @@ namespace launcher
             entry += "Icon=" + pathText(icon) + "\n";
         entry += "Terminal=false\n"
                  "Categories=Game;\n"
-                 "StartupWMClass=VCSLauncher\n";
+                 "StartupWMClass=LCSLauncher\n";
         // the Desktop (the link asked for) and the applications menu
         const fs::path menu = knownFolder(Folder::LocalAppData) / "applications" / link.filename();
         bool wrote = false;

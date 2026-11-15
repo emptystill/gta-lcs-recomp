@@ -278,7 +278,7 @@ namespace platform
                 return;
             const SDL_WindowFlags flags = SDL_GetWindowFlags(g_window);
             if (flags & (SDL_WINDOW_MINIMIZED | SDL_WINDOW_FULLSCREEN))
-                return; // full screen keeps the window it came from (vcs.ini's window.* stay the windowed place)
+                return; // full screen keeps the window it came from (lcs.ini's window.* stay the windowed place)
             g_maximized = (flags & SDL_WINDOW_MAXIMIZED) != 0;
             if (!g_maximized)
             {

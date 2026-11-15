@@ -31,9 +31,9 @@ __pycache__/
 
 # the build folder chosen elsewhere (tools/build_dir.py): this machine only
 .vcs-build-dir
-/VCSLauncher
-/VCSLauncher.app
-/VCSLauncher.old
+/LCSLauncher
+/LCSLauncher.app
+/LCSLauncher.old
 
 # --- Downloaded third-party code / bundled Python (tools/deps.py, release): not ours ---
 /deps/

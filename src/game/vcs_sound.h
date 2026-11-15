@@ -1,4 +1,4 @@
-// VCS sound without the IOP (docs/NATIVE_PORT_ROADMAP.md milestone 6 step 2; docs/game-internals.md 9).
+// VCS sound without the IOP (docs/vcs-reference/NATIVE_PORT_ROADMAP.md milestone 6 step 2; docs/vcs-reference/game-internals.md 9).
 #pragma once
 
 class PS2Runtime;

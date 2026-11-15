@@ -3,9 +3,9 @@
 // Finds the user's disc image, checks it holds the supported executable,
 // maps it as cdrom0: and boots the recompiled game.
 //
-//   vcs.exe [path\to\Grand Theft Auto - Liberty City Stories (USA).iso]
+//   lcs.exe [path\to\Grand Theft Auto - Liberty City Stories (USA).iso]
 //
-// Without an argument it uses "iso=" from vcs.ini next to the exe, then the
+// Without an argument it uses "iso=" from lcs.ini next to the exe, then the
 // first *.iso in the exe's folder or the current folder.
 #include "ps2_runtime.h"
 #include "runtime/gs/gs_hw.h"
@@ -275,7 +275,7 @@ namespace
     }
 
     // Each host frame, before the menus draw: the screenshot key (Keyboard > Menus, F8) saves this frame's picture as
-    // shown - menus and overlays included, at the window's size - as screenshots/vcs_<date>_<time>.png next to vcs.exe
+    // shown - menus and overlays included, at the window's size - as screenshots/vcs_<date>_<time>.png next to lcs.exe
     // (VCS_SCREENSHOT_DIR: another folder). The notices of earlier shots are left out of it; nothing while the settings
     // menu waits for a key to bind.
     void screenshotKey()
@@ -296,7 +296,7 @@ namespace
         localtime_r(&t, &local);
 #endif
         char stamp[32];
-        std::strftime(stamp, sizeof(stamp), "vcs_%Y-%m-%d_%H-%M-%S", &local);
+        std::strftime(stamp, sizeof(stamp), "lcs_%Y-%m-%d_%H-%M-%S", &local);
         fs::path path = dir / (std::string(stamp) + ".png");
         for (int n = 2; fs::exists(path, ec); ++n) // several in one second
             path = dir / (std::string(stamp) + "_" + std::to_string(n) + ".png");
@@ -397,8 +397,8 @@ namespace
     }
 
     // The player settings (settings/settings.h). The menu shows pages (tabs) in the order they first appear here, each
-    // page's sections likewise, and the rows of a section in this order. vcs.ini next to vcs.exe holds them along
-    // with iso=; a setting's vcs.ini key stays the same when it moves to another page.
+    // page's sections likewise, and the rows of a section in this order. lcs.ini next to lcs.exe holds them along
+    // with iso=; a setting's lcs.ini key stays the same when it moves to another page.
     void registerSettings()
     {
         using settings::Apply;
@@ -675,7 +675,7 @@ namespace
         s.onChange = [](int v) { setEnv("PS2X_HW_ANISO", std::to_string(v)); };
         settings::add(s);
 
-        // The reflection on car paint (docs/game-internals.md 6g): the PS2 samples the frame once per spot, so a panel
+        // The reflection on car paint (docs/vcs-reference/game-internals.md 6g): the PS2 samples the frame once per spot, so a panel
         // flickers as the camera moves - the same at every resolution, but plainer to see when the rest of the picture is
         // sharp. Always Auto: the original at 1x, Smooth above it - no setting (the user's choice, DECISIONS.md
         // 2026-11-06). VCS_REFLECTIONS=0|1|2 (Original / Smooth / Auto) picks for one run, for comparisons.
@@ -705,7 +705,7 @@ namespace
             settings::add(s);
 
         // The graphics card, on a PC with more than one (GitHub issue 112: a laptop started the game on its integrated
-        // chip): the cards this PC has, by name, the fastest first and the default. vcs.ini keeps the card's id (rhi::Gpu);
+        // chip): the cards this PC has, by name, the fastest first and the default. lcs.ini keeps the card's id (rhi::Gpu);
         // a card no longer there falls back to the fastest. The log's "[rhi] graphics cards" line names them with their
         // ids (VCS_GPU=<id> for one run), "[present] ... on ..." the one in use.
         if (const std::vector<rhi::Gpu> gpus = rhi::listGpus(); !gpus.empty())
@@ -765,7 +765,7 @@ namespace
         settings::add(s);
     }
 
-    // The window opens where it was last closed (monitor, position, size, maximized): window.* in vcs.ini, written
+    // The window opens where it was last closed (monitor, position, size, maximized): window.* in lcs.ini, written
     // by the platform layer's callback whenever the window settles somewhere new. Deleting those lines resets it.
     void restoreWindowPlacement()
     {
@@ -812,14 +812,14 @@ namespace
     {
         if (argc >= 2 && argv[1] && argv[1][0])
             return fs::u8path(argv[1]);
-        if (fs::path p = isoFromIni(exeDirectory() / "vcs.ini"); !p.empty())
+        if (fs::path p = isoFromIni(exeDirectory() / "lcs.ini"); !p.empty())
             return p;
         if (fs::path p = firstIsoIn(exeDirectory()); !p.empty())
             return p;
         return firstIsoIn(fs::current_path());
     }
 
-    // Writes the guest ELF from the disc into the cache folder (runtime loads it from a file). 0, or vcs.exe's exit
+    // Writes the guest ELF from the disc into the cache folder (runtime loads it from a file). 0, or lcs.exe's exit
     // code for the failure (vcs_disc_id.h) with `error` set.
     int stageElf(const vcs::IsoImage &iso, const fs::path &out, std::string &error)
     {
@@ -858,7 +858,7 @@ int main(int argc, char *argv[])
     try
     {
         // the hardware (D3D11) renderer unless PS2X_GS says otherwise: the runtime's own default is the software GS
-        // (~5 fps), which only tools/run.py and the test tools used to override - vcs.exe started on its own got it
+        // (~5 fps), which only tools/run.py and the test tools used to override - lcs.exe started on its own got it
         if (const char *gs = std::getenv("PS2X_GS"); !gs || !*gs)
             setEnv("PS2X_GS", "hw");
         // Liberty City Stories: the VCS port's game code (src/game) knows VCS's addresses only. Its hooks are
@@ -869,7 +869,7 @@ int main(int argc, char *argv[])
             if (const char *v = std::getenv(off); !v || !*v)
                 setEnv(off, "0");
         registerSettings();
-        settings::load(exeDirectory() / "vcs.ini");
+        settings::load(exeDirectory() / "lcs.ini");
         // a test run never changes the player's settings: hidden, or shown (VCS_KEEP_SETTINGS=1 from
         // toolchain.test_window when VCS_TEST_VISIBLE=1)
         if (const char *keep = std::getenv("VCS_KEEP_SETTINGS"); ps2control::hiddenMode() || (keep && keep[0] == '1'))
@@ -880,7 +880,7 @@ int main(int argc, char *argv[])
         if (isoPath.empty())
         {
             std::cerr << "No disc image found. Pass your Liberty City Stories (USA) .iso as the first argument,\n"
-                         "put iso=<path> in vcs.ini next to vcs.exe, or place the .iso next to vcs.exe."
+                         "put iso=<path> in lcs.ini next to lcs.exe, or place the .iso next to lcs.exe."
                       << std::endl;
             return vcs::disc::kExitNoDisc;
         }
@@ -917,7 +917,7 @@ int main(int argc, char *argv[])
         }
 
         // the card in our data folder from the start: the runtime's default (the working directory) left empty mc0 / mc1
-        // folders next to vcs.exe, made before loadELF below set the paths
+        // folders next to lcs.exe, made before loadELF below set the paths
         {
             PS2Runtime::IoPaths early = PS2Runtime::getIoPaths();
             early.mcRoot = data / "mc0";
@@ -963,7 +963,7 @@ int main(int argc, char *argv[])
         vcs::input::install(runtime);   // the player's bindings feed the pad (game/vcs_input.h)
         vcs::volume::install(runtime);  // the game's music / effects levels follow the settings (game/vcs_volume.h)
         vcs::gameinfo::install(runtime); // the F3 overlay's game-state panel, the `gameinfo` command (debug/game_info.h)
-        // setting <key> [value] -> ok <value>: a setting read or changed (a hidden run never writes vcs.ini)
+        // setting <key> [value] -> ok <value>: a setting read or changed (a hidden run never writes lcs.ini)
         ps2control::addCommand("setting", [](const std::string &args, ps2control::Reply reply) {
             const size_t space = args.find(' ');
             const std::string key = args.substr(0, space);

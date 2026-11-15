@@ -1,4 +1,4 @@
-// See vcs_prompts.h. How the game shows a prompt (docs/game-internals.md 6n):
+// See vcs_prompts.h. How the game shows a prompt (docs/vcs-reference/game-internals.md 6n):
 //
 // 1. Text names controls by action: `Press ~k~ ~TGSUB~ to ...`. FUN_003aff20 expands each `~k~` through FUN_003afd78,
 //    which copies the text of the GXT key `C<configuration><ACTION>` (configuration: CPad 0 +0x92): a face-button token

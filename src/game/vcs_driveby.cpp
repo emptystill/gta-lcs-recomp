@@ -1,4 +1,4 @@
-// Enhancements > Combat: the fire rate of people shooting from vehicles (docs/game-internals.md 12c).
+// Enhancements > Combat: the fire rate of people shooting from vehicles (docs/vcs-reference/game-internals.md 12c).
 //
 // The NPC drive-by (FUN_00216768, and FUN_002168E8 for the other vehicle kinds) calls CWeapon::Fire (FUN_002C0F98)
 // whenever its burst gate FUN_00216690 says so - every frame of a 0.5-1 s burst - and Fire never checks the weapon's

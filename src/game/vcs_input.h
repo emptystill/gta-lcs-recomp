@@ -1,4 +1,4 @@
-// The player's controls (docs/CONTROLS.md): keyboard / mouse bindings, the gamepad's button map, stick options, the
+// The player's controls (docs/vcs-reference/CONTROLS.md): keyboard / mouse bindings, the gamepad's button map, stick options, the
 // mouse camera and vibration - all turned into the one DualShock 2 the game reads.
 #pragma once
 
@@ -35,7 +35,7 @@ namespace vcs::input
     };
     Device lastDevice();
 
-    // The free camera's controls (game/vcs_freecam.h; fixed keys, docs/CONTROLS.md), taken once per camera update on
+    // The free camera's controls (game/vcs_freecam.h; fixed keys, docs/vcs-reference/CONTROLS.md), taken once per camera update on
     // the game thread. While the free camera flies the game's pad reads give it nothing, and the mouse is left for this.
     struct FreeCamInput
     {

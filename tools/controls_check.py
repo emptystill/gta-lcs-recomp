@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Controls and player settings check (docs/CONTROLS.md, src/game/vcs_input.cpp): the bindings, checked in the pad
+"""Controls and player settings check (docs/vcs-reference/CONTROLS.md, src/game/vcs_input.cpp): the bindings, checked in the pad
 report they make and in the game, plus the settings registry's presets and reset, with menu screenshots.
 
     python tools/controls_check.py [OUT] [--port 47673]
@@ -1062,7 +1062,7 @@ class Check:
                                          "VCS_SCREENSHOT_DIR": os.path.join(self.out, "screenshot_key")})
         try:
             g.wait_ingame()
-            # the player's own vcs.ini is read by hidden runs too (never written): start from the defaults
+            # the player's own lcs.ini is read by hidden runs too (never written): start from the defaults
             self.ok("start from the defaults", self.setting("advanced.reset_all") == "pressed")
             g.prime()
             g.teleport(75.0, 175.0, -100.0)

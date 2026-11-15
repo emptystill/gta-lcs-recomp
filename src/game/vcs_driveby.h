@@ -1,4 +1,4 @@
-// Enhancements > Combat: the fire rate of people shooting from vehicles (docs/game-internals.md 12c).
+// Enhancements > Combat: the fire rate of people shooting from vehicles (docs/vcs-reference/game-internals.md 12c).
 #pragma once
 
 class PS2Runtime;

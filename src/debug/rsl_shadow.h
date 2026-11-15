@@ -1,4 +1,4 @@
-// The RSL shadow draw list (docs/RSL_SUBMISSION.md phase 1, VCS_RSL_SHADOW=1): the RSL draw calls of a frame, recorded
+// The RSL shadow draw list (docs/vcs-reference/RSL_SUBMISSION.md phase 1, VCS_RSL_SHADOW=1): the RSL draw calls of a frame, recorded
 // from before-hooks on the draw functions (game-internals.md 6i), checked against the frame's VIF1 chain as the runtime
 // copies it (runtime/ps2_chain_observer.h):
 // - every draw must have written its own tag - a model instance (FUN_002F7D58 / FUN_002F80A0) a CALL to its packet, a

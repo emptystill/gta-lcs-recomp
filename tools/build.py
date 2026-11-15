@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Build the game (configures CMake the first time).
 
-    python tools/build.py                       build vcs (build/vcs[.exe], with its DLLs and vcs.ini)
+    python tools/build.py                       build vcs (build/vcs[.exe], with its DLLs and lcs.ini)
     python tools/build.py --recompile [ISO]     recompile from your disc first, then build - the whole pipeline
     python tools/build.py --recompile-if-needed [ISO]   the same, recompiling only when generated/ is not current
                                                 (generated/recompile_stamp.json; what the launcher runs)
-    python tools/build.py --launcher            build the launcher (VCSLauncher(.exe) in the repository root; no disc)
+    python tools/build.py --launcher            build the launcher (LCSLauncher(.exe) in the repository root; no disc)
     python tools/build.py --install-deps        Linux: install the missing packages (the desktop's password prompt)
     python tools/build.py --progress json       also print `@vcs {...}` events for the launcher (toolchain.py)
     python tools/build.py --quick               no link-time optimisation: fast rebuilds while changing code
@@ -29,7 +29,7 @@ Baxter card copy, or a new game when there is none) and the reference scenes' bo
 (tools/scenes.py); the profiles go to build/pgo/vcs.profdata. A profile
 from older code still works: the functions that changed are optimised as without one.
 
-ISO defaults to VCS_ISO, iso=... in build/vcs.ini or vcs.ini, or a '*Vice City Stories*.iso' in the repository root.
+ISO defaults to VCS_ISO, iso=... in build/lcs.ini or lcs.ini, or a '*Liberty City Stories*.iso' in the repository root.
 A successful game build writes build/build_info.json (source version, optimisation, disc) - the launcher compares it
 with the source to know whether the game needs building.
 Windows: builds with llvm-mingw (clang, lld, libc++ and the Windows headers), downloaded once into build/build-tools -
@@ -70,7 +70,7 @@ def main():
                     help="Linux: install the missing packages (pkexec: the desktop's password prompt) and stop")
     ap.add_argument("--recompile-if-needed", nargs="?", const="", metavar="ISO",
                     help="recompile first only when the generated code is not current")
-    ap.add_argument("--launcher", action="store_true", help="build the launcher (VCSLauncher.exe) instead of the game")
+    ap.add_argument("--launcher", action="store_true", help="build the launcher (LCSLauncher.exe) instead of the game")
     ap.add_argument("--progress", choices=("text", "json"), default="text", help="json: events for the launcher too")
     a = ap.parse_args()
     if a.progress == "json":
@@ -175,9 +175,9 @@ def build_launcher(env, verbose):
         if tc.run_with_progress(cmd, log, "[build] configure launcher", env=env) != 0:
             print(tc.tail(log, 30))
             tc.fail("CMake configure of the launcher failed (build/configure_launcher.log)", tc.configure_failure(log), log)
-    if not tc.cmake_build(env, "VCSLauncher", "build_launcher.log", verbose, build_dir=LAUNCHER_BUILD):
+    if not tc.cmake_build(env, "LCSLauncher", "build_launcher.log", verbose, build_dir=LAUNCHER_BUILD):
         return False
-    exe = "VCSLauncher.app" if tc.IS_MACOS else tc.exe("VCSLauncher")
+    exe = "LCSLauncher.app" if tc.IS_MACOS else tc.exe("LCSLauncher")
     print("[build] ok: " + exe)
     tc.event(result="ok", exe=exe)
     return True
@@ -257,19 +257,19 @@ def configured_without_game():
 
 
 def move_from_old_place():
-    """vcs.exe used to be built in build/release/third_party/PS2Recomp/ps2xRuntime; it is now at the top of build/.
-    The player's vcs.ini moves with it (when build/ has none yet), and the old exe goes, so nobody starts a stale one."""
+    """lcs.exe used to be built in build/release/third_party/PS2Recomp/ps2xRuntime; it is now at the top of build/.
+    The player's lcs.ini moves with it (when build/ has none yet), and the old exe goes, so nobody starts a stale one."""
     new_dir = os.path.dirname(tc.game_exe(tc.BUILD_DIR))
     if os.path.normcase(new_dir) == os.path.normcase(tc.OLD_GAME_DIR):
         return
-    old_ini, new_ini = os.path.join(tc.OLD_GAME_DIR, "vcs.ini"), os.path.join(new_dir, "vcs.ini")
+    old_ini, new_ini = os.path.join(tc.OLD_GAME_DIR, "lcs.ini"), os.path.join(new_dir, "lcs.ini")
     if os.path.isfile(old_ini) and not os.path.isfile(new_ini):
         shutil.copy2(old_ini, new_ini)
         print("[build] settings moved: " + tc.show(old_ini) + " -> " + tc.show(new_ini))
-    for name in ("vcs.exe", "vcs.pdb", "vcs", "vcs.ini"):
+    for name in ("lcs.exe", "lcs.pdb", "lcs", "lcs.ini"):
         path = os.path.join(tc.OLD_GAME_DIR, name)
-        # the old vcs.ini only once build/'s is the same file (a different one stays for the player to look at)
-        if os.path.isfile(path) and (name != "vcs.ini" or (os.path.isfile(new_ini) and filecmp.cmp(path, new_ini, shallow=False))):
+        # the old lcs.ini only once build/'s is the same file (a different one stays for the player to look at)
+        if os.path.isfile(path) and (name != "lcs.ini" or (os.path.isfile(new_ini) and filecmp.cmp(path, new_ini, shallow=False))):
             try:
                 os.remove(path)
                 print("[build] removed the old " + tc.show(path) + " (the game is now in build/)")
@@ -278,14 +278,14 @@ def move_from_old_place():
 
 
 def remember_iso(given):
-    """Writes iso=<disc> into the vcs.ini next to vcs.exe when it has none, so the exe started on its own (a double
+    """Writes iso=<disc> into the lcs.ini next to lcs.exe when it has none, so the exe started on its own (a double
     click) finds the disc the build used. An iso= already there is the player's and stays. Returns the disc (None when
     none is known)."""
     try:
         iso = tc.find_iso(given)
     except SystemExit:
-        return None  # no disc known here: vcs.exe looks next to itself, or is given one
-    ini = os.path.join(os.path.dirname(tc.VCS_EXE), "vcs.ini")
+        return None  # no disc known here: lcs.exe looks next to itself, or is given one
+    ini = os.path.join(os.path.dirname(tc.VCS_EXE), "lcs.ini")
     lines = []
     if os.path.isfile(ini):
         with open(ini, encoding="utf-8", errors="replace") as f:
@@ -294,7 +294,7 @@ def remember_iso(given):
         return iso
     with open(ini, "w", encoding="utf-8") as f:
         f.write("\n".join(lines + ["iso=" + iso]) + "\n")
-    print("[build] disc for vcs.exe: " + iso + " (iso= in " + tc.show(ini) + ")")
+    print("[build] disc for lcs.exe: " + iso + " (iso= in " + tc.show(ini) + ")")
     return iso
 
 

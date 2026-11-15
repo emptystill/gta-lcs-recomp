@@ -281,7 +281,7 @@ Audio, Game, Keyboard, Gamepad, Advanced.
   removed again the same day (DECISIONS.md).
 - **Game**: **In the background** - keep running (as before), mute, or pause (the game thread held at the frame kick,
   vibration stopped, sound muted).
-- **Keyboard** / **Gamepad**: the bindings and stick, mouse and vibration options (docs/CONTROLS.md).
+- **Keyboard** / **Gamepad**: the bindings and stick, mouse and vibration options (docs/vcs-reference/CONTROLS.md).
 - **Advanced**: **Reset all settings** (asks for a second click).
 - **Enhancements** (2026-11-07, after this list was written): **Button prompts** (game-internals.md 6n) and, under
   *World*, **Traffic density**, **Pedestrian density** and **Draw distance** (100% = the original, up to 300%;
@@ -468,7 +468,7 @@ overlay toggle; the rest are registrations once their behaviour exists.
   global through a `FUN_002653e0` override) can be added later.
 - Cutscenes may use their own cameras / FOV and the fixed-16:9 camera.
 - Ratios beyond 16:9: culling and LOD distances follow the camera, but sector streaming is driven
-  by the hex cell around the camera (docs/game-internals.md "Level data"), so very wide views may reach
+  by the hex cell around the camera (docs/vcs-reference/game-internals.md "Level data"), so very wide views may reach
   unloaded cells at the edges - check at 21:9.
 - Memory card: the game saves its preferences; with our setting authoritative the saved value is
   overwritten each session - fine, but the save then stores our value (harmless).

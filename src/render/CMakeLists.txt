@@ -1,4 +1,4 @@
-# Renderer pieces on top of the RHI: the window presenter and the HW GS renderer's shaders (docs/NATIVE_RENDERER.md).
+# Renderer pieces on top of the RHI: the window presenter and the HW GS renderer's shaders (docs/vcs-reference/NATIVE_RENDERER.md).
 # One HLSL source per shader, compiled at build time into headers for each backend that is built:
 #   D3D11: DXBC from D3DCompile (tools/hlsl_dxbc.py) -> shaders/dxbc/<header>, array <name>
 #   Vulkan: SPIR-V from glslang (tools/hlsl_spirv.py) -> shaders/spirv/<header>, array <name>_spv
@@ -107,7 +107,7 @@ vcs_shader(shaders/gs_draw.hlsl vs_lit vs_5_0 kGsLitVS gs_lit_vs.h)
 foreach(mode RANGE 0 6)
     vcs_shader(shaders/gs_draw.hlsl ps_main ps_5_0 kGsDrawPS${mode} gs_draw_ps${mode}.h DUAL_SOURCE=0 SAMPLE_MODE=${mode})
     vcs_shader(shaders/gs_draw.hlsl ps_main ps_5_0 kGsDrawPS${mode}Dual gs_draw_ps${mode}_dual.h DUAL_SOURCE=1 SAMPLE_MODE=${mode})
-    # ... and without writing the depth (SHADER_DEPTH=0: early depth rejection; docs/PERFORMANCE.md 26)
+    # ... and without writing the depth (SHADER_DEPTH=0: early depth rejection; docs/vcs-reference/PERFORMANCE.md 26)
     vcs_shader(shaders/gs_draw.hlsl ps_main ps_5_0 kGsDrawPS${mode}NoZ gs_draw_ps${mode}_noz.h DUAL_SOURCE=0 SAMPLE_MODE=${mode} SHADER_DEPTH=0)
     vcs_shader(shaders/gs_draw.hlsl ps_main ps_5_0 kGsDrawPS${mode}DualNoZ gs_draw_ps${mode}_dual_noz.h DUAL_SOURCE=1 SAMPLE_MODE=${mode} SHADER_DEPTH=0)
 endforeach()

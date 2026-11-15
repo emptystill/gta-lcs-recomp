@@ -1,4 +1,4 @@
-// The radio's progress while it isn't heard, put on the game's time step (docs/game-internals.md 9, GitHub issue 117).
+// The radio's progress while it isn't heard, put on the game's time step (docs/vcs-reference/game-internals.md 9, GitHub issue 117).
 #pragma once
 
 class PS2Runtime;

@@ -1,12 +1,12 @@
-// VCSLauncher: from "downloaded the release" to playing, without a terminal (docs/LAUNCHER.md).
+// LCSLauncher: from "downloaded the release" to playing, without a terminal (docs/LAUNCHER.md).
 //
-//   VCSLauncher.exe                     the window
-//   VCSLauncher.exe --check             tools/doctor.py's report in the terminal
-//   VCSLauncher.exe --build [--iso X]   tools/build.py --recompile-if-needed, output in the terminal
-//   VCSLauncher.exe --play [--iso X]    start the game and wait for it; its exit code
-//   VCSLauncher.exe --self-test [--iso X]   the launcher's own checks (CI): repository, Python, doctor, disc check
+//   LCSLauncher.exe                     the window
+//   LCSLauncher.exe --check             tools/doctor.py's report in the terminal
+//   LCSLauncher.exe --build [--iso X]   tools/build.py --recompile-if-needed, output in the terminal
+//   LCSLauncher.exe --play [--iso X]    start the game and wait for it; its exit code
+//   LCSLauncher.exe --self-test [--iso X]   the launcher's own checks (CI): repository, Python, doctor, disc check
 //   ... --out FILE                      the output to a file instead (scripts, CI)
-//   VCSLauncher.exe --screenshot F.png  the window rendered offscreen and saved (tests, docs; never a window):
+//   LCSLauncher.exe --screenshot F.png  the window rendered offscreen and saved (tests, docs; never a window):
 //       [--screen S] [--demo D]         what is shown (screens/screens.h: setup:disc, home, task, sheet:saves,
 //                                       dialog:quit, gallery...; demo: running, count (1% every 0.8 s), link, firstlink, error, done,
 //                                       playing, update, updated (Restart after an update), stale (the build out of date))
@@ -17,10 +17,10 @@
 //       [--clock S]                     Home's moving scene S seconds in (its jets, clouds, windows...), plus the run's time
 //       [--step N]                      the old page numbers: 0-3 the setup steps, 4 Saves, 5 Settings, 6 Help
 //       [--action build --every S] [--iso X] [--wait S] [--pick-build-dir PATH]
-//   VCSLauncher.exe --stats             the window with a frame-time overlay (also Ctrl+Shift+F11)
-//   VCSLauncher.exe --after-update PID  (the Restart button after an update) wait for the old launcher to end, then
+//   LCSLauncher.exe --stats             the window with a frame-time overlay (also Ctrl+Shift+F11)
+//   LCSLauncher.exe --after-update PID  (the Restart button after an update) wait for the old launcher to end, then
 //                                       the window
-//   VCSLauncher.exe --hidden --quit-after S [--out F]   the real window and frame loop, never shown, for S seconds;
+//   LCSLauncher.exe --hidden --quit-after S [--out F]   the real window and frame loop, never shown, for S seconds;
 //                                       then the frames drawn and the CPU time used (the idle cost; tests)
 //
 // The command-line forms print into the terminal that started them (a GUI exe: in PowerShell use
@@ -187,7 +187,7 @@ namespace
             std::printf("%s\n", failed ? "self-test FAILED" : "self-test ok");
             return failed ? 1 : 0;
         }
-        std::fprintf(stderr, "usage: VCSLauncher [--check | --build | --play | --self-test] [--iso PATH] [--out FILE]\n");
+        std::fprintf(stderr, "usage: LCSLauncher [--check | --build | --play | --self-test] [--iso PATH] [--out FILE]\n");
         return 1;
     }
 
@@ -359,7 +359,7 @@ namespace
             if (!shots->iso.empty())
                 app.chooseDisc(pathFrom(shots->iso));
         }
-        else if (!platform::init("GTA: Vice City Stories - Launcher", kWidth, kHeight, kMinWidth, kMinHeight, error))
+        else if (!platform::init("GTA: Liberty City Stories - Launcher", kWidth, kHeight, kMinWidth, kMinHeight, error))
         {
             platform::errorBox(error);
             return 1;
@@ -542,7 +542,7 @@ int launcherMain(const std::vector<std::string> &argsIn)
 {
     std::vector<std::string> args = argsIn;
     // started by the Restart button after an update (App::restart): the old launcher first ends, so its renamed exe
-    // (VCSLauncher.exe.old) can go and an AppImage's old mount is gone; then the window as usual
+    // (LCSLauncher.exe.old) can go and an AppImage's old mount is gone; then the window as usual
     for (size_t i = 0; i + 1 < args.size(); ++i)
         if (args[i] == "--after-update")
         {

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Trainer check (docs/TRAINER.md): every trainer feature through the control channel, each verified in the game's
+"""Trainer check (docs/vcs-reference/TRAINER.md): every trainer feature through the control channel, each verified in the game's
 memory, with screenshots.
 
     python tools/trainer_check.py [OUT] [--vehicles all|N] [--freecam] [--port 47672]
@@ -31,7 +31,7 @@ CAR_HEALTH = 0x278
 CLOCK = 0x4CD148
 CAMERA = 0x6F44D0  # TheCamera: +0x30 its position (game-internals.md 12b)
 CAMERA_TARGET = CAMERA + 0xE0  # what the active camera follows (game-internals.md 12)
-# open streets far apart (the landmarks, docs/TRAINER.md), for the vehicle batches
+# open streets far apart (the landmarks, docs/vcs-reference/TRAINER.md), for the vehicle batches
 SPOTS = [(75.0, 175.0), (-1446.2, -820.2), (571.0, -640.8), (-834.4, 1403.7), (-978.2, -570.1), (351.4, 339.0),
          (-958.2, 85.6), (83.8, -1284.7)]
 

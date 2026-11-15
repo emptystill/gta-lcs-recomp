@@ -1,4 +1,4 @@
-# Host platform layer (docs/NATIVE_RENDERER.md): SDL3 window / input / audio and the Dear ImGui context with its
+# Host platform layer (docs/vcs-reference/NATIVE_RENDERER.md): SDL3 window / input / audio and the Dear ImGui context with its
 # input backend. The runtime links it (with src/render) through ps2_host_backend (PS2X_HOST_PLATFORM_TARGET).
 include(FetchContent)
 

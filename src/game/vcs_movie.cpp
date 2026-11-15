@@ -1,4 +1,4 @@
-// VCS movies (docs/NATIVE_PORT_ROADMAP.md milestone 5; docs/game-internals.md 3 "Movies").
+// VCS movies (docs/vcs-reference/NATIVE_PORT_ROADMAP.md milestone 5; docs/vcs-reference/game-internals.md 3 "Movies").
 //
 // At boot FUN_0021CA70 plays cdrom0:\MOVIES\STINGS.PSS (the logos; skip threshold 1,000,000 frames - never) and
 // INTRO.PSS (threshold 10) through CMoviePlayer::Play(path, 0, threshold) at 0x40D8B8, which drives libmpeg / the

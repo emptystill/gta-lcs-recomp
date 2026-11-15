@@ -1,4 +1,4 @@
-// VCS disc streaming without the IOP (docs/NATIVE_PORT_ROADMAP.md milestone 6 step 1).
+// VCS disc streaming without the IOP (docs/vcs-reference/NATIVE_PORT_ROADMAP.md milestone 6 step 1).
 #pragma once
 
 class PS2Runtime;

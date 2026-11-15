@@ -1,5 +1,5 @@
 // Host platform layer: window, events, keyboard / mouse / gamepad, audio output, frame pacing and the Dear ImGui
-// frame. The runtime and the renderer talk to the host only through this header (docs/NATIVE_RENDERER.md);
+// frame. The runtime and the renderer talk to the host only through this header (docs/vcs-reference/NATIVE_RENDERER.md);
 // platform_sdl3.cpp implements it with SDL3. No SDL, windows.h or graphics-API types appear here.
 //
 // Threads: init / shutdown / pumpEvents / the frame calls and keyPressed belong to the main thread. The input
@@ -121,7 +121,7 @@ namespace platform
         bool vulkan = false; // for a Vulkan renderer (the surface comes from vulkanCreateSurface)
     };
 
-    // Where the window was on the desktop, to open it there again (main.cpp keeps it in vcs.ini as window.*).
+    // Where the window was on the desktop, to open it there again (main.cpp keeps it in lcs.ini as window.*).
     // x / y / width / height: the restored (not maximized) client area, in screen coordinates relative to the
     // top-left of the monitor it is on. The monitor is found again by name, and by its desktop origin between two of
     // the same model; when it is gone the window opens at the default place.
@@ -180,7 +180,7 @@ namespace platform
     void endUiFrame();
     void waitNextFrame();
     // Frame lead (main thread): waitNextFrame wakes `leadNs` before the next host frame and calls `atLead` (an input
-    // refresh and the start of the game's next frame, so it is ready by then: docs/PERFORMANCE.md 19); 0 = none.
+    // refresh and the start of the game's next frame, so it is ready by then: docs/vcs-reference/PERFORMANCE.md 19); 0 = none.
     // frameLeadRan(): whether the last waitNextFrame did (then the frame start need not start the game's frame).
     using FrameLead = void (*)();
     void setFrameLead(uint64_t leadNs, FrameLead atLead);

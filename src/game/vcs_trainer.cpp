@@ -1,4 +1,4 @@
-// See vcs_trainer.h and docs/TRAINER.md.
+// See vcs_trainer.h and docs/vcs-reference/TRAINER.md.
 #include "game/vcs_trainer.h"
 
 #include "debug/rig.h"
@@ -160,7 +160,7 @@ namespace vcs::trainer
             const char *fallback;
             int ammo;
         };
-        // Weapon types 0..39 (40 and up make the script hang); models and text keys checked in game (docs/TRAINER.md).
+        // Weapon types 0..39 (40 and up make the script hang); models and text keys checked in game (docs/vcs-reference/TRAINER.md).
         constexpr WeaponDef kWeapons[] = {
             {1, 331, "WEAP03", "Brass Knuckles", 1},   {2, 332, "WEAP04", "Butterfly Knife", 1},
             {3, 333, "WEAP05", "Golf Club", 1},        {4, 334, "WEAP02", "Nightstick", 1},
@@ -206,7 +206,7 @@ namespace vcs::trainer
             const char *fallback;
             float x, y;          // a street-level spot in it (z: the ground there)
         };
-        // Points chosen by teleporting to each and looking (docs/TRAINER.md); rooftops and water left out.
+        // Points chosen by teleporting to each and looking (docs/vcs-reference/TRAINER.md); rooftops and water left out.
         constexpr LandmarkDef kLandmarks[] = {
             {"A_PORT", "Escobar International", -1446.2f, -820.2f}, {"ARMYB", "Fort Baxter Air Base", -1648.87f, -261.0f},
             {"BEACH1", "Ocean Beach", 83.8f, -1284.7f},            {"BEACH2", "Washington Beach", 571.0f, -640.8f},
@@ -220,7 +220,7 @@ namespace vcs::trainer
         constexpr const char *kWeatherNames[] = {"Sunny", "Cloudy", "Rainy", "Foggy", "Extra sunny", "Hurricane",
                                                  "Extra colours", "Ultra sunny"};
 
-        // Vehicle models that cannot be spawned usefully (docs/TRAINER.md: every model was spawned in a test run).
+        // Vehicle models that cannot be spawned usefully (docs/vcs-reference/TRAINER.md: every model was spawned in a test run).
         bool vehicleExcluded(int) { return false; }
 
         // ---- State ----------------------------------------------------------------------------------------------------

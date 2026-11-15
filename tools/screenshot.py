@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Save a screenshot of the running game as a PNG.
 
-    python tools/screenshot.py [build/run/shot.png] [--title "GTA: Vice City Stories"]
+    python tools/screenshot.py [build/run/shot.png] [--title "GTA: Liberty City Stories"]
 
 Uses the game's control channel when it is open (works with the window hidden or covered, see tools/gamectl.py);
 otherwise captures the window (Windows).

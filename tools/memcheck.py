@@ -84,7 +84,7 @@ def _children_linux(parent):
 def game_pid(runner_pid):
     """vcs(.exe) started by run.py (the rig's process)."""
     for pid, name in (_children_windows if os.name == "nt" else _children_linux)(runner_pid):
-        if name in ("vcs.exe", "vcs"):
+        if name in ("lcs.exe", "lcs"):
             return pid
     return None
 

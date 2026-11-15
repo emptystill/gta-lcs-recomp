@@ -1,4 +1,4 @@
-// Button prompts by input device (Enhancements > Button prompts; docs/game-internals.md 6n): the game's prompts - its
+// Button prompts by input device (Enhancements > Button prompts; docs/vcs-reference/game-internals.md 6n): the game's prompts - its
 // help text's `~k~ ~ACTION~` controls, the font's ✕ ○ △ □ glyphs, the pause menu's help-bar buttons - shown as the
 // keyboard keys and mouse buttons the player bound, an Xbox pad's buttons or a PlayStation pad's, following the device
 // used last (Automatic) or fixed. Original leaves the game exactly as it is.

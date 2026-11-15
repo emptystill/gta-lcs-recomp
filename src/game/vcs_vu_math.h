@@ -1,4 +1,4 @@
-// VU arithmetic the C++ references of VCS's VU1 programs reproduce bit-exactly (docs/NATIVE_RENDERER.md): every
+// VU arithmetic the C++ references of VCS's VU1 programs reproduce bit-exactly (docs/vcs-reference/NATIVE_RENDERER.md): every
 // MULA / MADD step rounded on its own (no FP contraction), under FE_TOWARDZERO set by the caller - the runtime's VU1
 // core runs the same way. Same semantics as the helpers in vcs_hle_world.cpp.
 #pragma once

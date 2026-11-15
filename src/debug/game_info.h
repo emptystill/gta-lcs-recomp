@@ -1,6 +1,6 @@
 // The game-state panel of the F3 overlay (under the perf numbers): the player's position, heading, state, health,
 // the vehicle, the camera, the world clock / area / pauses, the pools and the running scripts - read from the game's
-// memory at the frame kick (addresses: docs/game-internals.md 4, 11, 12). The same lines answer the control channel's
+// memory at the frame kick (addresses: docs/vcs-reference/game-internals.md 4, 11, 12). The same lines answer the control channel's
 // `gameinfo` command (`python tools/gamectl.py gameinfo`), for scripted runs and bug hunts.
 #pragma once
 

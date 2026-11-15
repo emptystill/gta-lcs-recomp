@@ -13,7 +13,7 @@ time): start the mission, go to the lock-up, take the van to the meeting place a
   stay at the right edge (VCS_TRACE_HUDANCHOR; grouped with the haze they went to the middle).
 Results: OUT/result.json and screenshots (default OUT: build/haze_check/<date-time>). Exit code 0 = pass.
 
-What broke (docs/game-internals.md 11h, 6f "Tunnel vision"): with a frame shorter than the PS2's the truck's hit turns
+What broke (docs/vcs-reference/game-internals.md 11h, 6f "Tunnel vision"): with a frame shorter than the PS2's the truck's hit turns
 the van instead of pushing it, the truck rolls on and over the spot where the first thug is created; his dialogue
 line's slot is freed with him and the mission waited for the line to load for ever, behind the faded-out screen.
 VCS_SCRIPT_FIXES=0 / VCS_HAZE_FILL=0 bring the old behaviour back (the check then fails).

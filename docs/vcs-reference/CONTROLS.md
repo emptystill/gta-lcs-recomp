@@ -165,7 +165,7 @@ Keyboard & mouse fix a set; Original is the PS2's text. game-internals.md 6n, DE
 
 ## Menus
 
-F2 (or Back + Start on a gamepad) opens the settings, F5 (or Back + RB) the trainer (docs/TRAINER.md), F6 (or Back + LB)
+F2 (or Back + Start on a gamepad) opens the settings, F5 (or Back + RB) the trainer (docs/vcs-reference/TRAINER.md), F6 (or Back + LB)
 turns the trainer's free camera on and off. Flying: W / A / S / D, E or Space up, Q down, mouse look, Shift faster,
 Ctrl slower, Z / X zoom out / in; gamepad left stick, right stick, RT / LT, A / B, D-pad up / down (fixed keys; the
 game gets no input meanwhile). In the

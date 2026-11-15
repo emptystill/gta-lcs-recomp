@@ -1,5 +1,5 @@
 // The clipper path of VCS's prelit world pipeline (VU1 program 0x0030, stage table 0x19) in C++: the GIF packets the
-// VU1 would XGKICK for a packet whose triangles cross the guard band. See docs/game-internals.md 6h.
+// VU1 would XGKICK for a packet whose triangles cross the guard band. See docs/vcs-reference/game-internals.md 6h.
 #pragma once
 
 #include <cstdint>

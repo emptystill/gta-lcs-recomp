@@ -1,4 +1,4 @@
-// VCS display settings applied to the game (docs/SETTINGS_MENU_WIDESCREEN.md).
+// VCS display settings applied to the game (docs/vcs-reference/SETTINGS_MENU_WIDESCREEN.md).
 //
 // Widescreen is Hor+: FUN_001ab9e0 (sets the camera's view window: x = tan(FOV / 2), y = x / aspect, then
 // RwCameraSetViewWindow) is wrapped so the horizontal extent grows by r = display aspect / (4:3) while the vertical
@@ -203,7 +203,7 @@ namespace vcs
         if (g_gamePreference.load(std::memory_order_relaxed) >= 0)
             runtime.replaceFunction(0x002AF660u, &setWidescreenPreference);
         runtime.replaceFunction(0x002804C8u, &cutsceneBars);
-        // VCS's render targets by what they are (game-internals.md 6g; docs/FULLY_NATIVE.md step 3d). The reflection map
+        // VCS's render targets by what they are (game-internals.md 6g; docs/vcs-reference/FULLY_NATIVE.md step 3d). The reflection map
         // is only ever sampled (vehicles' paint), so it follows "Internal resolution: Match window" like the picture.
         gsHwSetTargetRole(140u, 10u, "frame", false);
         gsHwSetTargetRole(0u, 10u, "shown picture (the previous frame)", false);

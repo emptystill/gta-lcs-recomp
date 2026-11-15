@@ -1,4 +1,4 @@
-// Render hardware interface (docs/NATIVE_RENDERER.md): the small set of GPU operations the renderer needs, so the
+// Render hardware interface (docs/vcs-reference/NATIVE_RENDERER.md): the small set of GPU operations the renderer needs, so the
 // renderer never sees a graphics API. One backend per API: D3D11 (rhi/d3d11, Windows), Vulkan (rhi/vulkan, Linux, and
 // Windows to compare), Metal (rhi/metal, macOS) and null (rhi/null, no GPU work). Immutable pipelines, explicit passes, copies and readbacks as
 // plain operations.
@@ -229,7 +229,7 @@ namespace rhi
         D3D11,
         Vulkan,
         Null, // no GPU work: textures read back as zeros (bring-up and tests of the CPU side)
-        Metal, // macOS (after Null: the values are kept in vcs.ini)
+        Metal, // macOS (after Null: the values are kept in lcs.ini)
     };
     const char *backendName(Backend backend);         // "D3D11", "Vulkan", "null", "Metal"
     bool backendFromName(const char *name, Backend &out); // d3d11 | vulkan | null | metal, any case
@@ -244,7 +244,7 @@ namespace rhi
     };
 
     // A graphics card the game can draw with (Graphics > Graphics card; GitHub issue 112: a laptop started the game on
-    // its integrated chip). `id` names it in vcs.ini and DeviceDesc::gpu: made from the PCI vendor / device ids (and
+    // its integrated chip). `id` names it in lcs.ini and DeviceDesc::gpu: made from the PCI vendor / device ids (and
     // which of several identical cards), so the same card has the same id under D3D11 and Vulkan and across starts.
     struct Gpu
     {

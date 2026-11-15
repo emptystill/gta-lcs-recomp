@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """macOS disk images: the release's .dmg (tools/release.py) and opening one (tools/update.py). macOS only.
 
-The release's image opens in Finder as one window: VCSLauncher.app on the left, a link to /Applications on the right,
+The release's image opens in Finder as one window: LCSLauncher.app on the left, a link to /Applications on the right,
 large icons, no toolbar or sidebar - drag the one onto the other. Finder reads that layout from the image's .DS_Store,
 written here (ds_store below) because the tools are standard library only (no dmgbuild / ds_store packages). The
 volume carries the launcher's icon (.VolumeIcon.icns + the volume's custom-icon flag, SetFile). Made with hdiutil:
@@ -263,7 +263,7 @@ def check(image, app_name):
     hdiutil("verify", image)
     with attached(image) as mount:
         app = os.path.join(mount, app_name)
-        if not os.path.isfile(os.path.join(app, "Contents", "MacOS", "VCSLauncher")):
+        if not os.path.isfile(os.path.join(app, "Contents", "MacOS", "LCSLauncher")):
             problems.append("no %s in the image" % app_name)
         elif subprocess.run(["/usr/bin/codesign", "--verify", "--deep", "--strict", app]).returncode != 0:
             problems.append("the app's signature doesn't verify inside the image")
@@ -281,7 +281,7 @@ def check(image, app_name):
     return problems
 
 
-def find_app(folder, name="VCSLauncher.app"):
+def find_app(folder, name="LCSLauncher.app"):
     found = [os.path.join(d, n) for d, ns, _ in os.walk(folder) for n in ns if n == name]
     return found[0] if found else ""
 

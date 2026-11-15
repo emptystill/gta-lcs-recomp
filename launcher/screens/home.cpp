@@ -68,9 +68,9 @@ namespace screens
             const float size = fontFound(kFontBrand) ? px(66) : px(58);
             const FontMetrics m = metrics(kFontBrand, size);
             // a soft glow under the name
-            shadow({left, y + m.ascent * 0.35f, measure(kFontBrand, size, "Vice City Stories"), m.ascent * 0.6f},
+            shadow({left, y + m.ascent * 0.35f, measure(kFontBrand, size, "Liberty City Stories"), m.ascent * 0.6f},
                    withAlpha(theme::kPink, 0.16f), px(26), px(10));
-            drawText(kFontBrand, size, left - px(2), y + m.ascent, theme::kText, "Vice City Stories");
+            drawText(kFontBrand, size, left - px(2), y + m.ascent, theme::kText, "Liberty City Stories");
             y += m.ascent + m.descent + px(4);
         }
         popReveal();
