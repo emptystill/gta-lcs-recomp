@@ -52,6 +52,7 @@ namespace
     std::atomic<uint32_t> g_outputW{0}, g_outputH{0};   // [gta-recomp] gsHwSetOutputSize
     std::atomic<float> g_aspectWidening{1.0f};          // [gta-recomp] gsHwSetAspectWidening
     std::atomic<bool> g_reducedPostFx{false};           // [gta-recomp] gsHwSetReducedPostFx
+    std::atomic<bool> g_trailsBlur{true};                // [gta-recomp] gsHwSetTrailsBlur
     std::atomic<uint32_t> g_frameW{0}, g_frameH{0};     // [gta-recomp] gsHwSetFrameSize
     struct TargetRole                                   // [gta-recomp] gsHwSetTargetRole
     {
@@ -157,6 +158,7 @@ void gsHwSetFrameSize(uint32_t width, uint32_t height)
 
 void gsHwSetAspectWidening(float widening) { g_aspectWidening.store(widening, std::memory_order_relaxed); }
 void gsHwSetReducedPostFx(bool on) { g_reducedPostFx.store(on, std::memory_order_relaxed); }
+void gsHwSetTrailsBlur(bool on) { g_trailsBlur.store(on, std::memory_order_relaxed); }
 
 // [gta-recomp] gsHwShownInputNs (gs_hw.h)
 static int64_t steadyNs()
@@ -1920,8 +1922,9 @@ namespace
 
         // Adds a draw to the pass list: its vertices copied into m_postVerts, positions widened when it draws into a
         // native buffer, texture coordinates remapped when it reads one (texWBase: that buffer's width at 4:3).
+        // texScale: the native buffer read is that many times its 4:3 PS2 size (its texels per PS2 texel; nativeTrails)
         void postAdd(std::vector<PostItem> &items, const Frame &f, const DrawCmd *d, rhi::Texture *target, rhi::Texture *texture,
-                     float w, float texWBase)
+                     float w, float texWBase, float texScale = 1.0f)
         {
             PostItem it{d, d->s, static_cast<uint32_t>(m_postVerts.size()), target, texture};
             const float targetUnits = static_cast<float>(d->s.fbw) * 64.0f; // target width at 4:3
@@ -1937,10 +1940,12 @@ namespace
                 HwVertex v = f.vertices[d->first + i];
                 if (texture)
                 {
-                    const float u = v.s / v.q * su + (w - 1.0f) * slope * v.x; // texels
+                    const float u = (v.s / v.q * su + (w - 1.0f) * slope * v.x) * texScale; // texels
                     v.s = d->s.fst ? u : u / static_cast<float>(it.s.tw) * v.q;
                     if (!d->s.fst)
-                        v.t = v.t / v.q * static_cast<float>(d->s.th) / static_cast<float>(it.s.th) * v.q;
+                        v.t = v.t / v.q * static_cast<float>(d->s.th) * texScale / static_cast<float>(it.s.th) * v.q;
+                    else
+                        v.t *= texScale;
                 }
                 if (target)
                     v.x *= w;
@@ -1959,7 +1964,8 @@ namespace
             return t.get();
         }
 
-        void postRun(const std::vector<PostItem> &items, float w, bool log, const char *what)
+        // targetScale: the native buffers drawn into are that many times their 4:3 PS2 size (nativeTrails)
+        void postRun(const std::vector<PostItem> &items, float w, bool log, const char *what, float targetScale = 1.0f)
         {
             const size_t bytes = m_postVerts.size() * sizeof(HwVertex);
             if (!m_postVb || m_postVbCapacity < bytes)
@@ -1977,6 +1983,8 @@ namespace
                 LayerTarget t;
                 t.color = it.target;
                 t.scissorScaleX = it.target ? w : 1.0f;
+                if (it.target)
+                    t.scaleX = t.scaleY = targetScale;
                 t.opaque = false;
                 t.texture = it.texture;
                 t.vertices = m_postVb.get();
@@ -2282,18 +2290,44 @@ namespace
             const DrawCmd *tint = drawAt(f, ci + 2);
             if (!back(tint) || !blendIs(tint->s, 0u, 2u, 2u, 1u))
                 tint = nullptr;
+            { // [gta-recomp] PS2X_HW_SKIP_TRAILS=1 (diagnosis): the effect's draws taken and not drawn
+                static const bool skip = [] {
+                    const char *e = std::getenv("PS2X_HW_SKIP_TRAILS");
+                    return e && e[0] == '1';
+                }();
+                if (skip)
+                    return tint ? 3u : 2u;
+            }
             const float w = std::max(1.0f, g_aspectWidening.load(std::memory_order_relaxed));
             const uint32_t th = std::max<uint32_t>(down->s.scy1, 1u);
-            rhi::Texture *t = postBuffer(m_postTrails, static_cast<uint32_t>(std::lround(512.0f * w)), th, "gs post trails");
+            // [gta-recomp] The effect buffer at the frame's own resolution (PS2X_HW_TRAILS_SCALE=0: 512 wide, as
+            // before). Liberty City Stories blends it back over the whole picture strongly: at 512 wide it put a
+            // 640x448-sharp veil over a 1440p frame - the picture looked equally soft at any internal resolution, where
+            // an emulator, upscaling every target, stays sharp (the user's report, 2026-11-15). Positions stay in PS2
+            // units, so the strips' warp covers the same distance on screen; only the buffer's detail grows.
+            static const bool scaled = [] {
+                const char *e = std::getenv("PS2X_HW_TRAILS_SCALE");
+                return !(e && e[0] == '0');
+            }();
+            float S = 1.0f;
+            if (scaled)
+                if (auto src = m_rts.find(down->s.rtFbp); src != m_rts.end())
+                    S = std::clamp(src->second.scale.y, 1.0f, 8.0f);
+            const uint32_t bw = std::min<uint32_t>(8192u, static_cast<uint32_t>(std::lround(512.0f * w * S)));
+            const uint32_t bh = std::min<uint32_t>(8192u, static_cast<uint32_t>(std::lround(static_cast<float>(th) * S)));
+            rhi::Texture *t = postBuffer(m_postTrails, bw, bh, "gs post trails");
             if (!t)
                 return 0;
             m_postVerts.clear();
             std::vector<PostItem> items;
             postAdd(items, f, down, t, nullptr, w, 0.0f);
-            postAdd(items, f, blend, nullptr, t, w, 512.0f);
+            // [gta-recomp] gsHwSetTrailsBlur(false): the warped blend-back left out, the tint kept - Liberty City Stories'
+            // softening of the whole picture (its "trails" blend a warped copy of the frame back at a high FIX)
+            if (g_trailsBlur.load(std::memory_order_relaxed))
+                postAdd(items, f, blend, nullptr, t, w, 512.0f, S);
             if (tint)
-                postAdd(items, f, tint, nullptr, t, w, 512.0f);
-            postRun(items, w, log, "trails");
+                postAdd(items, f, tint, nullptr, t, w, 512.0f, S);
+            postRun(items, w, log, "trails", S);
             postWriteBack(t, buffer, 8u, 512u, th);
             return tint ? 3u : 2u;
         }

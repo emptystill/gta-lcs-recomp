@@ -215,6 +215,16 @@ taken out again at the user's request (they did not help enough, and the game st
 the upscaling adds decode time when textures stream in). The commits stay in the history (reverted) to start from.
 What would really change it is replacement textures.
 
+**Found (2026-11-15, the user: an emulator's upscaling looks sharp, no patches):** two mistakes of method first - the
+hidden test window is 960x672 and the runtime composes the shown picture at the window's size, so 2560x1440 captures
+had been upscaled from it (`PS2X_HIDDEN_WINDOW=2560x1440` for real comparisons). Then, with that: LCS's **trails**
+effect (the runtime's native trails, the same as VCS's: downsample the frame into a 512-wide buffer, blend it back
+through warped strips, add it tinted) is what softens the whole picture - `PS2X_HW_SKIP_TRAILS=1` gives a sharp
+picture; the effect run as recorded (`PS2X_HW_POSTFX=bc`) is as soft as the native one. The softening is the warped
+blend-back itself, not only the buffer's 512-wide resolution (now scaled with the frame, `PS2X_HW_TRAILS_SCALE`).
+Graphics > **PS2 blur filter** (`display.ps2_blur`, `LCS_PS2_BLUR`; on by default, the original): off leaves the
+blend-back out and keeps the tint - sharp, with the game's colours.
+
 ## Tools for LCS debugging
 
 - `tools/xglobal.py --vcs-lcs 0xADDR...`: a VCS global's LCS address, from the code around its uses (votes).

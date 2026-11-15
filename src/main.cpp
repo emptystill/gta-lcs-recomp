@@ -675,6 +675,24 @@ namespace
         s.onChange = [](int v) { setEnv("PS2X_HW_ANISO", std::to_string(v)); };
         settings::add(s);
 
+        // Liberty City Stories softens its whole picture: its "trails" effect blends a warped copy of the frame back
+        // over it, on every frame. At the PS2's 640x448 that read as a soft glow; at 1440p it is the reason the picture
+        // looks blurry at any internal resolution (the user's report, 2026-11-15; docs/LCS.md "Picture sharpness"). Off
+        // leaves that blend out and keeps the effect's colour tint.
+        s = {};
+        s.key = "display.ps2_blur";
+        s.page = "Graphics";
+        s.section = "Image quality";
+        s.label = "PS2 blur filter";
+        s.help = "The game blends a slightly shifted copy of each frame back over it - a soft glow on the PS2, a blurry "
+                 "picture at a high resolution. Off keeps the game's colours and makes the picture sharp. On is the "
+                 "original.";
+        s.type = Type::Toggle;
+        s.defaultValue = 1;
+        s.env = "LCS_PS2_BLUR";
+        s.onChange = [](int v) { gsHwSetTrailsBlur(v != 0); };
+        settings::add(s);
+
         // The reflection on car paint (docs/vcs-reference/game-internals.md 6g): the PS2 samples the frame once per spot, so a panel
         // flickers as the camera moves - the same at every resolution, but plainer to see when the rest of the picture is
         // sharp. Always Auto: the original at 1x, Smooth above it - no setting (the user's choice, DECISIONS.md
