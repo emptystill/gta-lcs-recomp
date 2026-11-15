@@ -203,6 +203,21 @@ without it VCS lost buildings, peds and cars in the outer eighths of a 16:9 pict
 VCS code shape: watch the edges in the city); HUD **Screen edges** (VCS names its HUD's draws, `vcs_hud.cpp`: on LCS
 it behaves as Keep 4:3); the game's own Vert- widescreen option and the cutscene bars setting.
 
+## Picture sharpness (2026-11-15)
+
+The user found the picture blurry at every internal resolution. Checked, each at 1x / 2x / 3x with crops of the same
+spot: the internal resolution applies (targets at 2560x1536 at 3x 16:9, 8x MSAA; geometry edges and foliage much finer
+than at 1x); not the cause - the native post effects (`PS2X_HW_POSTFX=0` / `bt`), the PCRTC (one circuit shown), the
+frame copy (1:1, same scale), the mip levels (the renderer always samples level 0), anisotropic filtering. What stays
+soft is the textures: LCS's are tiny (a PSP game), magnified bilinearly, plus the motion blur's ghost while moving.
+Two settings (Graphics > Image quality), both off / as before by default:
+
+- **Sharpening** (`display.sharpen`, `LCS_SHARPEN`): a contrast-adaptive pass in the presenter
+  (`src/render/shaders/present.hlsl`, after AMD FidelityFX CAS: four neighbours, the weight lowered where the range is
+  already large - no halos). At High a number plate becomes readable.
+- **Motion blur** (`display.motion_blur`, `LCS_MOTION_BLUR`): Off / Reduced (the default, as before) / PS2
+  (`gsHwSetMotionBlur`, runtime).
+
 ## Tools for LCS debugging
 
 - `tools/xglobal.py --vcs-lcs 0xADDR...`: a VCS global's LCS address, from the code around its uses (votes).
