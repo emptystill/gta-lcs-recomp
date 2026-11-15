@@ -33,3 +33,29 @@ stubs = [
   "sceCdGetDiskType@0x00366280", # VCS 0x0044EFA8: sceCdGetDiskType2
   "sceCdDiskReady@0x00365E20",  # VCS 0x0044EB48: sceCdDiskReady_old
 ]
+
+# Instruction patches (address -> replacement word), applied by the recompiler.
+#
+# CTimer::Update (FUN_002B4CF8) floors the time step at 0.5 (1/100 s) inline: `lui $at, 0x3F00` at 0x2B4EC0 is both
+# the compare's operand and the value stored. With frame-rate independent timing above 100 fps that floor made the
+# game run fast (each frame counted as 1/100 s). 0x3E55 = 0.2080 (~1/240 s), the VCS port's floor (its kMaxFps 240,
+# game/vcs_framerate.cpp). Steps >= 0.5 (30 to 100 fps, and original timing) run exactly as before.
+[[patches]]
+address = "0x002B4EC0"
+value = "0x3C013E55"
+
+# The ped's animation movement turned into its velocity (+0x4D8 / +0x4DC; VCS FUN_001F1D38 at 0x1F2158, the same code):
+# `if (ms_fTimeStep < 0.5) v *= 0.5; else v *= 1 / ms_fTimeStep;` - the `< 0.5` branch is dead on the PS2 and above
+# 100 fps (independent timing) made peds walk / run at a fraction of their speed (Toni walked 1.0 m in a second at
+# 144 fps, 3.3 at 30). `lui $at, 0x3F00` at 0x1D5978 feeds only the compare and that branch's multiply ($f3): 0.001
+# sends every real step down the 1 / step path, as in VCS. Steps >= 0.5 run exactly as before.
+[[patches]]
+address = "0x001D5978"
+value = "0x3C013A83"
+
+# The cutscene objects' animation movement (CCutsceneObject::ProcessControl's twin, VCS FUN_0031AE38 at 0x31B19C):
+# `if (step < 0.5) v *= 2 (add.s); else v *= 1 / step` on +0x70.. - the same dead branch, so above 100 fps cutscene
+# objects moved too little. `lui $at, 0x3F00` at 0x2B75A8 is only the compare's ($f0 reloaded right after): 0.001.
+[[patches]]
+address = "0x002B75A8"
+value = "0x3C013A83"

@@ -1,95 +1,87 @@
-"""MIPS I disassembly (the IOP's R3000A instruction set), standard library only - used by tools/irxdis.py.
+#!/usr/bin/env python3
+"""A minimal MIPS (R5900) listing of an address range of a PS2 executable: enough to place instruction patches and
+read call sites (lui / ori / addiu / loads / stores / jal / j / jr / branches / COP1 compares; the rest as raw words).
+Standard library only (tools/eedis.py needs capstone).
 
-    decode(word, address) -> (mnemonic, operands, branch_target_or_None)
+    python tools/mipsdis.py ELF 0x2B4CF8 0x2B4F00
 
-Covers every MIPS I opcode (ALU, shifts, multiply / divide, loads / stores incl. lwl / lwr / swl / swr, branches,
-jumps, syscall / break, COP0 mfc0 / mtc0 / rfe, COP2 moves). Anything else comes out as `.word`.
+Analysis only: prints addresses and instructions to the terminal, never into the repository.
 """
+import struct
+import sys
 
-REG = ["zero", "at", "v0", "v1", "a0", "a1", "a2", "a3", "t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7",
-       "s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7", "t8", "t9", "k0", "k1", "gp", "sp", "fp", "ra"]
+sys.path.insert(0, __import__("os").path.dirname(__import__("os").path.abspath(__file__)))
+import xmatch  # noqa: E402
 
-_SPECIAL = {0x00: "sll", 0x02: "srl", 0x03: "sra", 0x04: "sllv", 0x06: "srlv", 0x07: "srav", 0x08: "jr", 0x09: "jalr",
-            0x0C: "syscall", 0x0D: "break", 0x10: "mfhi", 0x11: "mthi", 0x12: "mflo", 0x13: "mtlo", 0x18: "mult",
-            0x19: "multu", 0x1A: "div", 0x1B: "divu", 0x20: "add", 0x21: "addu", 0x22: "sub", 0x23: "subu", 0x24: "and",
-            0x25: "or", 0x26: "xor", 0x27: "nor", 0x2A: "slt", 0x2B: "sltu"}
-_IMM = {0x08: "addi", 0x09: "addiu", 0x0A: "slti", 0x0B: "sltiu", 0x0C: "andi", 0x0D: "ori", 0x0E: "xori"}
-_MEM = {0x20: "lb", 0x21: "lh", 0x22: "lwl", 0x23: "lw", 0x24: "lbu", 0x25: "lhu", 0x26: "lwr", 0x28: "sb", 0x29: "sh",
-        0x2A: "swl", 0x2B: "sw", 0x2E: "swr", 0x32: "lwc2", 0x3A: "swc2"}
+R = ["zero", "at", "v0", "v1", "a0", "a1", "a2", "a3", "t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7",
+     "s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7", "t8", "t9", "k0", "k1", "gp", "sp", "fp", "ra"]
+IMM = {0x08: "addi", 0x09: "addiu", 0x0A: "slti", 0x0B: "sltiu", 0x0C: "andi", 0x0D: "ori", 0x0E: "xori",
+       0x19: "daddiu"}
+MEM = {0x20: "lb", 0x21: "lh", 0x23: "lw", 0x24: "lbu", 0x25: "lhu", 0x27: "lwu", 0x28: "sb", 0x29: "sh", 0x2B: "sw",
+       0x37: "ld", 0x3F: "sd", 0x31: "lwc1", 0x39: "swc1", 0x1E: "lq", 0x1F: "sq"}
+BR = {0x04: "beq", 0x05: "bne", 0x06: "blez", 0x07: "bgtz", 0x14: "beql", 0x15: "bnel"}
 
 
-def _s16(v):
+def s16(v):
     return v - 0x10000 if v & 0x8000 else v
 
 
-def decode(w, addr):
-    op, rs, rt, rd, sa, fn = w >> 26, (w >> 21) & 31, (w >> 16) & 31, (w >> 11) & 31, (w >> 6) & 31, w & 63
+def dis(pc, w):
+    op, rs, rt, rd = w >> 26, (w >> 21) & 31, (w >> 16) & 31, (w >> 11) & 31
     imm = w & 0xFFFF
-    R = REG
     if w == 0:
-        return "nop", "", None
-    if op == 0:
-        m = _SPECIAL.get(fn)
-        if m is None:
-            return ".word", "0x%08x" % w, None
-        if m in ("sll", "srl", "sra"):
-            return m, "%s, %s, %d" % (R[rd], R[rt], sa), None
-        if m in ("sllv", "srlv", "srav"):
-            return m, "%s, %s, %s" % (R[rd], R[rt], R[rs]), None
-        if m == "jr":
-            return m, R[rs], None
-        if m == "jalr":
-            return m, (R[rs] if rd == 31 else "%s, %s" % (R[rd], R[rs])), None
-        if m in ("syscall", "break"):
-            return m, "0x%x" % ((w >> 6) & 0xFFFFF), None
-        if m in ("mfhi", "mflo"):
-            return m, R[rd], None
-        if m in ("mthi", "mtlo"):
-            return m, R[rs], None
-        if m in ("mult", "multu", "div", "divu"):
-            return m, "%s, %s" % (R[rs], R[rt]), None
-        if m == "addu" and rt == 0:
-            return "move", "%s, %s" % (R[rd], R[rs]), None
-        return m, "%s, %s, %s" % (R[rd], R[rs], R[rt]), None
-    if op == 1:
-        names = {0: "bltz", 1: "bgez", 16: "bltzal", 17: "bgezal"}
-        if rt not in names:
-            return ".word", "0x%08x" % w, None
-        t = (addr + 4 + (_s16(imm) << 2)) & 0xFFFFFFFF
-        return names[rt], "%s, 0x%x" % (R[rs], t), t
-    if op in (2, 3):
-        t = ((addr + 4) & 0xF0000000) | ((w & 0x03FFFFFF) << 2)
-        return ("j" if op == 2 else "jal"), "0x%x" % t, t
-    if op in (4, 5):
-        t = (addr + 4 + (_s16(imm) << 2)) & 0xFFFFFFFF
-        m = "beq" if op == 4 else "bne"
-        if op == 4 and rs == 0 and rt == 0:
-            return "b", "0x%x" % t, t
-        return m, "%s, %s, 0x%x" % (R[rs], R[rt], t), t
-    if op in (6, 7):
-        t = (addr + 4 + (_s16(imm) << 2)) & 0xFFFFFFFF
-        return ("blez" if op == 6 else "bgtz"), "%s, 0x%x" % (R[rs], t), t
-    if op in _IMM:
-        m = _IMM[op]
-        if m == "addiu" and rs == 0:
-            return "li", "%s, %d" % (R[rt], _s16(imm)), None
-        if m in ("andi", "ori", "xori"):
-            return m, "%s, %s, 0x%x" % (R[rt], R[rs], imm), None
-        return m, "%s, %s, %d" % (R[rt], R[rs], _s16(imm)), None
+        return "nop"
     if op == 0x0F:
-        return "lui", "%s, 0x%x" % (R[rt], imm), None
-    if op == 0x10:  # COP0
-        if rs == 0:
-            return "mfc0", "%s, $%d" % (R[rt], rd), None
-        if rs == 4:
-            return "mtc0", "%s, $%d" % (R[rt], rd), None
-        if rs == 16 and fn == 0x10:
-            return "rfe", "", None
-    if op == 0x12:  # COP2 moves (GTE: unused by sound code, decoded for completeness)
-        names = {0: "mfc2", 2: "cfc2", 4: "mtc2", 6: "ctc2"}
-        if rs in names:
-            return names[rs], "%s, $%d" % (R[rt], rd), None
-        return "cop2", "0x%x" % (w & 0x1FFFFFF), None
-    if op in _MEM:
-        return _MEM[op], "%s, %d(%s)" % (R[rt] if op < 0x30 else "$%d" % rt, _s16(imm), R[rs]), None
-    return ".word", "0x%08x" % w, None
+        return "lui %s, 0x%04x" % (R[rt], imm)
+    if op in (2, 3):
+        return "%s 0x%06x" % ("jal" if op == 3 else "j", (w & 0x3FFFFFF) << 2)
+    if op in IMM:
+        return "%s %s, %s, %d" % (IMM[op], R[rt], R[rs], s16(imm) if op in (8, 9, 0x19) else imm)
+    if op in MEM:
+        reg = ("f%d" % rt) if op in (0x31, 0x39) else R[rt]
+        return "%s %s, %d(%s)" % (MEM[op], reg, s16(imm), R[rs])
+    if op in BR:
+        return "%s %s, %s, 0x%06x" % (BR[op], R[rs], R[rt], pc + 4 + s16(imm) * 4)
+    if op == 0x01:
+        return "regimm rt=%d %s, 0x%06x" % (rt, R[rs], pc + 4 + s16(imm) * 4)
+    if op == 0:
+        fn = w & 63
+        names = {0x08: "jr", 0x09: "jalr", 0x21: "addu", 0x2D: "daddu", 0x25: "or", 0x24: "and", 0x23: "subu",
+                 0x2A: "slt", 0x2B: "sltu", 0x00: "sll", 0x02: "srl", 0x03: "sra", 0x0C: "syscall"}
+        if fn in (0x08, 0x09):
+            return "%s %s" % (names[fn], R[rs])
+        if fn in (0, 2, 3):
+            return "%s %s, %s, %d" % (names[fn], R[rd], R[rt], (w >> 6) & 31)
+        return "%s %s, %s, %s" % (names.get(fn, "special.%02x" % fn), R[rd], R[rs], R[rt])
+    if op == 0x11:
+        fmt = rs
+        if fmt == 0x04:
+            return "mtc1 %s, f%d" % (R[rt], rd)
+        if fmt == 0x00:
+            return "mfc1 %s, f%d" % (R[rt], rd)
+        if fmt == 0x08:
+            return "bc1%s 0x%06x" % ("t" if rt & 1 else "f", pc + 4 + s16(imm) * 4)
+        if fmt == 0x10:
+            fn, ft, fs, fd = w & 63, rt, rd, (w >> 6) & 31
+            names = {0: "add.s", 1: "sub.s", 2: "mul.s", 3: "div.s", 6: "mov.s", 0x24: "cvt.w.s", 0x28: "max.s",
+                     0x29: "min.s", 0x30: "c.f.s", 0x32: "c.eq.s", 0x34: "c.lt.s", 0x36: "c.le.s"}
+            return "%s f%d, f%d, f%d" % (names.get(fn, "cop1.s.%02x" % fn), fd, fs, ft)
+        if fmt == 0x14:
+            return "cvt.s.w f%d, f%d" % ((w >> 6) & 31, rd)
+    return ".word 0x%08x" % w
+
+
+def main():
+    if len(sys.argv) != 4:
+        sys.exit(__doc__)
+    elf, lo, hi = sys.argv[1], int(sys.argv[2], 16), int(sys.argv[3], 16)
+    words = xmatch.words_at(xmatch.load_code(elf), lo, hi)
+    if words is None:
+        sys.exit("range outside the code")
+    for i, w in enumerate(words):
+        pc = lo + i * 4
+        print("%08x: %08x  %s" % (pc, w, dis(pc, w)))
+
+
+if __name__ == "__main__":
+    main()

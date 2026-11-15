@@ -153,12 +153,48 @@ mission (hidden run, ThinLTO):
 - **VU1**: `game/lcs/vu1_uploads.txt` was empty, so every VU1 microprogram was interpreted. The 23 uploads LCS makes
   (`PS2X_LOG_MPG_SOURCES=1` through the intro and the first mission, walking and driving) are listed there now;
   `tools/vu1_recomp.py` compiles them (50 programs, 2970 pairs; `tools/recompile.py` runs it).
-- The game itself now runs as on the PS2: 30 game frames a second, its clock at 1000 ms a second. Above 30 needs the
-  VCS port's frame-rate work (`src/game/vcs_framerate.cpp` and the timing fixes) at LCS's addresses: next.
+- The game itself now runs as on the PS2: 30 game frames a second, its clock at 1000 ms a second.
+
+## Frame rate (2026-11-15)
+
+The VCS port's frame-rate module (`src/game/vcs_framerate.cpp`) runs on LCS with its addresses (`vcs::FrameLayout`,
+set in `lcs_overrides.cpp`): the settings (F2 -> Display: **Game timing**, **Frame rate cap**) work as in VCS -
+frame-rate independent at 60 by default, up to 240. LCS's addresses (VCS's in brackets):
+
+| What | LCS | How |
+|---|---|---|
+| `CTimer::Update` | 0x2B4CF8 (0x2F4960) | the only caller of the timer read |
+| kernel timer read | 0x368ED8 (0x451C00) | xmatch (unique) |
+| VBlank counting callback (`*(obj+4) += 1`) | 0x2B5528 (0x317AC8) | xmatch (2 identical leaves; the one the VBlank chain calls) |
+| the limiter | 0x2B5400 (0x3179A0); its `WaitVBlank` 0x2D9360, called at 0x2B54A8 (ra 0x2B54B0), object in `$s2` | xmatch, mipsdis |
+| CTimer's last ticks (64-bit) / frame ticks / time scale / step / step not clipped | 0x3D72D0 / 0x3DA0D8 / 0x3D9CE4 / 0x3D9B8C (`$gp`+0x2C9C, gp 0x3D6EF0) / 0x3D9D9C | decomp of Update |
+
+Differences from VCS, and the instruction patches they needed (`game/lcs/overrides.toml`, full recompile):
+
+- LCS clamps the step to 0.5 inline in Update (no call to hook): the constant (`lui $at, 0x3F00` at 0x2B4EC0) is
+  0.208 (1/240 s) instead. Checked: a forced 1/144 s step (`VCS_TIMESTEP=144`) gives 6.95 ms of game time a frame.
+- The dead `step < 0.5` branches above 100 fps, found by pattern (`lui 0x3F00` -> `c.lt.s` -> `mul.s` -> `lui 0x3F80`
+  -> `div.s`; the same search finds VCS's patched site): the ped's animation movement (0x1D5978, VCS 0x1F2158) - at
+  144 fps Toni walked a third of the distance and the intro left him 13 m from where it does at 30 - and the cutscene
+  objects' (0x2B75A8, VCS 0x31B19C). Both 0.001 as in VCS.
+- Measured at the first mission (W for 1 s and the stop; the car accelerating 3 s): 30 fps 4.3 m / 27.6 m, 60 fps
+  4.05 m / 26.9 m, 144 fps 3.5 m / 25.8 m (VCS saw sprinting 5-11% slower at 200-240 fps).
+- Not ported yet (each a VCS fix whose LCS twin is not found): the HUD's flashing on the frame counter (2D pass), the
+  wheels' rolling resistance per frame (VCS `CVehicle::ProcessWheel` + `vcs_physics_timing.cpp`: cars coast to a stop
+  faster at high frame rates - LCS has no function with VCS's constants together), cars / bikes in water, boats'
+  rudder, bike lean, moving platforms, the follow cameras' automatic turn (`max(step, 1.0)`), and the per-frame
+  effects (particles, mission meters, lightning...: `src/game/vcs_*_timing.cpp`). `tools/stepscan.py` lists LCS's
+  step comparisons to start from.
+
+Speed: uncapped 130 game frames a second at the first mission (hidden run); the GS stage is the limit (texture uploads
+and their hashing). `soleQueuedWriter` (runtime) walked every queued writer of each block for each texture lookup; from
+the newest, it stops at the first (GS stage time in `bindTexture` 19.5% -> 3.9%).
 
 ## Tools for LCS debugging
 
 - `tools/xglobal.py --vcs-lcs 0xADDR...`: a VCS global's LCS address, from the code around its uses (votes).
+- `tools/mipsdis.py ELF LO HI`: a small MIPS listing (no capstone). `tools/stepscan.py`: the time step's compares /
+  clamps. `tools/xpatch.py`: VCS's instruction patches looked for in LCS (fails where the code generation differs).
 - Control channel (`tools/gamectl.py`): `eethreads` (the EE kernel's threads: status, wait, pc / ra), `streamstate`
   (native streaming: reads, polls, waits, pending per channel), `padstate`, `peek` / `peekf`.
 - `PS2X_PAD_TRACE=1`: every change of the pad report; `LCS_CHECK_SECTORS=1`: the world sectors' entity lists checked.
@@ -186,3 +222,5 @@ mission (hidden run, ThinLTO):
   intermittent hang when the intro cutscene is skipped. `tools/xglobal.py`.
 - 2026-11-15: the skip hang fixed (step 5 above): the runtime's RPC / TLS pools moved out of LCS's streaming memory.
 - 2026-11-15: full speed (60 vblanks / s, was 23): ThinLTO, textures keyed by content, VU1 microcode compiled.
+- 2026-11-15: frame rate above 30: VCS's frame-rate module at LCS's addresses, the step floor and two dead-branch
+  patches; 60 / 144 checked against 30. Uncapped ~130 fps.

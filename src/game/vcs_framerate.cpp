@@ -39,22 +39,7 @@ namespace vcs
 {
     namespace
     {
-        constexpr uint32_t kCountVBlank = 0x00317AC8u; // (graphics object): +0x4 += 1, from a VBlank callback
-        constexpr uint32_t kTimerTicks = 0x00451C00u;  // kernel timer count (64-bit), read by CTimer::Update only
-        constexpr uint32_t kTimerEnsure = 0x002F47C0u; // CTimer: create the kernel timer if needed (2 calls in Update)
-        constexpr uint32_t kWaitVBlank = 0x003703B8u;
-        constexpr uint32_t kAfterMinClamp = 0x002F4C04u; // return address of Update's 2nd kTimerEnsure call
-        constexpr uint32_t kLimiterWait = 0x00317A50u;   // return address of the limiter's VBlank wait
-        constexpr uint32_t kTimerUpdate = 0x002F4960u;   // CTimer::Update
-        constexpr uint32_t kTwoDPass = 0x0021F348u;      // the frame's 2D pass: radar, HUD, text (game-internals.md 6f)
-        constexpr uint32_t kFrameCounter = 0x004CD124u;  // CTimer::m_FrameCounter
-        constexpr uint32_t kTimeMs = 0x004CD104u;        // CTimer::m_snTimeInMilliseconds
-
-        constexpr uint32_t kPrevTicks = 0x00488298u;  // CTimer: tick count of the last Update (64-bit)
-        constexpr uint32_t kFrameTicks = 0x004CD564u; // CTimer: this frame's ticks
-        constexpr uint32_t kTimeScale = 0x004CD168u;  // CTimer::ms_fTimeScale
-        constexpr uint32_t kTimeStep = 0x004CD110u;   // CTimer::ms_fTimeStep (1.0 = 1/50 s)
-        constexpr uint32_t kTimeStepNonClipped = 0x004CD300u;
+        FrameLayout g_fl; // the game's addresses (vcs_framerate.h; VCS's by default)
 
         constexpr uint64_t kBusHz = 147456000ull;     // the tick rate (CTimer: ms = ticks / 147456)
         constexpr double kEeCyclesPerNs = 0.294912;   // EE clock 294.912 MHz
@@ -152,7 +137,7 @@ namespace vcs
             static uint64_t base = 0, originNs = 0, calls = 0;
             if (!started)
             {
-                std::memcpy(&base, rdram + kPrevTicks, 8);
+                std::memcpy(&base, rdram + (g_fl.prevTicks & 0x01FFFFFFu), 8);
                 originNs = hostNs();
                 started = true;
             }
@@ -177,19 +162,19 @@ namespace vcs
         // (ticks * scale * 50/147456000) and put it back, floored at kMinStep. The maximum clamp follows the call.
         PS2_GUEST_CC void timerEnsure(uint8_t *rdram, R5900Context *ctx, PS2Runtime *runtime)
         {
-            if (independent() && GPR_U32(ctx, 31) == kAfterMinClamp && readF(rdram, kTimeStep) == 0.5f)
+            if (independent() && g_fl.afterMinClamp && GPR_U32(ctx, 31) == g_fl.afterMinClamp && readF(rdram, g_fl.timeStep) == 0.5f)
             {
-                const int32_t ticks = static_cast<int32_t>(read32(rdram, kFrameTicks));
+                const int32_t ticks = static_cast<int32_t>(read32(rdram, g_fl.frameTicks));
                 const float t = ticks >= 0 ? static_cast<float>(ticks) : static_cast<float>(static_cast<uint32_t>(ticks)); // Update's cvt / unsigned path
                 uint32_t kBits = 0x34B60B61u; // 50 / 147456000 as the game has it
                 float k;
                 std::memcpy(&k, &kBits, 4);
-                const float step = t * readF(rdram, kTimeScale) * k;
+                const float step = t * readF(rdram, g_fl.timeScale) * k;
                 if (step < 0.5f)
                 {
                     const float lifted = std::max(step, minStep());
-                    writeF(rdram, kTimeStep, lifted);
-                    writeF(rdram, kTimeStepNonClipped, lifted);
+                    writeF(rdram, g_fl.timeStep, lifted);
+                    writeF(rdram, g_fl.timeStepNonClipped, lifted);
                 }
             }
             g_origEnsure(rdram, ctx, runtime);
@@ -266,7 +251,7 @@ namespace vcs
             lastNs = now;
             lastCycle = scheduler.fastClock().cycle;
 
-            write32(rdram, GPR_U32(ctx, 18) + 4u, 2u); // the limiter's VBlank count ($s2 = the graphics object): done
+            write32(rdram, GPR_U32(ctx, static_cast<int>(g_fl.limiterObjectReg)) + 4u, 2u); // the limiter's VBlank count ($s2 = the graphics object): done
             ctx->pc = GPR_U32(ctx, 31);
         }
 
@@ -279,11 +264,11 @@ namespace vcs
             const bool fast = independent() ? effectiveFps() != 30.0 : g_cap.load(std::memory_order_relaxed) != 30;
             if (fast && !g_counterSwapped)
             {
-                g_realCounter = read32(rdram, kFrameCounter);
+                g_realCounter = read32(rdram, g_fl.frameCounter);
                 // only the low bits the flashing tests (& 2 / 4 / 8 ..) look at: the value stays within 63 of the real
                 // one for any other reader before the next Update (frame stamps compared with `counter - 1`)
-                const uint32_t at30 = static_cast<uint32_t>(static_cast<uint64_t>(read32(rdram, kTimeMs)) * 3u / 100u);
-                write32(rdram, kFrameCounter, (g_realCounter & ~0x3Fu) | (at30 & 0x3Fu));
+                const uint32_t at30 = static_cast<uint32_t>(static_cast<uint64_t>(read32(rdram, g_fl.timeMs)) * 3u / 100u);
+                write32(rdram, g_fl.frameCounter, (g_realCounter & ~0x3Fu) | (at30 & 0x3Fu));
                 g_counterSwapped = true;
             }
             g_origTwoD(rdram, ctx, runtime);
@@ -294,7 +279,7 @@ namespace vcs
         {
             if (g_counterSwapped)
             {
-                write32(rdram, kFrameCounter, g_realCounter);
+                write32(rdram, g_fl.frameCounter, g_realCounter);
                 g_counterSwapped = false;
             }
             g_origUpdate(rdram, ctx, runtime);
@@ -324,7 +309,7 @@ namespace vcs
                     }
                 }
             }
-            if (independent() && GPR_U32(ctx, 31) == kLimiterWait)
+            if (independent() && GPR_U32(ctx, 31) == g_fl.limiterWait)
             {
                 limiterWait(rdram, ctx, runtime);
                 return;
@@ -367,27 +352,31 @@ namespace vcs
     void setFrameRate60(bool on) { setFrameCap(on ? 60 : 30); }
     bool frameRate60() { return frameCap() != 30; }
 
-    void installFrameRateHooks(PS2Runtime &runtime)
+    void installFrameRateHooks(PS2Runtime &runtime) { installFrameRateHooks(runtime, FrameLayout{}); }
+
+    void installFrameRateHooks(PS2Runtime &runtime, const FrameLayout &layout)
     {
-        g_origTicks = runtime.lookupFunction(kTimerTicks);
-        g_origEnsure = runtime.lookupFunction(kTimerEnsure);
-        g_origWait = runtime.lookupFunction(kWaitVBlank);
-        g_origTwoD = runtime.lookupFunction(kTwoDPass);
-        g_origUpdate = runtime.lookupFunction(kTimerUpdate);
-        runtime.replaceFunction(kCountVBlank, &countVBlank);
+        g_fl = layout;
+        g_origTicks = runtime.lookupFunction(g_fl.timerTicks);
+        g_origEnsure = g_fl.timerEnsure ? runtime.lookupFunction(g_fl.timerEnsure) : nullptr;
+        g_origWait = runtime.lookupFunction(g_fl.waitVBlank);
+        g_origTwoD = g_fl.twoDPass ? runtime.lookupFunction(g_fl.twoDPass) : nullptr;
+        g_origUpdate = runtime.lookupFunction(g_fl.timerUpdate);
+        runtime.replaceFunction(g_fl.countVBlank, &countVBlank);
         if (g_origTwoD && g_origUpdate)
         {
-            runtime.replaceFunction(kTwoDPass, &twoDPass);
-            runtime.replaceFunction(kTimerUpdate, &timerUpdate);
+            runtime.replaceFunction(g_fl.twoDPass, &twoDPass);
+            runtime.replaceFunction(g_fl.timerUpdate, &timerUpdate);
         }
-        if (!g_origTicks || !g_origEnsure || !g_origWait)
+        if (!g_origTicks || (g_fl.timerEnsure && !g_origEnsure) || !g_origWait)
         {
             std::fprintf(stderr, "[framerate] CTimer / WaitVBlank not found: independent timing unavailable\n");
             g_timing.store(static_cast<int>(Timing::Original), std::memory_order_relaxed);
             return;
         }
-        runtime.replaceFunction(kTimerTicks, &timerTicks);
-        runtime.replaceFunction(kTimerEnsure, &timerEnsure);
-        runtime.replaceFunction(kWaitVBlank, &waitVBlank);
+        runtime.replaceFunction(g_fl.timerTicks, &timerTicks);
+        if (g_origEnsure)
+            runtime.replaceFunction(g_fl.timerEnsure, &timerEnsure);
+        runtime.replaceFunction(g_fl.waitVBlank, &waitVBlank);
     }
 }

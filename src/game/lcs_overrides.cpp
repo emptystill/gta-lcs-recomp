@@ -2,6 +2,7 @@
 // counterpart of vcs_overrides.cpp (which only applies to VCS's executable). Each hook here is an LCS address with
 // the VCS one it mirrors and how it was found (docs/LCS.md).
 #include "game_overrides.h"
+#include "game/vcs_framerate.h"
 #include "game/vcs_input.h"
 #include "game/vcs_stream.h"
 #include "runtime/ps2_disc_image.h"
@@ -439,6 +440,29 @@ namespace
             g_origSectorWalk = runtime.lookupFunction(0x0018AC98u);
             if (g_origSectorWalk && runtime.replaceFunction(0x0018AC98u, &checkSectorWalk))
                 std::fprintf(stderr, "[lcs] checking the world sectors' entity lists (LCS_CHECK_SECTORS)\n");
+        }
+        // Frame rate (game/vcs_framerate.h): 30 / 60 in original timing, up to 240 with independent timing. LCS's
+        // CTimer::Update (0x2B4CF8) clamps its step to 0.5 inline (no call to hook as in VCS): the constant is patched
+        // in game/lcs/overrides.toml instead (0x2B4EC0). docs/LCS.md "Frame rate".
+        {
+            vcs::FrameLayout frame;
+            frame.countVBlank = 0x002B5528u;  // *(obj + 4) += 1 from the VBlank callback (VCS 0x317AC8)
+            frame.timerTicks = 0x00368ED8u;   // xmatch: VCS 0x451C00, its only caller is CTimer::Update
+            frame.timerEnsure = 0;            // none: the clamp is inline
+            frame.afterMinClamp = 0;
+            frame.waitVBlank = 0x002D9360u;   // the limiter's VBlank wait (0x2B5400 = VCS 0x3179A0, xmatch)
+            frame.limiterWait = 0x002B54B0u;  // its return address (jal at 0x2B54A8)
+            frame.limiterObjectReg = 18u;     // $s2, as in VCS (0x2B5410: daddu s2, a0, zero)
+            frame.timerUpdate = 0x002B4CF8u;
+            frame.twoDPass = 0;               // the HUD's flashing: not found yet
+            frame.frameCounter = 0x003D9B6Cu;
+            frame.timeMs = 0x003D9B70u;
+            frame.prevTicks = 0x003D72D0u;    // 64-bit (Update: frame ticks = now - prev; prev = now)
+            frame.frameTicks = 0x003DA0D8u;
+            frame.timeScale = 0x003D9CE4u;
+            frame.timeStep = 0x003D9B8Cu;     // 1.0 = 1/50 s ($gp + 0x2C9C)
+            frame.timeStepNonClipped = 0x003D9D9Cu;
+            vcs::installFrameRateHooks(runtime, frame);
         }
         vcs::StreamLayout stream;
         stream.read = kStreamRead;

@@ -3778,6 +3778,7 @@ namespace
                 (dpsm == GS_PSM_T4 || dpsm == GS_PSM_T8 || dpsm == GS_PSM_CT32 || dpsm == GS_PSM_CT16) && !overlapsRenderTarget(first, last))
             {
                 m_uploadRaster = raster;
+                m_uploadHash = dataHash;
                 deferUpload(data, sizeBytes);
             }
             else
@@ -3952,8 +3953,10 @@ namespace
             bool done = false;            // written or dropped
             uint32_t takeStamp = 0;       // == m_wantGeneration: chosen by the current materializeBlocks
             uint32_t raster = 0;          // [gta-recomp] the game's raster it sends (step 3d), 0 unknown
+            uint64_t hash = 0;            // [gta-recomp] its data's hashBytes, 0 not taken (content keys)
         };
         uint32_t m_uploadRaster = 0; // [gta-recomp] UploadImage -> deferUpload
+        uint64_t m_uploadHash = 0;   // [gta-recomp] UploadImage -> deferUpload: the data's hash when it was taken
 
         static bool lazyUploadsEnabled()
         {
@@ -4000,13 +4003,16 @@ namespace
             const PendingUpload *source = nullptr;
             for (uint16_t b : blocks)
             {
+                // [gta-recomp] ids are appended in increasing order (deferUpload; the pruning keeps the order): the latest
+                // pending writer is the last pending id - from the back, stop at the first (it was every id each time,
+                // up to 64 per block: most of bindTexture's time in LCS, whose ~2,800 lookups a frame take this path)
                 const PendingUpload *latest = nullptr;
-                uint64_t latestId = 0;
-                for (uint64_t id : m_blockUploads[b])
-                    if (const PendingUpload *u = pendingById(id); u && (!latest || id > latestId))
+                const std::vector<uint64_t> &ids = m_blockUploads[b];
+                for (auto it = ids.rbegin(); it != ids.rend(); ++it)
+                    if (const PendingUpload *u = pendingById(*it))
                     {
                         latest = u;
-                        latestId = id;
+                        break;
                     }
                 if (!latest || (source && latest != source))
                     return nullptr;
@@ -4051,6 +4057,8 @@ namespace
             PendingUpload pu;
             pu.cmd = t;
             pu.raster = m_uploadRaster;
+            pu.hash = m_uploadHash;
+            m_uploadHash = 0;
             if (!m_uploadBufferPool.empty())
             {
                 pu.data = std::move(m_uploadBufferPool.back());
@@ -4975,7 +4983,7 @@ namespace
                     {
                         const GSTransferCommand &c = w->cmd;
                         contentKeyed = true;
-                        key = mix64(mix64(key ^ 0xB10C5ull, hashBytes(w->data.data(), static_cast<uint32_t>(w->data.size()))),
+                        key = mix64(mix64(key ^ 0xB10C5ull, w->hash ? w->hash : hashBytes(w->data.data(), static_cast<uint32_t>(w->data.size()))),
                                     uint64_t(c.bitbltbuf.dbp) | (uint64_t(c.bitbltbuf.dbw) << 16) | (uint64_t(c.bitbltbuf.dpsm) << 24) |
                                         (uint64_t(c.trxpos.dsax) << 32) | (uint64_t(c.trxpos.dsay) << 44));
                         key = mix64(key, uint64_t(c.trxreg.rrw) | (uint64_t(c.trxreg.rrh) << 16));
