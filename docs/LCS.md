@@ -81,6 +81,24 @@ What it took, in order (each in `src/game/lcs_overrides.cpp` with its reason, `L
 
 Open:
 
+- **Skipping the intro cutscene hangs about half the time** (2026-11-14; already so before the controls work: the
+  built-in pad mapping hangs too, 1 run in 3). Letting the cutscenes play reaches gameplay every time (4 of 4). Cross
+  pressed through the intro (at 40 / 50 / 60 s in a hidden run) -> black screen, 0 draws. What is known:
+  - the game thread is alive but `CTimer::m_FrameCounter` stops (~frame 950); interrupts (vblank 0x2D92B0, timer
+    0x368310) and the sound driver's per-frame RPCs carry on; the host thread mostly waits (the EE's cycle pacing);
+    guest samples are in 0x31E820 (a RenderWare linked-list walk, `for each in list until back at the head`, called
+    here by 0x104B48 with the no-op callback 0x1049B8 from 0x26CDF0): consistent with a list made circular without
+    its head, i.e. memory freed and reused while still linked;
+  - once (1 run in ~12) the same hang showed as `[ee] thread 1 -> dormant pc=0 ra=0x18acf4`: 0x18AC98 walks a world
+    sector's entity list (from 0x18A560 / 0x18A9D0 / 0x18AAD8, the sectors at 0x3D09F4) and calls vtable(+0x5C)+0x44
+    - an entity whose vtable has 0 there, again a freed entity still linked. `LCS_CHECK_SECTORS=1` checks those lists
+    before each walk (found nothing in 3 hung runs: that form is rarer);
+  - not the disc streaming (`streamstate`: nothing pending, no polls while hung), not the pad report (`PS2X_PAD_TRACE`:
+    byte-identical in both mappings), not a blocked thread (`eethreads`: thread 1 running; LCS has one EE thread).
+  Next: catch the freed block being reused while linked (`VCS_WATCH` / `LCS_HWBP` on the list node once the hang's
+  list is known; the cutscene's clumps / objects deleted by the skip, `CCutsceneMgr`-like), and check the recompiler's
+  delay-slot resume bug below is not involved.
+
 - **IOP modules loaded twice** at boot (`[IOP] module arena exhausted`, MCMAN falls back to HLE): LCS reboots the IOP
   with IOPRP300.IMG between two loads; the runtime's reboot does not unload the first set. Harmless so far.
 - **Recompiler**: resuming at the delay slot of an unconditional branch continues at the fall-through, not the target
@@ -88,7 +106,42 @@ Open:
 - Sound (emulated IOP: unchecked by ear), saves, missions beyond the first, frame rate, widescreen, controls: none of
   VCS's work applies until its addresses are found (`tools/xmatch.py` first, then by hand).
 
+## Addresses found (LCS <- VCS)
+
+How each was found: `xglobal` = `tools/xglobal.py --vcs-lcs` (the code around VCS's uses, found in LCS; the votes
+agree), `scan` = memory snapshots of a running game, `decomp` = `tools/eedecomp.py`.
+
+| What | LCS | VCS | How |
+|---|---|---|---|
+| `CWorld::Players[0].m_pPed` (a player is 100 words: Players[i] at +i*400) | 0x408E40 | 0x4E4910 | xglobal (2 sites), decomp |
+| `CWorld::PlayerInFocus` (byte) | 0x3D9BC8 | | decomp of 0x107278 |
+| `FindPlayerVehicle` | 0x107278 | | decomp: Players[focus] -> +0x538 ? +0x534 : 0 |
+| ped: position | +0x30 | +0x30 | decomp 0x107170 |
+| ped: `m_pMyVehicle` / in a vehicle (word) | +0x534 / +0x538 | +0x480 / state +0x8C4 == 0x37 | decomp 0x107278 |
+| `TheCamera` | 0x43BBF0 | 0x6F44D0 | xglobal (42 sites agree); +0x30 its position (0x107390) |
+| `CPad` 0 | 0x408C60 | 0x5147A8 | xglobal (4 sites) |
+| `CTimer::m_snTimeInMilliseconds` | 0x3D9B70 | 0x4CD104 | scan (+~1000 / s), 637 code uses (VCS 581) |
+| `CTimer::m_FrameCounter` | 0x3D9B6C | 0x4CD124 | scan (+1 a frame, 30 / s at the PS2's rate) |
+
+CTimer's code changed between the games (xglobal finds none of its sites); the rest of CTimer is around
+0x3D9B6C..0x3D9BC8 (much-used words at 0x3D9B8C, 0x3D9BA0, 0x3D9BC0: the time step / scale candidates, unchecked).
+
+## Controls (2026-11-14)
+
+The VCS port's bindings (`src/game/vcs_input.cpp`: keyboard / mouse / gamepad -> the DualShock 2 the game reads) are
+on for LCS. Its game addresses are a `vcs::input::GameLayout` (VCS's by default), LCS's set in `lcs_overrides.cpp`;
+what is 0 there is off. Working: every binding (the F2 menu's Keyboard & mouse and Gamepad pages), the gamepad with
+its options, the mouse as the right stick (once a game frame: the frame counter), the Driving keys (W / S / Space in a
+vehicle: the player's vehicle fields). Not yet: the mouse turning the on-foot camera itself and the scopes (TheCamera's
+CCam layout unchecked), the radio and weapon changes on the wheel (vehicle radio field; camera mode), free aim, the
+car camera, the pause menu's mouse (VCS-only modules, `GameLayout::extras` off).
+
 ## Tools for LCS debugging
+
+- `tools/xglobal.py --vcs-lcs 0xADDR...`: a VCS global's LCS address, from the code around its uses (votes).
+- Control channel (`tools/gamectl.py`): `eethreads` (the EE kernel's threads: status, wait, pc / ra), `streamstate`
+  (native streaming: reads, polls, waits, pending per channel), `padstate`, `peek` / `peekf`.
+- `PS2X_PAD_TRACE=1`: every change of the pad report; `LCS_CHECK_SECTORS=1`: the world sectors' entity lists checked.
 
 - `LCS_HWBP=<guest addr>[,<guest addr>]`: hardware write breakpoint on EE RAM in every host thread (Windows) - the
   writer's thread and RIP (`exe+0x...`; vcs.exe has no symbols for the runtime, read the code with llvm-objdump).
@@ -104,3 +157,6 @@ Open:
   stream protocol, 0x20CE98).
 - 2026-11-14: independent identity (docs/DECISIONS.md, phase 1): `lcs.exe`, `lcs.ini`, `LCSLauncher`, data in
   `LCSRecomp` (the launcher's own backups had still pointed at `VCSRecomp`), VCS docs to `docs/vcs-reference/`.
+- 2026-11-14: controls - the bindings on with LCS's addresses (`vcs::input::GameLayout`): keys, gamepad, mouse
+  (as the right stick), the Driving keys (checked: W walks; F enters the car; W accelerates, A steers). Found the
+  intermittent hang when the intro cutscene is skipped (above). `tools/xglobal.py`.

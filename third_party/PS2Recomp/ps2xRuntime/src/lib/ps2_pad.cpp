@@ -3,6 +3,8 @@
 #include "ps2_host_backend.h"
 #include "runtime/ps2_control.h"
 #include <cstring>
+#include <cstdio>
+#include <cstdlib>
 
 namespace
 {
@@ -57,12 +59,30 @@ bool PSPadBackend::readState(int /*port*/, int /*slot*/, uint8_t *data, size_t s
     std::memset(data, 0, 32);
     data[0] = 0x01;
     data[1] = kPadAnalogMarker;
+    // [gta-recomp] PS2X_PAD_TRACE=1: every change of the report the game gets (port, slot, size, bytes 0..7), stderr
+    static const bool trace = [] {
+        const char *e = std::getenv("PS2X_PAD_TRACE");
+        return e && e[0] == '1';
+    }();
+    auto traced = [&]() {
+        if (trace)
+        {
+            static uint8_t last[8] = {};
+            if (std::memcmp(last, data, 8) != 0)
+            {
+                std::memcpy(last, data, 8);
+                std::fprintf(stderr, "[pad] size=%zu %02x %02x | %02x%02x | %02x %02x %02x %02x\n", size, data[0], data[1],
+                             data[3], data[2], data[4], data[5], data[6], data[7]);
+            }
+        }
+        return true;
+    };
     if (g_reader) // [gta-recomp] the player's bindings (setReader)
     {
         data[2] = data[3] = 0xFF;
         data[4] = data[5] = data[6] = data[7] = 0x80;
         if (g_reader(data))
-            return true;
+            return traced();
     }
 
     uint16_t btns = 0xFFFFu;
@@ -152,5 +172,5 @@ bool PSPadBackend::readState(int /*port*/, int /*slot*/, uint8_t *data, size_t s
     data[7] = toByte(ly);
     data[2] = static_cast<uint8_t>(btns & 0xFF);
     data[3] = static_cast<uint8_t>(btns >> 8);
-    return true;
+    return traced();
 }

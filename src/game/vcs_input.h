@@ -9,6 +9,32 @@ namespace vcs::input
     // The settings of the "Keyboard & mouse" and "Gamepad" pages (settings/settings.h), the menu keys included.
     void registerSettings();
 
+    // Where the pad reads look in the game (the defaults: VCS, docs/vcs-reference/game-internals.md 12, 12b). A game
+    // sets its own before install(); an address left 0 switches off what needs it: no player -> no Driving keys, no
+    // mouse camera on foot (the mouse is the right stick then), no radio on the wheel; no camera -> no scope / foot
+    // camera; no frame counter -> the mouse is taken once per read. `extras`: the VCS-only modules that work with the
+    // input (free aim, the car camera, the pause menu's mouse) are installed.
+    struct GameLayout
+    {
+        // the player (CWorld::Players[0].m_pPed) and its fields (pedStateDriving 0: driving is pedState != 0, a flag)
+        unsigned playerPed = 0x004E4910u, pedVehicle = 0x480u, pedState = 0x8C4u, pedStateDriving = 0x37u;
+        unsigned pedPos = 0x30u, pedAttachedTo = 0x858u, vehicleRadio = 0x2BAu, radioPositions = 10u;
+        // TheCamera: the active CCam's index, the CCam array and its stride, "looks at the player" (0 under a script
+        // camera); a CCam's mode, pitch / heading, FOV, its source points and its target point
+        unsigned theCamera = 0x006F44D0u, camActive = 0x50u, cams = 0x70u, camStride = 0x270u, looksAtPlayer = 0x888u;
+        unsigned camAlpha = 0x78u, camBeta = 0x7Cu, camFov = 0x134u, camSource = 0x220u, camSource2 = 0x230u,
+                 camTarget = 0x1A0u;
+        unsigned camModeFollowPed = 4u;
+        unsigned scopeZoom = 0x00487E2Cu, camStickLocked = 0x00488EB4u, camTable = 0x00487B30u,
+                 camIndoors = 0x00489F7Cu, camWallSkip = 0x00487E58u;
+        // CPad 0 and its DisablePlayerControls (s16)
+        unsigned pad0 = 0x005147A8u, padDisabled = 0x96u;
+        // CTimer: m_FrameCounter, m_UserPause / m_CodePause (bytes), m_snTimeInMilliseconds
+        unsigned frameCounter = 0x004CD124u, userPause = 0x004CD2ACu, codePause = 0x004CD11Cu, gameClock = 0x004CD104u;
+        bool extras = true;
+    };
+    void setGameLayout(const GameLayout &layout);
+
     // Feeds the game's pad reads from the bindings (PSPadBackend::setReader) and its motor levels to the gamepad's
     // vibration (setActuatorSink). VCS_INPUT_MAP=0 keeps the runtime's built-in fixed mapping (the reference). The pad
     // reads look at the game's memory: driving or on foot, and the on-foot camera the mouse turns.

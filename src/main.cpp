@@ -863,9 +863,9 @@ int main(int argc, char *argv[])
             setEnv("PS2X_GS", "hw");
         // Liberty City Stories: the VCS port's game code (src/game) knows VCS's addresses only. Its hooks are
         // registered for VCS's executable alone (PS2_REGISTER_GAME_OVERRIDE); the parts main() installs itself are
-        // kept off the game's memory here until each has its LCS addresses: the runtime's own pad mapping instead of
-        // the bindings (which also turn the camera / aim / radio in VCS's memory), the volume setters left alone.
-        for (const char *off : {"VCS_INPUT_MAP", "VCS_GAME_VOLUME"})
+        // kept off the game's memory here until each has its LCS addresses: the volume setters left alone. (The
+        // bindings are on: game/lcs_overrides.cpp gives them LCS's addresses, vcs::input::GameLayout.)
+        for (const char *off : {"VCS_GAME_VOLUME"})
             if (const char *v = std::getenv(off); !v || !*v)
                 setEnv(off, "0");
         registerSettings();

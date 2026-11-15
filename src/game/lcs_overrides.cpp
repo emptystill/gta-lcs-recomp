@@ -2,6 +2,7 @@
 // counterpart of vcs_overrides.cpp (which only applies to VCS's executable). Each hook here is an LCS address with
 // the VCS one it mirrors and how it was found (docs/LCS.md).
 #include "game_overrides.h"
+#include "game/vcs_input.h"
 #include "game/vcs_stream.h"
 #include "ps2_runtime.h"
 #include "ps2_runtime_macros.h"
@@ -75,6 +76,42 @@ namespace
         std::fprintf(stderr, "[alloc] large heap=0x%x size=0x%x ra=0x%x root=0x%x used=0x%x\n", GPR_U32(ctx, 4),
                      GPR_U32(ctx, 5), GPR_U32(ctx, 31), root, used);
         g_origLarge(rdram, ctx, runtime);
+    }
+
+    // LCS_CHECK_SECTORS=1: before each walk of a world sector's entity list (0x18AC98: for each entity not flagged off,
+    // the virtual at vtable(+0x5C)+0x44), the list checked from the host: an entity whose vtable or that method is not
+    // code is logged (the freeze after a skipped cutscene: thread 1 called address 0 from 0x18ACEC).
+    PS2Runtime::RecompiledFunction g_origSectorWalk = nullptr;
+    uint32_t ld32(const uint8_t *rdram, uint32_t a)
+    {
+        uint32_t v;
+        std::memcpy(&v, rdram + (a & 0x01FFFFFCu), 4);
+        return v;
+    }
+    PS2_GUEST_CC void checkSectorWalk(uint8_t *rdram, R5900Context *ctx, PS2Runtime *runtime)
+    {
+        const uint32_t list = GPR_U32(ctx, 4);
+        uint32_t node = ld32(rdram, list);
+        for (int n = 0; node && n < 100000; ++n)
+        {
+            const uint32_t entity = ld32(rdram, node), next = ld32(rdram, node + 8);
+            const uint32_t vtbl = entity ? ld32(rdram, entity + 0x5C) : 0;
+            const uint32_t method = vtbl >= 0x100000u && vtbl < 0x2000000u ? ld32(rdram, vtbl + 0x44) : 0;
+            if (!entity || method < 0x100000u || method >= 0x400000u)
+            {
+                static int logged = 0;
+                if (logged++ < 40)
+                {
+                    std::fprintf(stderr, "[lcs] sector list 0x%x (ra 0x%x): node 0x%x entity 0x%x vtable 0x%x method 0x%x next 0x%x"
+                                         " | entity words:", list, GPR_U32(ctx, 31), node, entity, vtbl, method, next);
+                    for (uint32_t w = 0; w < 0x70 && entity; w += 4)
+                        std::fprintf(stderr, " %08x", ld32(rdram, entity + w));
+                    std::fprintf(stderr, "\n");
+                }
+            }
+            node = next;
+        }
+        g_origSectorWalk(rdram, ctx, runtime);
     }
 
     PS2_GUEST_CC void traceOom(uint8_t *rdram, R5900Context *ctx, PS2Runtime *runtime)
@@ -231,6 +268,32 @@ namespace
                 runtime.replaceFunction(0x00150530u, &traceLarge);
             if (g_origOom)
                 runtime.replaceFunction(0x001F3318u, &traceOom);
+        }
+        // The player's controls (game/vcs_input.h): the bindings, the gamepad and the mouse feed the pad, with LCS's
+        // addresses for what the reads look at; what is not known yet stays 0 (off: docs/LCS.md "Controls").
+        {
+            vcs::input::GameLayout input;
+            input.playerPed = 0x00408E40u; // CWorld::Players[0].m_pPed (VCS 0x4E4910; tools/xglobal.py)
+            // FindPlayerVehicle 0x107278: m_pMyVehicle +0x534, m_bInVehicle +0x538 (a word; VCS +0x480 and the state
+            // +0x8C4 == 0x37); the position at +0x30 as in VCS (0x107170)
+            input.pedVehicle = 0x534u;
+            input.pedState = 0x538u;
+            input.pedStateDriving = 0;
+            input.vehicleRadio = 0;
+            input.theCamera = 0;           // 0x43BBF0 (VCS 0x6F44D0; xglobal); its CCam layout not checked yet
+            input.scopeZoom = input.camStickLocked = input.camTable = input.camIndoors = input.camWallSkip = 0;
+            input.pad0 = 0;                // 0x408C60 (VCS 0x5147A8; xglobal); DisablePlayerControls' offset unchecked
+            input.frameCounter = 0x003D9B6Cu; // CTimer::m_FrameCounter (memory scan: +1 a frame, 30 a second)
+            input.gameClock = 0x003D9B70u;    // CTimer::m_snTimeInMilliseconds (637 code references; VCS 581)
+            input.userPause = input.codePause = 0;
+            input.extras = false;
+            vcs::input::setGameLayout(input);
+        }
+        if (envOn("LCS_CHECK_SECTORS"))
+        {
+            g_origSectorWalk = runtime.lookupFunction(0x0018AC98u);
+            if (g_origSectorWalk && runtime.replaceFunction(0x0018AC98u, &checkSectorWalk))
+                std::fprintf(stderr, "[lcs] checking the world sectors' entity lists (LCS_CHECK_SECTORS)\n");
         }
         vcs::StreamLayout stream;
         stream.read = kStreamRead;

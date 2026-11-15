@@ -3,6 +3,7 @@
 
 #include "ps2_runtime.h"
 #include "runtime/ps2_control.h"
+#include "runtime/ee_scheduler.h"
 #include "runtime/gs/gs_hw.h" // gsdraws
 
 #include <algorithm>
@@ -660,6 +661,24 @@ namespace vcs::rig
     {
         g_rdram = runtime.memory().getRDRAM();
         registerMemoryCommands();
+        // eethreads -> ok <the EE kernel's threads (id status/wait/waitId pc ra prio) and semaphores (id count/max
+        // waiters)>, taken from the scheduler's snapshot on the main thread: works while the game thread is stuck
+        // (status: 0 running 1 ready 2 waiting 3 waiting+suspended 4 suspended 5 dormant; wait: 1 sleep 2 sema 3 event
+        // flag 4 vsync 5 external 6 mpeg)
+        ps2control::addCommand("eethreads", [&runtime](const std::string &, ps2control::Reply reply) {
+            const EeKernelSnapshot s = runtime.eeScheduler().snapshot();
+            std::string out = fmt("ok running=%d", s.runningThreadId);
+            for (const EeThreadSnapshot &t : s.threads)
+                out += fmt(" | t%d st%d/w%d/%d pc=%08x ra=%08x pri=%d", t.id, static_cast<int>(t.status),
+                           static_cast<int>(t.waitReason), t.waitId, t.pc, t.ra, t.currentPriority);
+            for (const EeSemaphoreSnapshot &m : s.semaphores)
+                if (m.waiters)
+                    out += fmt(" | sema%d %d/%d waiters=%u", m.id, m.count, m.maxCount, m.waiters);
+            for (const EeEventFlagSnapshot &e : s.eventFlags)
+                if (e.waiters)
+                    out += fmt(" | ef%d bits=%x waiters=%u", e.id, e.bits, e.waiters);
+            reply(out);
+        });
         registerScriptCommands();
         registerCruiseCommands();
         // watch <lo>,<hi>[,<value>[,<mask>]] -> ok: arm the guest write watch now (debug/watch.cpp; VCS_WATCH at start)

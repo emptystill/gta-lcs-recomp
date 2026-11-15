@@ -14,6 +14,9 @@
 #include "ps2_runtime_macros.h"
 #include "runtime/ps2_disc_image.h"
 #include "runtime/ps2_iop_native.h"
+#include "runtime/ps2_control.h"
+
+#include <string>
 
 #include <algorithm>
 #include <atomic>
@@ -107,6 +110,10 @@ namespace vcs
                          r.nanoseconds.exchange(0) / 1e6);
         }
 
+        // "streamstate" (control channel): calls so far and what the last poll asked about
+        std::atomic<uint64_t> g_polls{0}, g_pollsBusy{0}, g_waits{0}, g_heads{0}, g_readCalls{0};
+        std::atomic<uint32_t> g_lastPollChannel{0}, g_lastPollRa{0};
+
         // FUN_00221818(channel, dest, lsn, size)
         PS2_GUEST_CC void streamRead(uint8_t *rdram, R5900Context *ctx, PS2Runtime *)
         {
@@ -129,6 +136,7 @@ namespace vcs
                 r.pending[request.channel % kChannels].fetch_add(1, std::memory_order_relaxed);
                 r.queue.push_back(request);
             }
+            g_readCalls.fetch_add(1, std::memory_order_relaxed);
             r.head.store(request.lsn + (request.bytes + 2047u) / 2048u, std::memory_order_relaxed);
             r.cv.notify_one();
             report();
@@ -140,6 +148,7 @@ namespace vcs
         PS2_GUEST_CC void streamWait(uint8_t *, R5900Context *ctx, PS2Runtime *)
         {
             Reader &r = reader();
+            g_waits.fetch_add(1, std::memory_order_relaxed);
             std::atomic<uint32_t> &pending = r.pending[GPR_U32(ctx, 4) % kChannels];
             if (pending.load(std::memory_order_acquire) != 0u)
             {
@@ -153,6 +162,7 @@ namespace vcs
         // fn 4 (LCS): the drive head's LSN (the streamer picks the nearest copy of a file by it)
         PS2_GUEST_CC void streamHead(uint8_t *, R5900Context *ctx, PS2Runtime *)
         {
+            g_heads.fetch_add(1, std::memory_order_relaxed);
             SET_GPR_U64(ctx, 2, reader().head.load(std::memory_order_relaxed));
             ctx->pc = GPR_U32(ctx, 31);
         }
@@ -170,6 +180,11 @@ namespace vcs
                 busy = !ps2x::waitFor(r.doneCv, lock, std::chrono::milliseconds(20),
                                           [&] { return pending.load(std::memory_order_acquire) == 0u; });
             }
+            g_polls.fetch_add(1, std::memory_order_relaxed);
+            if (busy)
+                g_pollsBusy.fetch_add(1, std::memory_order_relaxed);
+            g_lastPollChannel.store(GPR_U32(ctx, 4), std::memory_order_relaxed);
+            g_lastPollRa.store(GPR_U32(ctx, 31), std::memory_order_relaxed);
             SET_GPR_U64(ctx, 2, busy ? kBusy : 0u);
             ctx->pc = GPR_U32(ctx, 31);
         }
@@ -191,6 +206,25 @@ namespace vcs
             return false;
         }
         reader().readAccepted = layout.readAccepted;
+        // streamstate -> ok reads= polls= busy= waits= heads= pending=<per channel> queue= last poll ch / ra
+        ps2control::addCommand("streamstate", [](const std::string &, ps2control::Reply reply) {
+            Reader &r = reader();
+            std::string pend;
+            size_t queued;
+            {
+                std::lock_guard<std::mutex> lock(r.mutex);
+                queued = r.queue.size();
+            }
+            for (uint32_t c = 0; c < kChannels; ++c)
+                pend += std::to_string(r.pending[c].load()) + (c + 1 < kChannels ? "," : "");
+            char text[256];
+            std::snprintf(text, sizeof(text), "ok reads=%llu polls=%llu busy=%llu waits=%llu heads=%llu pending=%s queue=%zu lastpoll=ch%u ra=0x%x",
+                          static_cast<unsigned long long>(g_readCalls.load()), static_cast<unsigned long long>(g_polls.load()),
+                          static_cast<unsigned long long>(g_pollsBusy.load()), static_cast<unsigned long long>(g_waits.load()),
+                          static_cast<unsigned long long>(g_heads.load()), pend.c_str(), queued,
+                          g_lastPollChannel.load(), g_lastPollRa.load());
+            reply(text);
+        });
         runtime.replaceFunction(layout.read, &streamRead);
         runtime.replaceFunction(layout.poll, &streamPoll);
         runtime.replaceFunction(layout.fn5, &streamFn5);

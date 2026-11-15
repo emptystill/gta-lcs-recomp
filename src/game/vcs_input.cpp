@@ -101,32 +101,22 @@ namespace vcs::input
         constexpr size_t kControlCount = sizeof(kControls) / sizeof(kControls[0]);
 
         // ---- The game (game-internals.md 12, 12b) --------------------------------------------------------------------
+        // The game's addresses (GameLayout in vcs_input.h; VCS's by default, docs/vcs-reference/game-internals.md 12):
+        // the player (CWorld::Players[0].m_pPed; +pedVehicle the vehicle it is in, 0 on foot; +pedState, pedStateDriving
+        // driving), the vehicle's radio station (u8: 0..8 the stations, 9 off; L1 steps through radioPositions and
+        // round, game-internals.md 12a), TheCamera and its CCams (+0 mode, +camAlpha pitch, +camBeta heading, +camFov),
+        // the zoom a scope eases toward, CPad 0 (+padDisabled DisablePlayerControls), the follow camera's "ignore the
+        // stick" flag and tuning tables (+0x34 / +0x38 the pitch limits up / down; +0x3C the table indoors, when
+        // camIndoors is neither 0 nor 4: FUN_0029dab0), CTimer.
         constexpr uint32_t kRamMask = 0x01FFFFFFu;
-        constexpr uint32_t kPlayerPed = 0x004E4910u;   // CWorld::Players[0].m_pPed
-        constexpr uint32_t kPedVehicle = 0x480u;       // the vehicle it is in (0 on foot)
-        constexpr uint32_t kPedState = 0x8C4u;         // 0x37 driving
-        constexpr uint32_t kVehicleRadio = 0x2BAu;     // the vehicle's radio station (u8): 0..8 the stations, 9 off
-        constexpr uint32_t kRadioPositions = 10u;      // L1 steps through them and round (game-internals.md 12a)
+        GameLayout g_layout;
         constexpr int kRadioRetuneFrames = 40;         // the game adds its L1 presses to the station 30 frames after the
                                                        // last one; by now it has
-        constexpr uint32_t kTheCamera = 0x006F44D0u;
-        constexpr uint32_t kLooksAtPlayer = kTheCamera + 0x888u; // 0 under a script camera
-        constexpr uint32_t kCam = kTheCamera + 0x70u;  // the active CCam: +0 mode, +0x78 alpha (pitch), +0x7C beta (heading),
-                                                       // +0x134 FOV
-        constexpr uint32_t kCamModeFollowPed = 4;      // on foot (11 locked on, 18 in a vehicle)
+        uint32_t camBase() { return g_layout.theCamera + g_layout.cams; } // the first CCam (VCS: the follow camera's)
         // the first-person weapon cameras (FUN_00297cb8, game-internals.md 12c): sniper 7, rocket launcher 8, M16 34,
         // camera 46, binoculars 47, 45; they turn by +0x78 / +0x7C as the follow camera, and 7 / 46 / 47 zoom (+0x134)
         bool scopeMode(uint32_t mode) { return mode == 7 || mode == 8 || mode == 34 || (mode >= 45 && mode <= 47); }
         bool zoomMode(uint32_t mode) { return mode == 7 || mode == 46 || mode == 47; }
-        constexpr uint32_t kScopeZoom = 0x00487E2Cu; // the FOV a zooming scope eases toward
-        constexpr uint32_t kPad0 = 0x005147A8u;        // CPad 0: +0x96 DisablePlayerControls (s16)
-        constexpr uint32_t kCamStickLocked = 0x00488EB4u; // the follow camera ignores the stick's turn while set
-        constexpr uint32_t kCamTable = 0x00487B30u;    // the follow camera's tuning, outdoors (+0x3C indoors): +0x34 / +0x38
-                                                       // the pitch limits up / down
-        constexpr uint32_t kCamIndoors = 0x00489F7Cu;  // the table indoors when neither 0 nor 4 (FUN_0029dab0)
-        constexpr uint32_t kFrameCounter = 0x004CD124u; // CTimer::m_FrameCounter
-        constexpr uint32_t kUserPause = 0x004CD2ACu;   // CTimer::m_UserPause (the pause menu), m_CodePause: bytes
-        constexpr uint32_t kCodePause = 0x004CD11Cu;
         uint8_t *g_rdram = nullptr;
 
         uint32_t rd32(uint32_t a)
@@ -145,8 +135,7 @@ namespace vcs::input
         void wr32(uint32_t a, uint32_t v) { std::memcpy(g_rdram + (a & kRamMask), &v, 4); }
         // Walls (game-internals.md 12b): the on-foot camera's update pulls the camera in toward the player at a wall
         // only for a turned stick, or while this is > 0 (it sets it to 2 after a pull-in and counts it down).
-        constexpr uint32_t kCamWallSkip = 0x00487E58u;
-        constexpr uint32_t kGameClock = 0x004CD104u; // CTimer::m_snTimeInMilliseconds
+        // (g_layout.camWallSkip)
         constexpr uint32_t kWallTailMs = 300;        // ... kept so this long after the mouse's last turn
 
         struct GameState
@@ -161,14 +150,21 @@ namespace vcs::input
             GameState s;
             if (!g_rdram)
                 return s;
-            const uint32_t ped = rd32(kPlayerPed);
-            s.driving = ped && rd32(ped + kPedVehicle) && rd32(ped + kPedState) == 0x37;
-            int16_t disabled;
-            std::memcpy(&disabled, g_rdram + kPad0 + 0x96, 2);
-            const bool paused = g_rdram[kUserPause] || g_rdram[kCodePause];
+            const GameLayout &L = g_layout;
+            const bool paused = (L.userPause && g_rdram[L.userPause & kRamMask]) || (L.codePause && g_rdram[L.codePause & kRamMask]);
             s.paused = paused;
-            s.footCamera = ped && !s.driving && !paused && rd32(kCam) == kCamModeFollowPed && rd32(kLooksAtPlayer) == 1 &&
-                           disabled == 0 && rd32(kCamStickLocked) == 0;
+            const uint32_t ped = L.playerPed ? rd32(L.playerPed) : 0;
+            if (!ped || !(ped >= 0x100000u && ped < 0x2000000u))
+                return s;
+            s.driving = L.pedVehicle && L.pedState && rd32(ped + L.pedVehicle) &&
+                        (L.pedStateDriving ? rd32(ped + L.pedState) == L.pedStateDriving : rd32(ped + L.pedState) != 0);
+            int16_t disabled = 0;
+            if (L.pad0)
+                std::memcpy(&disabled, g_rdram + ((L.pad0 + L.padDisabled) & kRamMask), 2);
+            // the mouse turns the on-foot camera itself only where every address it needs is known
+            s.footCamera = L.theCamera && L.camStickLocked && L.camTable && L.camIndoors && !s.driving && !paused &&
+                           rd32(camBase()) == L.camModeFollowPed && rd32(L.theCamera + L.looksAtPlayer) == 1 &&
+                           disabled == 0 && rd32(L.camStickLocked) == 0;
             return s;
         }
 
@@ -451,7 +447,7 @@ namespace vcs::input
             // times a frame; the frame's other reads repeat the deflection)
             const auto now = ps2x::hostNow();
             const float dt = g_mouse.last.time_since_epoch().count() ? std::chrono::duration<float>(now - g_mouse.last).count() : 0.0f;
-            const uint32_t frame = g_rdram ? rd32(kFrameCounter) : 0;
+            const uint32_t frame = g_rdram && g_layout.frameCounter ? rd32(g_layout.frameCounter) : g_mouse.frame + 1;
             if (freeCamera)
                 g_mouse = {};
             else if (frame != g_mouse.frame || dt >= 0.25f || dt == 0.0f)
@@ -475,16 +471,17 @@ namespace vcs::input
                 // back (y > 0)
                 const float up = -dy * (m.mouseInvertY ? -1.0f : 1.0f);
                 g_mouse.x = g_mouse.y = 0.0f;
-                const uint32_t cam = kTheCamera + 0x70u + g_rdram[kTheCamera + 0x50u] * 0x270u; // the active CCam
-                const uint32_t mode = rd32(cam) & 0xFFFFu;
-                float fov = rdf(cam + 0x134);
+                const GameLayout &L = g_layout;
+                const uint32_t cam = L.theCamera ? camBase() + g_rdram[(L.theCamera + L.camActive) & kRamMask] * L.camStride : 0; // the active CCam
+                const uint32_t mode = cam ? rd32(cam) & 0xFFFFu : 0xFFFFu;
+                float fov = cam ? rdf(cam + L.camFov) : 70.0f;
                 fov = fov >= 1.0f && fov <= 130.0f ? fov : 70.0f;
 
                 // free aim (game/vcs_aim.h): the target button with a gun - R1 (its keys or mouse button) when Keyboard >
                 // Free aim is on, the gamepad's R1 when Gamepad > Free aim is; with the keyboard / mouse also a shot
                 // from the hip (Circle), held a moment after it so a burst stays one aim
                 g_mouse.aim = {};
-                if (m.freeAimMouse || m.freeAimPad || aim::aiming())
+                if (L.extras && (m.freeAimMouse || m.freeAimPad || aim::aiming()))
                 {
                     // the hold is for shots from the hip only: letting go of the target button ends the aim at once
                     if (keyR1 || g_mouse.aimHeld)
@@ -514,7 +511,7 @@ namespace vcs::input
                 {
                     // free aim turns the camera itself (aim::update)
                 }
-                else if (on && scopeMode(mode) && !game.driving)
+                else if (on && cam && L.extras && scopeMode(mode) && !game.driving)
                 {
                     // the scopes and first-person weapon views turn by the mouse itself, as the follow camera's heading:
                     // their update adds the stick's speed to +0x78 / +0x7C and keeps them in its limits
@@ -523,13 +520,13 @@ namespace vcs::input
                     // limit: wrapped into 0..2 pi, a turn right of the middle became the limit on the left
                     const float look = m.mouseLook * fov / 70.0f;
                     const float turn = -dx * look;
-                    float beta = std::fmod(rdf(cam + 0x7C) + turn, 6.2831855f);
-                    if (rd32(rd32(kPlayerPed) + 0x858))
-                        beta = std::remainder(rdf(cam + 0x7C) + turn, 6.2831855f);
+                    float beta = std::fmod(rdf(cam + L.camBeta) + turn, 6.2831855f);
+                    if (rd32(rd32(L.playerPed) + L.pedAttachedTo))
+                        beta = std::remainder(rdf(cam + L.camBeta) + turn, 6.2831855f);
                     else if (beta < 0.0f)
                         beta += 6.2831855f;
-                    wrf(cam + 0x7C, beta);
-                    wrf(cam + 0x78, rdf(cam + 0x78) + up * look);
+                    wrf(cam + L.camBeta, beta);
+                    wrf(cam + L.camAlpha, rdf(cam + L.camAlpha) + up * look);
                 }
                 else if (on && game.footCamera)
                 {
@@ -539,11 +536,11 @@ namespace vcs::input
                     const float turn = -dx * m.mouseLook;
                     if (turn != 0.0f)
                     {
-                        float beta = std::fmod(rdf(kCam + 0x7C) + turn, 6.2831855f);
-                        wrf(kCam + 0x7C, beta < 0.0f ? beta + 6.2831855f : beta);
-                        const uint32_t ped = rd32(kPlayerPed);
-                        const float px = rdf(ped + 0x30), py = rdf(ped + 0x34), c = std::cos(turn), s = std::sin(turn);
-                        for (uint32_t at : {kCam + 0x220u, kCam + 0x230u})
+                        float beta = std::fmod(rdf(camBase() + L.camBeta) + turn, 6.2831855f);
+                        wrf(camBase() + L.camBeta, beta < 0.0f ? beta + 6.2831855f : beta);
+                        const uint32_t ped = rd32(L.playerPed);
+                        const float px = rdf(ped + L.pedPos), py = rdf(ped + L.pedPos + 4), c = std::cos(turn), s = std::sin(turn);
+                        for (uint32_t at : {camBase() + L.camSource, camBase() + L.camSource2})
                         {
                             const float ox = rdf(at) - px, oy = rdf(at + 4) - py;
                             wrf(at, px + ox * c - oy * s);
@@ -554,15 +551,16 @@ namespace vcs::input
                     // from the target point (+0x1A0, which it placed them around), so those turn up / down about it by
                     // the same angle. Through the stick it was capped at the stick's top speed (0.03 a step) and then
                     // eased (20% of the gap a step), slower than the heading. Kept in the game's limits.
-                    const uint32_t indoors = rd32(kCamIndoors);
-                    const uint32_t table = kCamTable + (indoors != 0 && indoors != 4 ? 0x3Cu : 0u);
-                    const float alpha = rdf(kCam + 0x78);
+                    const uint32_t indoors = rd32(L.camIndoors);
+                    const uint32_t table = L.camTable + (indoors != 0 && indoors != 4 ? 0x3Cu : 0u);
+                    const float alpha = rdf(camBase() + L.camAlpha);
                     const float tilt = std::clamp(alpha + up * m.mouseLook, -rdf(table + 0x38), rdf(table + 0x34)) - alpha;
                     if (tilt != 0.0f)
                     {
-                        wrf(kCam + 0x78, alpha + tilt);
-                        const float tx = rdf(kCam + 0x1A0), ty = rdf(kCam + 0x1A4), tz = rdf(kCam + 0x1A8);
-                        for (uint32_t at : {kCam + 0x220u, kCam + 0x230u})
+                        wrf(camBase() + L.camAlpha, alpha + tilt);
+                        const uint32_t target = camBase() + L.camTarget;
+                        const float tx = rdf(target), ty = rdf(target + 4), tz = rdf(target + 8);
+                        for (uint32_t at : {camBase() + L.camSource, camBase() + L.camSource2})
                         {
                             const float ox = rdf(at) - tx, oy = rdf(at + 4) - ty, oz = rdf(at + 8) - tz;
                             const float h = std::sqrt(ox * ox + oy * oy), d = std::sqrt(h * h + oz * oz);
@@ -587,7 +585,7 @@ namespace vcs::input
                         const char *e = std::getenv("VCS_FOOT_WALL");
                         return !(e && e[0] == '0');
                     }();
-                    const uint32_t clock = rd32(kGameClock);
+                    const uint32_t clock = L.gameClock ? rd32(L.gameClock) : 0;
                     if (turn != 0.0f || tilt != 0.0f)
                     {
                         g_mouse.footTurn = true;
@@ -595,10 +593,10 @@ namespace vcs::input
                     }
                     else if (clock - g_mouse.footTurned > kWallTailMs)
                         g_mouse.footTurn = false;
-                    if (wallFix && g_mouse.footTurn && rd32(kCamWallSkip) == 0)
-                        wr32(kCamWallSkip, 1);
+                    if (wallFix && L.camWallSkip && g_mouse.footTurn && rd32(L.camWallSkip) == 0)
+                        wr32(L.camWallSkip, 1);
                 }
-                else if (on && game.driving && carcam::turns(mode))
+                else if (on && L.extras && game.driving && carcam::turns(mode))
                 {
                     // the camera behind a vehicle turns by the mouse itself and stays where it is put while the mouse
                     // moves, then goes back behind the car (game/vcs_carcam.h)
@@ -639,9 +637,9 @@ namespace vcs::input
                 // was, so a notch then does nothing, as L1 itself.
                 if (g_mouse.radioVehicle)
                 {
-                    const uint32_t ped = rd32(kPlayerPed);
-                    const uint32_t at = (g_mouse.radioVehicle + kVehicleRadio) & kRamMask;
-                    if (!ped || rd32(ped + kPedVehicle) != g_mouse.radioVehicle)
+                    const uint32_t ped = rd32(L.playerPed);
+                    const uint32_t at = (g_mouse.radioVehicle + L.vehicleRadio) & kRamMask;
+                    if (!ped || rd32(ped + L.pedVehicle) != g_mouse.radioVehicle)
                         g_mouse.radioVehicle = 0;
                     else if (++g_mouse.radioFrames >= kRadioRetuneFrames)
                     {
@@ -650,9 +648,9 @@ namespace vcs::input
                         g_mouse.radioVehicle = 0;
                     }
                 }
-                if (!m.mouseWheel || wheelBound || g_mouse.aim.camera || aim::aiming())
+                if (!m.mouseWheel || wheelBound || g_mouse.aim.camera || (L.extras && aim::aiming()))
                     g_mouse.wheelSteps = 0;
-                else if (game.driving)
+                else if (game.driving && L.vehicleRadio)
                 {
                     // the radio (GitHub issue 90): a notch down is the next station - the game's own L1 - and a notch up
                     // the one before. The game only steps forwards: each L1 clicks and counts, and 30 frames after the
@@ -662,15 +660,15 @@ namespace vcs::input
                     g_mouse.wheelSteps = game.paused ? 0 : std::clamp(g_mouse.wheelSteps + (notch[1] ? 1 : 0) - (notch[0] ? 1 : 0), -3, 3);
                     if (g_mouse.wheelSteps && !pressedLast)
                     {
-                        const uint32_t vehicle = rd32(rd32(kPlayerPed) + kPedVehicle);
-                        const uint32_t at = (vehicle + kVehicleRadio) & kRamMask;
+                        const uint32_t vehicle = rd32(rd32(L.playerPed) + L.pedVehicle);
+                        const uint32_t at = (vehicle + L.vehicleRadio) & kRamMask;
                         // (a vehicle whose station is none of these has no radio to step back: the plain L1)
-                        if (g_mouse.wheelSteps < 0 && g_rdram[at] < kRadioPositions)
+                        if (g_mouse.wheelSteps < 0 && g_rdram[at] < L.radioPositions)
                         {
                             if (g_mouse.radioVehicle != vehicle || g_rdram[at] != g_mouse.radioSet)
                                 g_mouse.radioWas = g_rdram[at]; // the first step back since the game last retuned
                             g_mouse.radioVehicle = vehicle;
-                            g_mouse.radioSet = static_cast<uint8_t>((g_rdram[at] + kRadioPositions - 2u) % kRadioPositions);
+                            g_mouse.radioSet = static_cast<uint8_t>((g_rdram[at] + L.radioPositions - 2u) % L.radioPositions);
                             g_rdram[at] = g_mouse.radioSet;
                         }
                         g_mouse.radioFrames = 0; // any press starts the game's 30 frames again
@@ -678,15 +676,15 @@ namespace vcs::input
                         g_mouse.wheelSteps += g_mouse.wheelSteps > 0 ? -1 : 1;
                     }
                 }
-                else if (zoomMode(mode))
+                else if (L.scopeZoom && L.extras && zoomMode(mode))
                 {
                     // the zoom the scope eases its FOV toward (0x487E2C, FUN_00297cb8), in the game's own limits: 70
                     // down to 15 (4.8 for the camera)
-                    const float zoomed = rdf(kScopeZoom) * (notch[0] ? 0.8f : 1.0f) * (notch[1] ? 1.25f : 1.0f);
-                    wrf(kScopeZoom, std::clamp(zoomed, mode == 46 ? 4.8f : 15.0f, 70.0f));
+                    const float zoomed = rdf(L.scopeZoom) * (notch[0] ? 0.8f : 1.0f) * (notch[1] ? 1.25f : 1.0f);
+                    wrf(L.scopeZoom, std::clamp(zoomed, mode == 46 ? 4.8f : 15.0f, 70.0f));
                     g_mouse.wheelSteps = 0;
                 }
-                else if (mode == kCamModeFollowPed)
+                else if (mode == L.camModeFollowPed || !L.theCamera)
                 {
                     g_mouse.wheelSteps = std::clamp(g_mouse.wheelSteps + (notch[1] ? 1 : 0) - (notch[0] ? 1 : 0), -3, 3);
                     // a press, then a frame up before the next one
@@ -701,7 +699,7 @@ namespace vcs::input
             }
             // the right stick (the gamepad's, or the camera keys) on the camera behind a vehicle hands it back to the
             // game at once, should the mouse have held it a moment before (game/vcs_carcam.h)
-            if ((rx != 0.0f || ry != 0.0f) && game.driving)
+            if ((rx != 0.0f || ry != 0.0f) && game.driving && g_layout.extras)
                 carcam::stickMoved();
             rx += g_mouse.x;
             ry += g_mouse.y;
@@ -1091,6 +1089,8 @@ namespace vcs::input
         s.onChange = onChange;
         settings::add(s);
     }
+
+    void setGameLayout(const GameLayout &layout) { g_layout = layout; }
 
     void install(PS2Runtime &runtime)
     {
