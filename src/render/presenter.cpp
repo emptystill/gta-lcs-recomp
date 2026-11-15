@@ -23,9 +23,7 @@ namespace present
             float rect[4];  // NDC left, top, right, bottom
             float uvMax[2];
             float pad[2];
-            float sharpen[4]; // texel size in uv, strength, unused (present.hlsl)
         };
-        std::atomic<float> g_sharpness{0.0f};
 
         std::unique_ptr<rhi::Device> g_device;
         std::unique_ptr<rhi::Pipeline> g_pipeline;
@@ -83,8 +81,7 @@ namespace present
             const rhi::TextureDesc &td = picture.texture->desc();
             const Params params{{ndcX(x0), ndcY(y0), ndcX(x0 + w), ndcY(y0 + h)},
                                 {static_cast<float>(srcWidth) / td.width, static_cast<float>(srcHeight) / td.height},
-                                {0.0f, 0.0f},
-                                {1.0f / td.width, 1.0f / td.height, picture.linear ? g_sharpness.load(std::memory_order_relaxed) : 0.0f, 0.0f}};
+                                {0.0f, 0.0f}};
             g_device->updateBuffer(*g_params, &params, sizeof(params));
             g_device->setPipeline(*g_pipeline);
             g_device->setConstants(0, *g_params);
@@ -205,8 +202,6 @@ namespace present
     }
 
     void setDisplayAspect(float aspect) { g_displayAspect.store(aspect, std::memory_order_relaxed); }
-
-    void setSharpness(float strength) { g_sharpness.store(std::clamp(strength, 0.0f, 1.0f), std::memory_order_relaxed); }
 
     float displayAspect(bool showing3d) { return showing3d ? g_displayAspect.load(std::memory_order_relaxed) : 4.0f / 3.0f; }
 

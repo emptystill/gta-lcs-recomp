@@ -675,38 +675,6 @@ namespace
         s.onChange = [](int v) { setEnv("PS2X_HW_ANISO", std::to_string(v)); };
         settings::add(s);
 
-        // Liberty City Stories' textures are tiny (a PSP game): at any internal resolution the picture stays soft. A
-        // contrast-adaptive sharpening pass at the end (render/shaders/present.hlsl) brings out what detail they have.
-        s = {};
-        s.key = "display.sharpen";
-        s.page = "Graphics";
-        s.section = "Image quality";
-        s.label = "Sharpening";
-        s.help = "Sharpens the final picture (contrast-adaptive: strong edges are left alone, so no halos). The game's "
-                 "textures are low resolution, which no internal resolution changes; this brings out their detail. Off "
-                 "is the original picture.";
-        s.type = Type::Choice;
-        s.choices = {{"Off (original)", 0}, {"Low", 25}, {"Medium", 50}, {"High", 75}, {"Maximum", 100}};
-        s.defaultValue = 0;
-        s.env = "LCS_SHARPEN";
-        s.onChange = [](int v) { present::setSharpness(v / 100.0f); };
-        settings::add(s);
-
-        s = {};
-        s.key = "display.motion_blur";
-        s.page = "Graphics";
-        s.section = "Image quality";
-        s.label = "Motion blur";
-        s.help = "The game blends the previous picture into each new one: a ghost that trails moving things and softens "
-                 "the picture while the camera turns. Reduced (the default) keeps it lighter above 30 fps or 1x, PS2 is "
-                 "the original strength everywhere, Off shows each frame as drawn.";
-        s.type = Type::Choice;
-        s.choices = {{"Off", 0}, {"Reduced", 1}, {"PS2", 2}};
-        s.defaultValue = 1;
-        s.env = "LCS_MOTION_BLUR";
-        s.onChange = [](int v) { gsHwSetMotionBlur(v); };
-        settings::add(s);
-
         // The reflection on car paint (docs/vcs-reference/game-internals.md 6g): the PS2 samples the frame once per spot, so a panel
         // flickers as the camera moves - the same at every resolution, but plainer to see when the rest of the picture is
         // sharp. Always Auto: the original at 1x, Smooth above it - no setting (the user's choice, DECISIONS.md

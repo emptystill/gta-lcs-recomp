@@ -68,7 +68,5 @@ namespace present
     // Display aspect of the game picture (docs/vcs-reference/SETTINGS_MENU_WIDESCREEN.md): 4:3 as on a PS2's TV, or the widescreen
     // ratio. displayAspect(false) is for frames without 3D (loading screens, menus): always 4:3. Any thread.
     void setDisplayAspect(float aspect);
-    // Display > Sharpening: 0 off .. 1 strongest (present.hlsl, contrast-adaptive). Any thread; the next frame.
-    void setSharpness(float strength);
     float displayAspect(bool showing3d);
 }

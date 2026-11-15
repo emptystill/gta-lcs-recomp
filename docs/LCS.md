@@ -203,27 +203,17 @@ without it VCS lost buildings, peds and cars in the outer eighths of a 16:9 pict
 VCS code shape: watch the edges in the city); HUD **Screen edges** (VCS names its HUD's draws, `vcs_hud.cpp`: on LCS
 it behaves as Keep 4:3); the game's own Vert- widescreen option and the cutscene bars setting.
 
-## Picture sharpness (2026-11-15)
+## Picture sharpness (2026-11-15, to look at again later)
 
-The user found the picture blurry at every internal resolution. Checked, each at 1x / 2x / 3x with crops of the same
-spot: the internal resolution applies (targets at 2560x1536 at 3x 16:9, 8x MSAA; geometry edges and foliage much finer
-than at 1x); not the cause - the native post effects (`PS2X_HW_POSTFX=0` / `bt`), the PCRTC (one circuit shown), the
-frame copy (1:1, same scale), the mip levels (the renderer always samples level 0), anisotropic filtering. What stays
-soft is the textures: LCS's are tiny (a PSP game), magnified bilinearly, plus the motion blur's ghost while moving.
-Two settings (Graphics > Image quality), both off / as before by default:
-
-- **Sharpening** (`display.sharpen`, `LCS_SHARPEN`): a contrast-adaptive pass in the presenter
-  (`src/render/shaders/present.hlsl`, after AMD FidelityFX CAS: four neighbours, the weight lowered where the range is
-  already large - no halos). At High a number plate becomes readable.
-- **Motion blur** (`display.motion_blur`, `LCS_MOTION_BLUR`): Off / Reduced (the default, as before) / PS2
-  (`gsHwSetMotionBlur`, runtime).
-
-Then (the user's 1440p screenshots: "Match window" in full screen, sharper than 1x - the HUD text and the outlines -
-but "jagged"): the targets are 2560x1646 with 8 samples, geometry edges are antialiased (checked in the user's own
-picture); the blocks are the textures' texels - a wallpaper texel covers several screen pixels at 1440p. Not point
-filtering: a count of point-filtered game textures (TEX1 MMAG / MMIN nearest) over the intro and the first mission was
-zero - every texture is bilinear already (a "smooth all textures" option was tried and dropped: it changed nothing).
-What would help is more texture detail: an upscaling filter at decode time (xBRZ-like) or replacement textures.
+The user finds the picture blurry. Checked with crops of the same spot at 1x / 2x / 3x and in the user's own 1440p
+screenshots: the internal resolution applies (targets at the window's size with 8x MSAA; geometry edges antialiased and
+much finer than at 1x); not the cause - the native post effects, the PCRTC (one circuit shown), the frame copy (1:1),
+the mip levels, anisotropic filtering, point filtering (no game texture is point-filtered: all bilinear). What stays
+soft / blocky is the textures: LCS's are tiny (a PSP game). Three options were tried on 2026-11-15 - a contrast-adaptive
+sharpening pass, a motion blur setting and texture upscaling at creation (xBR corner rule + bilinear, 2x / 4x) - and
+taken out again at the user's request (they did not help enough, and the game stuttered in the user's play-through:
+the upscaling adds decode time when textures stream in). The commits stay in the history (reverted) to start from.
+What would really change it is replacement textures.
 
 ## Tools for LCS debugging
 
