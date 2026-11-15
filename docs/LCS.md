@@ -253,6 +253,19 @@ mode or the active CCam changes - cutscenes, getting in / out) and writes them o
 -0.07..1.30). Measured at 60 fps: after a turn, 2.4 s of walking or driving leave the view within 1.5 degrees of where
 the mouse put it.
 
+Then (the user: small hitches when the mouse moves fast with the camera far, the car camera shaking and not looking
+up, a limit looking up on foot): the game's own following, smoothing, terrain pitch and limits still ran on the
+written angles. **The camera's result is replaced** now: `CCamera::Process` (0x28FAC8) takes the active CCam as
+TheCamera + 0x220 + ActiveCam * 0x2B0 (ActiveCam the byte at TheCamera + 0x10C - not +0x50 as first assumed, which
+only worked while it was 0), calls `CCam::Process` 0x27A380 and right after 0x287020 with the same CCam, then builds
+the matrix / frustum from its Front (+0x1C0), Source (+0x1D0, a copy at +0x1E0) and Up (+0x1F0). A hook on 0x287020
+(before the original; `LCS_CAMERA_RESULT=0` off) has `vcs::input::directCameraResult` replace those: the point the
+game looked at (on its line of sight, as far along as the player / vehicle), the game's distance (its zoom), the
+mouse's heading and pitch; the camera stands at a pitch of at least 0.08 so looking up tilts the view instead of
+putting the camera under the ground (it did, behind a car). Measured: walking / driving after a turn the view stays
+exactly where the mouse put it; it looks up to 26 degrees on foot and in a car. Not yet: the game's camera collision
+(walls) works on its own camera, not this one - only its distance carries over.
+
 The first version (commit f683527) never ran in play: it read the camera through `GameLayout::theCamera`, which LCS
 leaves 0 to keep VCS's camera code off, so it read address 0x260 (mode 0) and the mouse stayed the stick - the user
 felt no difference. Its test had passed by the stick path's own turning.

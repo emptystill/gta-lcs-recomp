@@ -330,6 +330,15 @@ namespace vcs::input
             uint32_t footTurned = 0;   // ... last at this game time, ms
         } g_mouse;
 
+        // The direct mouse camera's own heading and pitch (GameLayout::direct*): game thread (the pad reads and
+        // directCameraResult)
+        struct DirectCamera
+        {
+            bool active = false;
+            uint32_t mode = 0, cam = 0;
+            float beta = 0.0f, alpha = 0.0f;
+        } g_direct;
+
         std::mutex g_injectedMutex;
         float g_injectedX = 0.0f, g_injectedY = 0.0f; // "mouse <dx> <dy>" (tests): counts, as from the mouse
 
@@ -531,12 +540,7 @@ namespace vcs::input
                 // in these modes - not only when the mouse moves, or the game's own following (behind the player as he
                 // walks, behind the vehicle as it drives) turned it back between moves. Taken from the game when the mode
                 // starts or changes (a cutscene, getting in / out), so the view does not jump.
-                static struct
-                {
-                    bool active = false;
-                    uint32_t mode = 0, cam = 0;
-                    float beta = 0.0f, alpha = 0.0f;
-                } dstate;
+                DirectCamera &dstate = g_direct;
                 bool directNow = false;
                 if (on && dcam)
                 {
@@ -1172,6 +1176,72 @@ namespace vcs::input
     }
 
     void setGameLayout(const GameLayout &layout) { g_layout = layout; }
+
+    void directCameraResult(uint8_t *rdram, uint32_t cam)
+    {
+        const GameLayout &L = g_layout;
+        const DirectCamera &d = g_direct;
+        if (!rdram || !L.directFront || !d.active || d.cam != cam || !g_enabled)
+            return;
+        if ((rd32(cam + L.directMode) & 0xFFFFu) != d.mode)
+            return;
+        auto rv = [&](uint32_t a, float *v) {
+            for (int i = 0; i < 3; ++i)
+                v[i] = rdf(a + 4u * i);
+        };
+        auto wv = [&](uint32_t a, const float *v) {
+            for (int i = 0; i < 3; ++i)
+                wrf(a + 4u * i, v[i]);
+        };
+        float src[3], front[3];
+        rv(cam + L.directSource, src);
+        rv(cam + L.directFront, front);
+        // the point the game looked at: on its line of sight, as far along as the player / vehicle it follows
+        const uint32_t ped = L.playerPed ? rd32(L.playerPed) : 0u;
+        if (!ped || ped < 0x100000u || ped >= 0x2000000u)
+            return;
+        uint32_t entity = ped;
+        if (d.mode == L.directCarMode && L.pedVehicle)
+        {
+            const uint32_t v = rd32(ped + L.pedVehicle);
+            if (v >= 0x100000u && v < 0x2000000u)
+                entity = v;
+        }
+        float e[3];
+        rv(entity + L.pedPos, e);
+        const float flen = std::sqrt(front[0] * front[0] + front[1] * front[1] + front[2] * front[2]);
+        if (!(flen > 0.5f && flen < 1.5f))
+            return;
+        for (float &f : front)
+            f /= flen;
+        const float along = (e[0] - src[0]) * front[0] + (e[1] - src[1]) * front[1] + (e[2] - src[2]) * front[2];
+        if (!(along > 0.3f && along < 60.0f)) // not a following camera's geometry: leave it
+            return;
+        const float pivot[3] = {src[0] + front[0] * along, src[1] + front[1] * along, src[2] + front[2] * along};
+        // the mouse's view: heading beta (Front.xy = -(cos, sin)), pitch alpha (+ looks down: Front.z = -sin)
+        const float ca = std::cos(d.alpha), sa = std::sin(d.alpha);
+        const float dir[3] = {-std::cos(d.beta) * ca, -std::sin(d.beta) * ca, -sa};
+        // The camera stands on the orbit at a pitch of at least kMinStandPitch: looking up past that tilts the view only
+        // (as the PC games do) - lowering the camera with it put it under the ground behind a car.
+        constexpr float kMinStandPitch = 0.08f;
+        const float sp = std::max(d.alpha, kMinStandPitch);
+        const float cs = std::cos(sp), ss = std::sin(sp);
+        const float back[3] = {-std::cos(d.beta) * cs, -std::sin(d.beta) * cs, -ss}; // pivot -> camera, reversed
+        const float pos[3] = {pivot[0] - back[0] * along, pivot[1] - back[1] * along, pivot[2] - back[2] * along};
+        // Up: the world's up made square to the view
+        float up[3] = {-dir[2] * dir[0], -dir[2] * dir[1], 1.0f - dir[2] * dir[2]};
+        const float ulen = std::sqrt(up[0] * up[0] + up[1] * up[1] + up[2] * up[2]);
+        if (ulen < 1e-4f)
+            return;
+        for (float &u : up)
+            u /= ulen;
+        wv(cam + L.directFront, dir);
+        wv(cam + L.directSource, pos);
+        if (L.directSource2)
+            wv(cam + L.directSource2, pos);
+        if (L.directUp)
+            wv(cam + L.directUp, up);
+    }
 
     void install(PS2Runtime &runtime)
     {

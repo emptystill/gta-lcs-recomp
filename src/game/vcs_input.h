@@ -2,6 +2,8 @@
 // mouse camera and vibration - all turned into the one DualShock 2 the game reads.
 #pragma once
 
+#include <cstdint>
+
 class PS2Runtime;
 
 namespace vcs::input
@@ -42,6 +44,9 @@ namespace vcs::input
         unsigned directActive = 0, directCam0 = 0, directCamStride = 0;
         unsigned directMode = 0, directFootMode = 4u, directCarMode = 18u;
         unsigned directBeta = 0, directBetaTarget = 0, directAlpha = 0, directAlphaNeg = 0;
+        // ... and the camera's result vectors inside the CCam (directCameraResult): Front, Source (and the copy kept
+        // before looking behind), Up. 0: the result is left to the game (only the angles are written).
+        unsigned directFront = 0, directSource = 0, directSource2 = 0, directUp = 0;
         float directAlphaMin = -0.5f, directAlphaMax = 1.46f;       // on foot
         float directCarAlphaMin = -0.5f, directCarAlphaMax = 1.46f; // behind a vehicle
     };
@@ -84,4 +89,11 @@ namespace vcs::input
         bool fast = false, slow = false;
     };
     FreeCamInput takeFreeCameraInput();
+
+    // Game thread, right after the game processed the active CCam `cam` (its mode's own camera: Source / Front / Up)
+    // and before the camera matrix, the view frustum and the render are made from it (Liberty City Stories: a hook on
+    // 0x287020, which CCamera::Process calls next with the same CCam). With the direct mouse camera in charge, the
+    // result is replaced: the camera orbits the point the game looked at, at the game's own distance, at the mouse's
+    // heading and pitch - so nothing of the game's following, smoothing or terrain pitch pulls on it.
+    void directCameraResult(uint8_t *rdram, uint32_t cam);
 }

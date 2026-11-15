@@ -227,6 +227,15 @@ namespace
     // The frame boundary (VCS: markFrameKick on its display-list kick): LCS's limiter 0x2B5400 (VCS FUN_003179A0), once
     // per rendered frame. Before the original only (hook rule 2): the rig's game-thread jobs (the control channel's
     // poke / dump / scm...: they never ran on LCS) and the hold while the window is in the background.
+    // 0x287020(CCam a0): CCamera::Process calls it right after CCam::Process with the same CCam; the direct mouse
+    // camera replaces that CCam's result here, before the camera matrix and the frustum are made from it
+    PS2Runtime::RecompiledFunction g_origAfterCam = nullptr;
+    PS2_GUEST_CC void afterCamProcess(uint8_t *rdram, R5900Context *ctx, PS2Runtime *runtime)
+    {
+        vcs::input::directCameraResult(rdram, GPR_U32(ctx, 4));
+        g_origAfterCam(rdram, ctx, runtime);
+    }
+
     PS2Runtime::RecompiledFunction g_origLimiter = nullptr;
     PS2_GUEST_CC void frameBoundary(uint8_t *rdram, R5900Context *ctx, PS2Runtime *runtime)
     {
@@ -441,17 +450,26 @@ namespace
             // three CCams (GTA III's Cams[3]) at +0x260, +0x510, +0x7C0 (modes found at each), the active one's index a
             // byte at +0x50 (as VCS's); the fields below are inside a CCam
             input.directCamera = 0x0043BBF0u; // TheCamera (xglobal: VCS 0x6F44D0)
-            input.directActive = 0x50u;
-            input.directCam0 = 0x260u;
+            // CCamera::Process (0x28FAC8) takes the active CCam as TheCamera + 0x220 + ActiveCam * 0x2B0, ActiveCam the
+            // byte at +0x10C (0x28FCAC..), and calls CCam::Process 0x27A380 then 0x287020 with it
+            input.directActive = 0x10Cu;
+            input.directCam0 = 0x220u;
             input.directCamStride = 0x2B0u;
-            input.directMode = 0x0u;
-            input.directBeta = 0x94u;
-            input.directBetaTarget = 0xB0u;
-            input.directAlpha = 0x98u;
-            input.directAlphaNeg = 0xA0u;
-            input.directAlphaMin = -0.07f;  // the game's own limit on foot (looking up)
-            input.directAlphaMax = 1.466f;  // the stick's
-            input.directCarAlphaMin = -0.07f;
+            input.directMode = 0x40u;
+            input.directBeta = 0xD4u;
+            input.directBetaTarget = 0xF0u;
+            input.directAlpha = 0xD8u;
+            input.directAlphaNeg = 0xE0u;
+            // the result vectors (Front +0x1C0: read by CCamera::Process at 0x28FCE8; Source / its copy / Up next to it)
+            input.directFront = 0x1C0u;
+            input.directSource = 0x1D0u;
+            input.directSource2 = 0x1E0u;
+            input.directUp = 0x1F0u;
+            // the camera's result is replaced (directCameraResult), so the pitch is the mouse's: a little more up than
+            // the game's own -0.07 on foot
+            input.directAlphaMin = -0.45f;
+            input.directAlphaMax = 1.40f;
+            input.directCarAlphaMin = -0.45f;
             input.directCarAlphaMax = 1.30f;
             vcs::input::setGameLayout(input);
         }
@@ -501,6 +519,12 @@ namespace
         // squeeze are the runtime's. Entity culling's side planes (VCS's CCamera::IsSphereVisible) not found yet.
         if (vcs::installViewWindowHook(runtime, 0x00113478u))
             std::fprintf(stderr, "[lcs] widescreen: view window hook at 0x113478\n");
+        if (!envOff("LCS_CAMERA_RESULT"))
+        {
+            g_origAfterCam = runtime.lookupFunction(0x00287020u);
+            if (g_origAfterCam)
+                runtime.replaceFunction(0x00287020u, &afterCamProcess);
+        }
         g_origLimiter = runtime.lookupFunction(0x002B5400u);
         if (g_origLimiter)
             runtime.replaceFunction(0x002B5400u, &frameBoundary);
