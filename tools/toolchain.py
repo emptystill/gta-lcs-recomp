@@ -234,8 +234,9 @@ def test_window(env, visible=False):
     "Reset all settings" landed in the player's lcs.ini, and the checks ran at the player's frame rate."""
     if visible:
         env.pop("PS2X_HIDDEN", None)
-        # players start in full screen (2026-11-13); a shown test run stays a window at its own size
-        env.setdefault("VCS_FULLSCREEN", "0")
+        # the player's own game: the window mode is the setting's (Display > Window mode, Alt+Enter). Pinning
+        # VCS_FULLSCREEN=0 here locked the setting greyed out and kept the game in a window (the user's report,
+        # 2026-11-15); only a shown test run (below) stays a window at its own size
         return env
     if os.environ.get("VCS_TEST_VISIBLE") == "1":
         env.pop("PS2X_HIDDEN", None)
