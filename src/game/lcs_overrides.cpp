@@ -2,6 +2,7 @@
 // counterpart of vcs_overrides.cpp (which only applies to VCS's executable). Each hook here is an LCS address with
 // the VCS one it mirrors and how it was found (docs/LCS.md).
 #include "game_overrides.h"
+#include "debug/rig.h"
 #include "game/vcs_display.h"
 #include "game/vcs_framerate.h"
 #include "game/vcs_input.h"
@@ -223,6 +224,17 @@ namespace
         g_origConvert(rdram, ctx, runtime);
     }
 
+    // The frame boundary (VCS: markFrameKick on its display-list kick): LCS's limiter 0x2B5400 (VCS FUN_003179A0), once
+    // per rendered frame. Before the original only (hook rule 2): the rig's game-thread jobs (the control channel's
+    // poke / dump / scm...: they never ran on LCS) and the hold while the window is in the background.
+    PS2Runtime::RecompiledFunction g_origLimiter = nullptr;
+    PS2_GUEST_CC void frameBoundary(uint8_t *rdram, R5900Context *ctx, PS2Runtime *runtime)
+    {
+        vcs::rig::onGameFrame(rdram, ctx, runtime);
+        vcs::input::holdInBackground(runtime);
+        g_origLimiter(rdram, ctx, runtime);
+    }
+
     PS2_GUEST_CC void traceOom(uint8_t *rdram, R5900Context *ctx, PS2Runtime *runtime)
     {
         std::fprintf(stderr, "[alloc] OUT OF MEMORY handler: size=0x%x ra=0x%x\n", GPR_U32(ctx, 5), GPR_U32(ctx, 31));
@@ -422,6 +434,17 @@ namespace
             input.gameClock = 0x003D9B70u;    // CTimer::m_snTimeInMilliseconds (637 code references; VCS 581)
             input.userPause = input.codePause = 0;
             input.extras = false;
+            // The direct mouse camera (found by memory diffs while the right stick turned the camera, and by writes the
+            // game kept - docs/LCS.md "Mouse camera"): TheCamera (0x43BBF0) + 0x260 the active camera's mode (4 on foot,
+            // 18 behind a vehicle: GTA III's FOLLOWPED / CAM_ON_A_STRING), +0x2F4 / +0x310 the heading and its target,
+            // +0x2F8 the pitch and +0x300 its negation (the target); the stick raises the pitch to 1.466 at most.
+            input.directMode = 0x260u;
+            input.directBeta = 0x2F4u;
+            input.directBetaTarget = 0x310u;
+            input.directAlpha = 0x2F8u;
+            input.directAlphaNeg = 0x300u;
+            input.directAlphaMin = -0.40f;
+            input.directAlphaMax = 1.466f;
             vcs::input::setGameLayout(input);
         }
         if (envOn("LCS_CHECK_READS"))
@@ -470,6 +493,9 @@ namespace
         // squeeze are the runtime's. Entity culling's side planes (VCS's CCamera::IsSphereVisible) not found yet.
         if (vcs::installViewWindowHook(runtime, 0x00113478u))
             std::fprintf(stderr, "[lcs] widescreen: view window hook at 0x113478\n");
+        g_origLimiter = runtime.lookupFunction(0x002B5400u);
+        if (g_origLimiter)
+            runtime.replaceFunction(0x002B5400u, &frameBoundary);
         vcs::StreamLayout stream;
         stream.read = kStreamRead;
         stream.poll = kStreamPoll;

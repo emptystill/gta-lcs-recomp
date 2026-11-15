@@ -225,6 +225,27 @@ blend-back itself, not only the buffer's 512-wide resolution (now scaled with th
 Graphics > **PS2 blur filter** (`display.ps2_blur`, `LCS_PS2_BLUR`; on by default, the original): off leaves the
 blend-back out and keeps the tint - sharp, with the game's colours.
 
+## Mouse camera (2026-11-15)
+
+The mouse turns the camera itself on foot and behind a vehicle (it was the right stick before: capped at the stick's
+top speed, with the camera's easing). Found by memory diffs of TheCamera (0x43BBF0) while the right stick turned it,
+and by writes the game keeps (`pokef`, which needed the frame hook below):
+
+| TheCamera + | What |
+|---|---|
+| 0x260 | the active camera's mode: 4 on foot (GTA III's FOLLOWPED), 18 behind a vehicle (CAM_ON_A_STRING) |
+| 0x2F4 / 0x310 | the heading (radians, 0..2 pi; left +) and its target: written together the game keeps it |
+| 0x2F8 / 0x300 | the pitch (+ looks down, the camera rises; the stick reaches 1.466; a negative one kept as 2 pi - x) and its negation (the target) |
+| 0x308 | FOV (70) |
+
+`vcs::input::GameLayout::direct*` (`vcs_input.cpp`): in modes 4 / 18 the mouse adds to both of each pair, on frames
+the game ran; Keyboard > Mouse sensitivity / Car camera sensitivity / invert apply. The game clamps the pitch itself
+(on foot it will not look up past ~-0.07). Checked on foot and in the car: the heading turns by the mouse and stays.
+
+**The frame hook** (`lcs_overrides.cpp` `frameBoundary`, on the limiter 0x2B5400 - VCS's markFrameKick): the rig's
+game-thread jobs run there, so the control channel's `poke` / `pokef` / `dump` / `scm` work on LCS now (they never
+ran: their jobs waited for VCS's frame kick); the hold while the window is in the background too.
+
 ## Tools for LCS debugging
 
 - `tools/xglobal.py --vcs-lcs 0xADDR...`: a VCS global's LCS address, from the code around its uses (votes).

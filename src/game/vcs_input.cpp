@@ -453,6 +453,7 @@ namespace vcs::input
             else if (frame != g_mouse.frame || dt >= 0.25f || dt == 0.0f)
             {
                 g_mouse.last = now;
+                const bool frameAdvanced = frame != g_mouse.frame; // the game ran a frame since (paused: no)
                 g_mouse.frame = frame;
                 float dx = 0.0f, dy = 0.0f;
                 takeMouseMotion(dx, dy);
@@ -507,7 +508,42 @@ namespace vcs::input
                     g_mouse.aim = aim::update(in);
                 }
 
-                if (g_mouse.aim.camera)
+                // The direct mouse camera of a game with GameLayout::direct* (Liberty City Stories): on foot and behind a
+                // vehicle the mouse turns the camera itself - its heading and pitch written in the game, each with the
+                // target the camera eases toward, so the game keeps them - instead of standing in for the stick (capped at
+                // the stick's top speed, with its easing). Only on frames the game ran (not while it is paused).
+                bool direct = false;
+                if (on && L.directMode && g_rdram)
+                {
+                    const uint32_t dmode = rd32(L.theCamera + L.directMode) & 0xFFFFu;
+                    if (dmode == L.directFootMode || dmode == L.directCarMode)
+                    {
+                        direct = true;
+                        const float look = dmode == L.directCarMode ? m.carLook : m.mouseLook;
+                        const float turn = -dx * look, tilt = -up * look; // pitch: + looks down (the camera rises)
+                        if (frameAdvanced && (turn != 0.0f || tilt != 0.0f))
+                        {
+                            float beta = std::fmod(rdf(L.theCamera + L.directBetaTarget) + turn, 6.2831855f);
+                            if (beta < 0.0f)
+                                beta += 6.2831855f;
+                            wrf(L.theCamera + L.directBeta, beta);
+                            wrf(L.theCamera + L.directBetaTarget, beta);
+                            // the game keeps a negative pitch as 2 pi - x
+                            float was = rdf(L.theCamera + L.directAlpha);
+                            if (was > 3.14159265f)
+                                was -= 6.2831855f;
+                            const float alpha = std::clamp(was + tilt, L.directAlphaMin, L.directAlphaMax);
+                            wrf(L.theCamera + L.directAlpha, alpha);
+                            wrf(L.theCamera + L.directAlphaNeg, -alpha);
+                        }
+                    }
+                }
+
+                if (direct)
+                {
+                    // turned above
+                }
+                else if (g_mouse.aim.camera)
                 {
                     // free aim turns the camera itself (aim::update)
                 }
