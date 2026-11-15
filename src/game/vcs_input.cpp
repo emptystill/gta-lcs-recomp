@@ -339,6 +339,18 @@ namespace vcs::input
             float beta = 0.0f, alpha = 0.0f;
         } g_direct;
 
+        // directCameraResult's smoothing: the pivot's offset from the followed entity and the orbit's distance, taken
+        // from the game's camera but eased (a bike's camera shakes with the lean and the bumps). Reset on a new mode /
+        // CCam / entity.
+        struct DirectOrbit
+        {
+            bool valid = false;
+            uint32_t mode = 0, cam = 0, entity = 0;
+            float offset[3] = {0, 0, 0};
+            float dist = 0.0f;
+            std::chrono::steady_clock::time_point last{};
+        } g_orbit;
+
         std::mutex g_injectedMutex;
         float g_injectedX = 0.0f, g_injectedY = 0.0f; // "mouse <dx> <dy>" (tests): counts, as from the mouse
 
@@ -1217,17 +1229,48 @@ namespace vcs::input
         const float along = (e[0] - src[0]) * front[0] + (e[1] - src[1]) * front[1] + (e[2] - src[2]) * front[2];
         if (!(along > 0.3f && along < 60.0f)) // not a following camera's geometry: leave it
             return;
-        const float pivot[3] = {src[0] + front[0] * along, src[1] + front[1] * along, src[2] + front[2] * along};
+        // The pivot: the followed entity plus the game's offset to the point it looked at, both the offset and the
+        // distance eased over ~0.2 s - the game's own camera shakes on a bike (lean, bumps) and that came through.
+        const float gameOffset[3] = {src[0] + front[0] * along - e[0], src[1] + front[1] * along - e[1],
+                                     src[2] + front[2] * along - e[2]};
+        DirectOrbit &o = g_orbit;
+        const auto now = ps2x::hostNow();
+        if (!o.valid || o.mode != d.mode || o.cam != cam || o.entity != entity)
+        {
+            o.valid = true;
+            o.mode = d.mode;
+            o.cam = cam;
+            o.entity = entity;
+            std::memcpy(o.offset, gameOffset, sizeof(o.offset));
+            o.dist = along;
+        }
+        else
+        {
+            const float dt = std::clamp(std::chrono::duration<float>(now - o.last).count(), 0.0f, 0.1f);
+            const float k = 1.0f - std::exp(-dt / 0.2f);
+            for (int i = 0; i < 3; ++i)
+                o.offset[i] += (gameOffset[i] - o.offset[i]) * k;
+            o.dist += (along - o.dist) * k;
+        }
+        o.last = now;
+        const float pivot[3] = {e[0] + o.offset[0], e[1] + o.offset[1], e[2] + o.offset[2]};
         // the mouse's view: heading beta (Front.xy = -(cos, sin)), pitch alpha (+ looks down: Front.z = -sin)
         const float ca = std::cos(d.alpha), sa = std::sin(d.alpha);
         const float dir[3] = {-std::cos(d.beta) * ca, -std::sin(d.beta) * ca, -sa};
-        // The camera stands on the orbit at a pitch of at least kMinStandPitch: looking up past that tilts the view only
-        // (as the PC games do) - lowering the camera with it put it under the ground behind a car.
-        constexpr float kMinStandPitch = 0.08f;
-        const float sp = std::max(d.alpha, kMinStandPitch);
-        const float cs = std::cos(sp), ss = std::sin(sp);
-        const float back[3] = {-std::cos(d.beta) * cs, -std::sin(d.beta) * cs, -ss}; // pivot -> camera, reversed
-        const float pos[3] = {pivot[0] - back[0] * along, pivot[1] - back[1] * along, pivot[2] - back[2] * along};
+        // The camera orbits the pivot at the full pitch, always looking at it (as the PC games do). Looking up lowers
+        // it; where it would go under the ground (a little below the ped's centre, or just under a vehicle's) it moves
+        // in towards the ped on foot, and behind a vehicle it stays at its distance on the ground looking up (moving in
+        // put it inside the car).
+        float dist = o.dist;
+        const bool inCar = d.mode == L.directCarMode;
+        const float minZ = e[2] - (inCar ? 0.2f : 0.7f);
+        if (!inCar && sa < -1e-3f)
+        {
+            const float room = pivot[2] - minZ;
+            dist = std::clamp(room / -sa, std::min(0.6f, dist), dist);
+        }
+        float pos[3] = {pivot[0] - dir[0] * dist, pivot[1] - dir[1] * dist, pivot[2] - dir[2] * dist};
+        pos[2] = std::max(pos[2], std::min(minZ, pivot[2]));
         // Up: the world's up made square to the view
         float up[3] = {-dir[2] * dir[0], -dir[2] * dir[1], 1.0f - dir[2] * dir[2]};
         const float ulen = std::sqrt(up[0] * up[0] + up[1] * up[1] + up[2] * up[2]);

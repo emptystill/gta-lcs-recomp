@@ -263,7 +263,16 @@ the matrix / frustum from its Front (+0x1C0), Source (+0x1D0, a copy at +0x1E0) 
 game looked at (on its line of sight, as far along as the player / vehicle), the game's distance (its zoom), the
 mouse's heading and pitch; the camera stands at a pitch of at least 0.08 so looking up tilts the view instead of
 putting the camera under the ground (it did, behind a car). Measured: walking / driving after a turn the view stays
-exactly where the mouse put it; it looks up to 26 degrees on foot and in a car. Not yet: the game's camera collision
+exactly where the mouse put it; it looks up to 26 degrees on foot and in a car.
+
+Then (the user: looking up felt unnatural, the camera shook on bikes at some angles): the camera orbits at the full
+pitch now, always looking at the pivot, as the PC games do. Where it would go under the ground (on foot: the ped's
+centre - 0.7) it **moves in** towards Toni, down to 0.6. Behind a vehicle, moving in put it inside the car, so it
+stays at its distance and stops on the ground (centre - 0.2) looking up. The pivot is the entity's position plus the
+game's offset to the point it looked at. That offset and the distance are eased with a 0.2 s time constant (reset on a
+new mode / CCam / entity), because the bike camera's lean and bumps came straight through. Limits: up to 0.80 rad on
+foot, 0.50 in a vehicle (more and the car leaves the picture). Measured: 40 degrees up on foot with Toni framed from
+below; in the car the camera stays outside. Not yet: the game's camera collision
 (walls) works on its own camera, not this one - only its distance carries over.
 
 The first version (commit f683527) never ran in play: it read the camera through `GameLayout::theCamera`, which LCS

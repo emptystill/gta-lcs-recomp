@@ -467,9 +467,9 @@ namespace
             input.directUp = 0x1F0u;
             // the camera's result is replaced (directCameraResult), so the pitch is the mouse's: a little more up than
             // the game's own -0.07 on foot
-            input.directAlphaMin = -0.45f;
+            input.directAlphaMin = -0.80f;
             input.directAlphaMax = 1.40f;
-            input.directCarAlphaMin = -0.45f;
+            input.directCarAlphaMin = -0.50f;
             input.directCarAlphaMax = 1.30f;
             vcs::input::setGameLayout(input);
         }
