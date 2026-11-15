@@ -180,6 +180,27 @@ namespace vcs
         }
     }
 
+    namespace
+    {
+        PS2Runtime::RecompiledFunction g_origViewWindow = nullptr; // installViewWindowHook's
+        PS2_GUEST_CC void setViewWindowAt(uint8_t *rdram, R5900Context *ctx, PS2Runtime *runtime)
+        {
+            const float r = g_widening.load(std::memory_order_relaxed);
+            if (r > 1.0001f || r < 0.9999f)
+            {
+                ctx->f[12] *= r;
+                ctx->f[13] *= r;
+            }
+            g_origViewWindow(rdram, ctx, runtime);
+        }
+    }
+
+    bool installViewWindowHook(PS2Runtime &runtime, unsigned address)
+    {
+        g_origViewWindow = runtime.lookupFunction(address);
+        return g_origViewWindow && runtime.replaceFunction(address, &setViewWindowAt);
+    }
+
     void setCutsceneBars(bool on) { g_cutsceneBars.store(on, std::memory_order_relaxed); }
 
     void setAspectWidening(float r) { g_widening.store(r, std::memory_order_relaxed); }

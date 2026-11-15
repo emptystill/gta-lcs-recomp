@@ -23,6 +23,10 @@ namespace vcs
     // At start-up (applyVcs): wraps the view-window setter and the sphere test.
     void installDisplayHooks(PS2Runtime &runtime);
 
+    // Another game's view-window setter (the same code as VCS's FUN_001AB9E0: camera a0, raster rect a1, tan(FOV / 2)
+    // f12, aspect f13): Hor+ widening only (LCS: game/lcs_overrides.cpp). False if the address is not a function.
+    bool installViewWindowHook(PS2Runtime &runtime, unsigned address);
+
     // Game thread, once per game frame: keeps the game's own (anamorphic) widescreen preference off (VCS_WIDESCREEN=1
     // forces it on, =game leaves it to the game).
     void applyDisplay(uint8_t *rdram);

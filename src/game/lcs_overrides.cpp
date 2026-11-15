@@ -2,6 +2,7 @@
 // counterpart of vcs_overrides.cpp (which only applies to VCS's executable). Each hook here is an LCS address with
 // the VCS one it mirrors and how it was found (docs/LCS.md).
 #include "game_overrides.h"
+#include "game/vcs_display.h"
 #include "game/vcs_framerate.h"
 #include "game/vcs_input.h"
 #include "game/vcs_stream.h"
@@ -464,6 +465,11 @@ namespace
             frame.timeStepNonClipped = 0x003D9D9Cu;
             vcs::installFrameRateHooks(runtime, frame);
         }
+        // Widescreen (Hor+, game/vcs_display.h): the camera's view-window setter 0x113478 is VCS's FUN_001AB9E0 (xmatch,
+        // identical code); the settings' aspect widens its horizontal extent. The presenter and the renderer's HUD
+        // squeeze are the runtime's. Entity culling's side planes (VCS's CCamera::IsSphereVisible) not found yet.
+        if (vcs::installViewWindowHook(runtime, 0x00113478u))
+            std::fprintf(stderr, "[lcs] widescreen: view window hook at 0x113478\n");
         vcs::StreamLayout stream;
         stream.read = kStreamRead;
         stream.poll = kStreamPoll;

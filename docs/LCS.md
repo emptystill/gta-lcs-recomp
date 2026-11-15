@@ -190,6 +190,19 @@ Speed: uncapped 130 game frames a second at the first mission (hidden run); the 
 and their hashing). `soleQueuedWriter` (runtime) walked every queued writer of each block for each texture lookup; from
 the newest, it stops at the first (GS stage time in `bindTexture` 19.5% -> 3.9%).
 
+## Widescreen (2026-11-15)
+
+F2 -> Display: **Aspect ratio** (16:10, 16:9, 21:9, 32:9, Match window) and **HUD** (Keep 4:3 / Stretch) work as in
+VCS, Hor+: the camera's view-window setter 0x113478 (VCS FUN_001AB9E0, xmatch: identical code; `RwCameraSetViewWindow`
+0x100578 = VCS 0x18F2D8) is wrapped and widens the horizontal extent (`vcs::installViewWindowHook`); the presenter and
+the renderer's HUD squeeze (far-plane 2D kept at 4:3) are the runtime's. Checked at 16:9 at the first mission: the view
+wider, nothing stretched, the HUD at 4:3 in the middle, trees drawn to both edges.
+
+Not yet: entity culling's side planes (VCS widens `CCamera::IsSphereVisible`'s, FUN_003816F8 at cam+0xB60 / +0xB70;
+without it VCS lost buildings, peds and cars in the outer eighths of a 16:9 picture - LCS's twin is not found by its
+VCS code shape: watch the edges in the city); HUD **Screen edges** (VCS names its HUD's draws, `vcs_hud.cpp`: on LCS
+it behaves as Keep 4:3); the game's own Vert- widescreen option and the cutscene bars setting.
+
 ## Tools for LCS debugging
 
 - `tools/xglobal.py --vcs-lcs 0xADDR...`: a VCS global's LCS address, from the code around its uses (votes).
