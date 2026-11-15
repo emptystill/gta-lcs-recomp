@@ -278,6 +278,28 @@ Next round (the user: turning felt like a smooth, trailing move; in a car it sho
 across the ground turns with the view, so easing it made the camera trail the mouse. Only the height and the distance
 are eased now. Behind a vehicle the camera moves in like on foot (ground: centre - 0.4), but no closer than half its
 distance, then it stays on the ground. The vehicle limit is 0.80 like on foot; the car is seen from below, outside it.
+
+Compared with VCS's mouse camera (the user: make it feel like VCS's; a limit at walls and looking up, the car seen
+from inside). VCS turns the game's own camera, so the game keeps its collision, and behind a car it goes back behind
+the vehicle after Keyboard > Car camera return (`vcs_carcam.cpp`). LCS's direct camera does both now:
+- **The return:** in a vehicle, the camera eases back to the nose's heading once the mouse has been still for that
+  long, on game time: 0.6 s easing, at most 2 rad/s. The pitch goes back to the one taken from the game when the mode
+  started. The camera then keeps following the nose until the mouse turns it. The vehicle's forward is at +0x10 of
+  its matrix (checked: after the return the view matched the nose to a degree).
+- **The world:** the game's camera, run at the mouse's heading and pitch (they are written into its CCam), stands where
+  this one does on open ground. Measured with `VCS_CAMRES_LOG=1`: on a road, the same Source to 0.05. Looking up, it
+  stays at its full distance just above the ground (car z - 0.17). Where its view is blocked it rises over the obstacle
+  and looks down: behind a car on a grass slope by a tree, the game's Source was 8.7 m above the car, looking 63° down,
+  while ours was in the grass. So `directCameraResult` does three things:
+  - it lifts this camera to the game's height when the game's is up to 0.5 m higher;
+  - from 0.5 to 1.5 m higher it blends into the game's Source / Front, in 0.08 s, and back out in 0.35 s;
+  - its distance follows the game's pull-in at once (0.04 s) and eases back out.
+
+  On foot only from level down, because looking up there is deliberately low (moved in towards Toni).
+  `LCS_CAMERA_GAME_BLEND=0` turns this off.
+- **Vehicle limits:** looking up 0.45 rad, moving in no closer than 3/4 of the distance (closer, the car was seen from
+  inside).
+
 Not yet: the game's camera collision
 (walls) works on its own camera, not this one - only its distance carries over.
 

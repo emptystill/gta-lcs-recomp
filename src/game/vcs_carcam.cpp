@@ -322,4 +322,5 @@ namespace vcs::carcam
     void stickMoved() { g_stick = true; }
 
     void setReturnDelay(float seconds) { g_delay.store(seconds, std::memory_order_relaxed); }
+    float returnDelay() { return g_delay.load(std::memory_order_relaxed); }
 }

@@ -469,7 +469,7 @@ namespace
             // the game's own -0.07 on foot
             input.directAlphaMin = -0.80f;
             input.directAlphaMax = 1.40f;
-            input.directCarAlphaMin = -0.80f;
+            input.directCarAlphaMin = -0.45f;
             input.directCarAlphaMax = 1.30f;
             vcs::input::setGameLayout(input);
         }

@@ -28,4 +28,5 @@ namespace vcs::carcam
 
     // Seconds after the mouse stops before the camera goes back behind the car; < 0 never.
     void setReturnDelay(float seconds);
+    float returnDelay(); // the setting (also Liberty City Stories' direct mouse camera, game/vcs_input.cpp)
 }

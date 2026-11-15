@@ -337,6 +337,9 @@ namespace vcs::input
             bool active = false;
             uint32_t mode = 0, cam = 0;
             float beta = 0.0f, alpha = 0.0f;
+            float alpha0 = 0.0f;      // the game's pitch when the mode started: where the car camera goes back to
+            uint32_t lastClock = 0;   // the game clock at the last frame, ms
+            float idle = 0.0f;        // seconds of game time since the mouse last turned it
         } g_direct;
 
         // directCameraResult's smoothing: the pivot's offset from the followed entity and the orbit's distance, taken
@@ -348,6 +351,8 @@ namespace vcs::input
             uint32_t mode = 0, cam = 0, entity = 0;
             float offset[3] = {0, 0, 0};
             float dist = 0.0f;
+            float blend = 0.0f; // how far the game's own camera has it (its view blocked: it rose over the obstacle)
+            float dt = 0.0f;    // seconds since the last result
             std::chrono::steady_clock::time_point last{};
         } g_orbit;
 
@@ -572,6 +577,9 @@ namespace vcs::input
                             dstate.cam = dcam;
                             dstate.beta = rdf(dcam + L.directBetaTarget);
                             dstate.alpha = pitchOf(rdf(dcam + L.directAlpha));
+                            dstate.alpha0 = dstate.alpha;
+                            dstate.idle = 0.0f;
+                            dstate.lastClock = L.gameClock ? rd32(L.gameClock) : 0u;
                         }
                         const float look = dmode == L.directCarMode ? m.carLook : m.mouseLook;
                         const float turn = -dx * look, tilt = -up * look; // pitch: + looks down (the camera rises)
@@ -582,6 +590,31 @@ namespace vcs::input
                                 beta += 6.2831855f;
                             dstate.beta = beta;
                             const bool inCar = dmode == L.directCarMode;
+                            // Behind a vehicle, as VCS's car camera (game/vcs_carcam.h): Keyboard > Car camera return
+                            // after the mouse stops, the camera eases back behind the vehicle's nose and to the pitch it
+                            // had, and keeps following it so until the mouse turns it again.
+                            const uint32_t clock = L.gameClock ? rd32(L.gameClock) : 0u;
+                            const float gdt = std::clamp((clock - dstate.lastClock) / 1000.0f, 0.0f, 0.1f);
+                            dstate.lastClock = clock;
+                            if (turn != 0.0f || tilt != 0.0f)
+                                dstate.idle = 0.0f;
+                            else
+                                dstate.idle += gdt;
+                            const float delay = carcam::returnDelay();
+                            const uint32_t pped = L.playerPed ? rd32(L.playerPed) : 0u;
+                            const uint32_t veh = pped >= 0x100000u && pped < 0x2000000u && L.pedVehicle ? rd32(pped + L.pedVehicle) : 0u;
+                            if (inCar && delay >= 0.0f && dstate.idle >= delay && gdt > 0.0f && veh >= 0x100000u && veh < 0x2000000u)
+                            {
+                                const float fx = rdf(veh + 0x10u), fy = rdf(veh + 0x14u); // the vehicle's forward
+                                if (fx * fx + fy * fy > 0.01f)
+                                {
+                                    const float k = 1.0f - std::exp(-gdt / 0.6f), cap = 2.0f * gdt;
+                                    const float dh = std::remainder(std::atan2(-fy, -fx) - beta, 6.2831855f);
+                                    beta = std::fmod(beta + std::clamp(dh * k, -cap, cap) + 6.2831855f, 6.2831855f);
+                                    dstate.beta = beta;
+                                    dstate.alpha += std::clamp((dstate.alpha0 - dstate.alpha) * k, -cap, cap);
+                                }
+                            }
                             dstate.alpha = std::clamp(dstate.alpha + tilt, inCar ? L.directCarAlphaMin : L.directAlphaMin,
                                                       inCar ? L.directCarAlphaMax : L.directAlphaMax);
                             {
@@ -1243,26 +1276,32 @@ namespace vcs::input
             o.entity = entity;
             std::memcpy(o.offset, gameOffset, sizeof(o.offset));
             o.dist = along;
+            o.blend = 0.0f;
+            o.dt = 0.0f;
         }
         else
         {
             const float dt = std::clamp(std::chrono::duration<float>(now - o.last).count(), 0.0f, 0.1f);
+            o.dt = dt;
             const float k = 1.0f - std::exp(-dt / 0.2f);
             // only the height and the distance are eased: the offset across the ground turns with the view, and easing
             // it made the camera trail behind the mouse (the user: "un movimiento suave")
             o.offset[0] = gameOffset[0];
             o.offset[1] = gameOffset[1];
             o.offset[2] += (gameOffset[2] - o.offset[2]) * k;
-            o.dist += (along - o.dist) * k;
+            // the distance comes in quickly (the game's camera pulled in at a wall: no look through it) and goes back
+            // out eased
+            const float kd = along < o.dist ? 1.0f - std::exp(-dt / 0.04f) : k;
+            o.dist += (along - o.dist) * kd;
         }
         o.last = now;
         const float pivot[3] = {e[0] + o.offset[0], e[1] + o.offset[1], e[2] + o.offset[2]};
         // the mouse's view: heading beta (Front.xy = -(cos, sin)), pitch alpha (+ looks down: Front.z = -sin)
         const float ca = std::cos(d.alpha), sa = std::sin(d.alpha);
-        const float dir[3] = {-std::cos(d.beta) * ca, -std::sin(d.beta) * ca, -sa};
+        float dir[3] = {-std::cos(d.beta) * ca, -std::sin(d.beta) * ca, -sa};
         // The camera orbits the pivot at the full pitch, always looking at it (as the PC games do). Looking up lowers
         // it; where it would go under the ground (a little below the ped's / vehicle's centre) it moves in towards the
-        // pivot - behind a vehicle no closer than half its distance (closer put it inside the car), then it stays on
+        // pivot - behind a vehicle no closer than 3/4 of its distance (closer put it inside the car), then it stays on
         // the ground looking up.
         float dist = o.dist;
         const bool inCar = d.mode == L.directCarMode;
@@ -1270,11 +1309,46 @@ namespace vcs::input
         if (sa < -1e-3f)
         {
             const float room = pivot[2] - minZ;
-            const float closest = inCar ? std::max(0.6f, 0.5f * o.dist) : 0.6f;
+            const float closest = inCar ? std::max(0.6f, 0.75f * o.dist) : 0.6f;
             dist = std::clamp(room / -sa, std::min(closest, dist), dist);
         }
         float pos[3] = {pivot[0] - dir[0] * dist, pivot[1] - dir[1] * dist, pivot[2] - dir[2] * dist};
         pos[2] = std::max(pos[2], std::min(minZ, pivot[2]));
+        // The game's own camera, run at the same heading and pitch, knows the world: on open ground it stands where
+        // this one does (looking up it stays at its distance, just above the ground), and where its view is blocked (a
+        // slope behind the car, a wall, a tree) it rises over the obstacle and looks down - GTA III's camera on a
+        // string. A little above this one: this one rises to its height (the ground on a slope). Well above it (1.5 m
+        // and more): it eases over to the game's camera, as VCS's mouse camera is the game's own; back when clear.
+        // On foot looking up this one is low on purpose (moved in towards Toni), so there only from level and down.
+        // LCS_CAMERA_GAME_BLEND=0: never (the camera goes through what is in the way).
+        static const bool gameBlend = [] {
+            const char *v = std::getenv("LCS_CAMERA_GAME_BLEND");
+            return !(v && v[0] == '0');
+        }();
+        if (gameBlend && (inCar || d.alpha >= 0.0f))
+        {
+            const float rise = src[2] - pos[2];
+            if (rise > 0.0f && rise < 0.5f)
+                pos[2] = src[2];
+            const float want = std::clamp((rise - 0.5f) / 1.0f, 0.0f, 1.0f);
+            const float tau = want > o.blend ? 0.08f : 0.35f;
+            o.blend += (want - o.blend) * (o.dt > 0.0f ? 1.0f - std::exp(-o.dt / tau) : 1.0f);
+            if (o.blend > 1e-3f)
+            {
+                const float w = o.blend;
+                float n = 0.0f;
+                for (int i = 0; i < 3; ++i)
+                {
+                    pos[i] += (src[i] - pos[i]) * w;
+                    dir[i] += (front[i] - dir[i]) * w;
+                    n += dir[i] * dir[i];
+                }
+                n = std::sqrt(n);
+                if (n > 1e-4f)
+                    for (float &f : dir)
+                        f /= n;
+            }
+        }
         // Up: the world's up made square to the view
         float up[3] = {-dir[2] * dir[0], -dir[2] * dir[1], 1.0f - dir[2] * dir[2]};
         const float ulen = std::sqrt(up[0] * up[0] + up[1] * up[1] + up[2] * up[2]);
@@ -1282,6 +1356,13 @@ namespace vcs::input
             return;
         for (float &u : up)
             u /= ulen;
+        {
+            static const bool rlog = std::getenv("VCS_CAMRES_LOG") != nullptr;
+            static uint32_t n = 0;
+            if (rlog && (++n % 15) == 0)
+                std::fprintf(stderr, "[camres] alpha %.3f game src %.2f %.2f %.2f front %.3f %.3f %.3f along %.2f | ours %.2f %.2f %.2f dist %.2f e %.2f %.2f %.2f\n",
+                             d.alpha, src[0], src[1], src[2], front[0], front[1], front[2], along, pos[0], pos[1], pos[2], dist, e[0], e[1], e[2]);
+        }
         wv(cam + L.directFront, dir);
         wv(cam + L.directSource, pos);
         if (L.directSource2)
