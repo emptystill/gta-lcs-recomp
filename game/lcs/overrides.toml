@@ -59,3 +59,13 @@ value = "0x3C013A83"
 [[patches]]
 address = "0x002B75A8"
 value = "0x3C013A83"
+
+# The PC camera's mouse-aim switch (CCamera::m_bUseMouse3rdPerson, 0x3D6C98; VC PC's code is still in LCS: CCam
+# Using3rdPersonMouseCam 0x286F88, the HUD's crosshair in CHud::Draw 0x23F438, Find3rdPersonCamTargetVector 0x28D1B0).
+# The PS2 build turns it off every frame in the menu manager's process (FUN_0034AF20 at 0x34B154: `if (flag) flag = 0`,
+# the store in the bnel's delay slot at 0x34B160). Without that store nothing changes while the flag is 0 (the PS2's
+# value: it is set only from the control method at a new game / load, FUN_00342B20, and LCS's method is 1); the
+# mouse-aim setting (src/game/lcs_overrides.cpp) sets it. docs/LCS.md "Mouse aim".
+[[patches]]
+address = "0x0034B160"
+value = "0x00000000"

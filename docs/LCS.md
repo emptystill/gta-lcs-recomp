@@ -401,6 +401,66 @@ felt no difference. Its test had passed by the stick path's own turning.
 game-thread jobs run there, so the control channel's `poke` / `pokef` / `dump` / `scm` work on LCS now (they never
 ran: their jobs waited for VCS's frame kick); the hold while the window is in the background too.
 
+## Mouse aim (2026-11-15)
+
+The user wanted aiming with the mouse (the PS2's aiming was all there was). **LCS still holds GTA Vice City PC's mouse
+aiming, switched off.** `src/game/lcs_mouseaim.cpp` switches it on and puts back what the PS2 build took out.
+
+How it was found:
+- **The game's own free aim.** LCS has the PS2 free aim too. Its help text, HELP42 in the GXT, read: "while aiming,
+  press L3 to enter free aim, then the left stick moves the sight". That help is a script's, not in the executable.
+- **Giving Toni weapons.** The rig's `scm` does not work on LCS yet: the script VM's globals did not match by code. The
+  weapons came from the game's own cheat instead: Up, Square, Square, Down, Left, Square, Square, Right, pressed through
+  the control channel (`press up`, `press square`...).
+- **The weapon slots.** A diff of the ped before and after the cheat: slots at **+0x594**, 0x1C each (type, ...,
+  clip +8, total +0xC; VCS +0x578). The current slot is the s8 at **+0x6B8**, read off CHud::Draw's decompile. The
+  lock-on target is **+0x6E0** (VCS +0x820): R1 near the car put the car there.
+- **The pad.** CPad 0 is at 0x408C60: R1 +0x0E, Circle +0x2C, L3 +0x30 (the previous frame's at +0x30 more), found by
+  diffing it while holding each key. The only short reader of L3 is **0x171478**, which is
+  CPad::GetLookBehindForPed (L3 unless controls are disabled).
+- **Its callers** are camera code, the script VM and CHud::Draw (0x23F438). They led to **0x286F88 =
+  CCam::Using3rdPersonMouseCam**, VC PC's to the letter: `CCamera::m_bUseMouse3rdPerson && (mode == FOLLOWPED || ...)`.
+  The switch is at **0x3D6C98** (gp - 600; gp = 0x3D6EF0).
+
+What VC PC's mouse aim still does in LCS, and what was taken out:
+- **Who reads the switch.** CHud::Draw (the crosshair's draw is gone: it reads look-behind and drops the result),
+  the shotgun's shot 0x2A8DC8 (Find3rdPersonCamTargetVector 0x28D1B0: the pellets down the camera's line), the
+  player's weapon code 0x1BABE8 (the aim's pitch from the camera, Find3rdPersonQuickAimPitch 0x28D570), the movement
+  0x1D5830 / 0x1EF700 (strafing while firing) and the throw 0x2AB418.
+- **Who sets it.** FUN_00342B20 (new game / load) sets it to `control method == 0`. The method is 0x3D8BC0, and it is
+  1 on LCS.
+- **Who clears it.** The menu manager's process clears it every frame: FUN_0034AF20 at 0x34B154,
+  `if (flag) flag = 0`. That store at 0x34B160 is patched out (`game/lcs/overrides.toml`). With the flag at 0, the
+  PS2's value, the patched game runs as before.
+- **The instant-hit shot.** Pistol, SMGs and rifles go through the line test 0x2B0BD0 (VCS 0x2D0870 by xmatch), and
+  their call returns to **0x2A59BC**. That shot no longer asks the switch, so its shots followed Toni's heading, not
+  the camera. `LCS_SHOT_LOG=1` (lcs_overrides.cpp) logs each line test with the camera: 6 degrees off once he had
+  turned, much more while turning.
+
+What `lcs_mouseaim.cpp` does:
+- **The switch.** Each game frame it sets 0x3D6C98 while Keyboard > **Free aim** (`mouse.aim`, on by default) and the
+  mouse camera are on and the keyboard / mouse is the device in use. With the gamepad, the PS2's aiming is unchanged.
+  `LCS_MOUSE_AIM=0` turns it all off.
+- **The player's instant-hit line.** It is tested down the camera's ray through the crosshair instead. The ray starts
+  at the point nearest the gun and runs the weapon's range. The start vector is kept at 0x7FF00, EE kernel RAM above
+  the runtime's heap and pools; checked all zero in play.
+- **The crosshair.** It is drawn with Dear ImGui at the camera's crosshair place, TheCamera **+0x210 / +0x214**
+  (0.53 / 0.47, VC's m_f3rdPersonCHairMultX / Y). It shows on foot, in the follow camera, with a gun (the weapon
+  info's fire type is not 0: info `*(*(0x3D9B48) + 4) + type * 0x70`, the same layout as VCS) and the game running.
+
+The projection the crosshair is drawn with, and the shots built on:
+- **The formula.** Half-height tan(FOV / 2) x 3/4, with the FOV at the active CCam's **+0xE8**; half-width that times
+  the picture's aspect; the screen's right is -TheCamera's right vector.
+- **Checked against the rendered picture.** Toni's head and pelvis, projected while paused, fall on their pixels
+  (299 / 479 predicted, seen at the same rows). `VCS_VIEWWINDOW_LOG=1` shows the view-window function's (window,
+  aspect) arguments: 0.70021 = tan 35 for the main camera, aspect 1.333 widened to 1.778.
+- **Measured.** All 17 pistol shots of a turning, firing run pass through the crosshair to 0.0003 (tan units). The
+  shotgun keeps the game's own maths: its middle pellet lands 0.012 to the left (0.7 degrees, ~6 px at 1080p), inside
+  a +-4 degree spread. The game's formula does not know the widened picture.
+
+The foot camera is unchanged with the switch on: the game's along 4.53 m, its height 0.83, the same `camfree` angles
+on and off.
+
 ## Tools for LCS debugging
 
 - `tools/xglobal.py --vcs-lcs 0xADDR...`: a VCS global's LCS address, from the code around its uses (votes).
