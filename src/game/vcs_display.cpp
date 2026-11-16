@@ -186,16 +186,6 @@ namespace vcs
         PS2_GUEST_CC void setViewWindowAt(uint8_t *rdram, R5900Context *ctx, PS2Runtime *runtime)
         {
             const float r = g_widening.load(std::memory_order_relaxed);
-            static const bool vwLog = std::getenv("VCS_VIEWWINDOW_LOG") != nullptr;
-            if (vwLog)
-            {
-                static float lastX = 0.0f, lastY = 0.0f;
-                if (ctx->f[12] != lastX || ctx->f[13] != lastY)
-                    std::fprintf(stderr, "[viewwindow] game %.5f %.5f widening %.4f -> %.5f %.5f\n", ctx->f[12], ctx->f[13], r,
-                                 ctx->f[12] * r, ctx->f[13] * r);
-                lastX = ctx->f[12];
-                lastY = ctx->f[13];
-            }
             if (r > 1.0001f || r < 0.9999f)
             {
                 ctx->f[12] *= r;

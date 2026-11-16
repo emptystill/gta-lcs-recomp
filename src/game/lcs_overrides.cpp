@@ -3,7 +3,6 @@
 // the VCS one it mirrors and how it was found (docs/LCS.md).
 #include "game_overrides.h"
 #include "debug/rig.h"
-#include "game/lcs_mouseaim.h"
 #include "game/vcs_display.h"
 #include "game/vcs_framerate.h"
 #include "game/vcs_input.h"
@@ -242,32 +241,7 @@ namespace
     {
         vcs::rig::onGameFrame(rdram, ctx, runtime);
         vcs::input::holdInBackground(runtime);
-        lcs::mouseaim::onGameFrame(rdram); // the PC mouse-aim switch, the crosshair's state (game/lcs_mouseaim.h)
         g_origLimiter(rdram, ctx, runtime);
-    }
-
-    // LCS_SHOT_LOG=1: each line test of the weapons' wrapper (0x2B0BD0, VCS 0x2D0870 by xmatch: from a0, to a1) with
-    // the camera's matrix (TheCamera +0x00 right, +0x10 forward, +0x20 up, +0x30 position), the active CCam's FOV (+0xE8)
-    // and the crosshair's place (+0x210 / +0x214) - to check that mouse-aimed shots go through the crosshair.
-    PS2Runtime::RecompiledFunction g_origShotLine = nullptr;
-    PS2_GUEST_CC void traceShotLine(uint8_t *rdram, R5900Context *ctx, PS2Runtime *runtime)
-    {
-        auto f = [&](uint32_t a) {
-            float v;
-            std::memcpy(&v, rdram + (a & 0x01FFFFFFu), 4);
-            return v;
-        };
-        const uint32_t from = GPR_U32(ctx, 4), to = GPR_U32(ctx, 5);
-        const uint32_t tc = 0x0043BBF0u, cam = tc + 0x220u + std::min<uint32_t>(rdram[tc + 0x10Cu], 2u) * 0x2B0u;
-        std::fprintf(stderr,
-                     "[shot] from %.3f %.3f %.3f to %.3f %.3f %.3f | cam R %.4f %.4f %.4f F %.4f %.4f %.4f U %.4f %.4f %.4f P %.3f %.3f "
-                     "%.3f | fov %.3f chair %.3f %.3f | cams0 mode %u active %u flag %u ra %08x\n",
-                     f(from), f(from + 4), f(from + 8), f(to), f(to + 4), f(to + 8), f(tc), f(tc + 4), f(tc + 8), f(tc + 0x10),
-                     f(tc + 0x14), f(tc + 0x18), f(tc + 0x20), f(tc + 0x24), f(tc + 0x28), f(tc + 0x30), f(tc + 0x34), f(tc + 0x38),
-                     f(cam + 0xE8u), f(tc + 0x210u), f(tc + 0x214u),
-                     static_cast<unsigned>(rdram[tc + 0x260u] | rdram[tc + 0x261u] << 8), static_cast<unsigned>(rdram[tc + 0x10Cu]),
-                     static_cast<unsigned>(rdram[0x3D6C98u]), GPR_U32(ctx, 31));
-        g_origShotLine(rdram, ctx, runtime);
     }
 
     PS2_GUEST_CC void traceOom(uint8_t *rdram, R5900Context *ctx, PS2Runtime *runtime)
@@ -451,10 +425,6 @@ namespace
             if (g_origOom)
                 runtime.replaceFunction(0x001F3318u, &traceOom);
         }
-        if (envOn("LCS_SHOT_LOG") && (g_origShotLine = runtime.lookupFunction(0x002B0BD0u)) != nullptr)
-            runtime.replaceFunction(0x002B0BD0u, &traceShotLine);
-        // after the log's hook, so the log shows the line as tested (game/lcs_mouseaim.h)
-        lcs::mouseaim::install(runtime);
         // The player's controls (game/vcs_input.h): the bindings, the gamepad and the mouse feed the pad, with LCS's
         // addresses for what the reads look at; what is not known yet stays 0 (off: docs/LCS.md "Controls").
         {

@@ -213,7 +213,7 @@ namespace vcs::input
             m.mouseLook = settings::value("mouse.sensitivity") / 100.0f * 0.0025f;
             m.carLook = m.mouseLook * settings::value("mouse.car_sensitivity") / 100.0f;
             m.mouseInvertY = settings::value("mouse.invert_y") != 0;
-            m.freeAimMouse = settings::value("mouse.aim") != 0;
+            m.freeAimMouse = settings::value("mouse.free_aim") != 0;
             m.freeAimPad = settings::value("pad.free_aim") != 0;
             m.mouseWheel = settings::value("mouse.wheel") != 0;
             m.swapSticks = settings::value("pad.swap_sticks") != 0;
@@ -1011,18 +1011,15 @@ namespace vcs::input
                 settings::add(s);
 
                 s = {};
-                s.key = "mouse.aim"; // LCS: a key of its own (lcs.ini files kept VCS's mouse.free_aim=0, its old default)
+                s.key = "mouse.free_aim";
                 s.page = kKeys;
                 s.section = "Mouse";
                 s.label = "Free aim";
-                // Liberty City Stories (game/lcs_mouseaim.h): the PC games' mouse aim, still in LCS's code - on by
-                // default, and only while the keyboard / mouse is the device in use (the gamepad aims as on the PS2)
-                s.help = "With the keyboard and mouse, aim as in the PC games: a crosshair shows with a gun in hand, firing "
-                         "turns Toni to where the camera looks and the shots go through the crosshair, and he strafes "
-                         "while firing. The right mouse button (target) still locks on. Off, or with the gamepad: the "
-                         "PS2's aiming.";
+                s.help = "With a gun, the target button (right mouse button / E) aims where the mouse points, with the "
+                         "game's aiming circle, instead of locking on; shots go through the circle. You move while aiming "
+                         "as you do locked on with that gun. Fists, melee and scoped weapons lock on as on the PS2.";
                 s.type = Type::Toggle;
-                s.defaultValue = 1;
+                s.defaultValue = 0;
                 s.onChange = onChange;
                 settings::add(s);
 
