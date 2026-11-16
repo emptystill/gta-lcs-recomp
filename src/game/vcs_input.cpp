@@ -355,7 +355,8 @@ namespace vcs::input
             float blend = 0.0f; // how far the game's own camera has it (its view blocked: it rose over the obstacle)
             float dt = 0.0f;    // seconds since the last result
             float gRel[3] = {0, 0, 0}, gFront[3] = {0, 0, 0}; // the game's camera behind a vehicle, eased (relative)
-            float excess = 0.0f; // its pitch over the given one, eased: spikes of a few frames are not a blocked view
+            float excess = 0.0f;  // its pitch over the given one, eased: spikes of a few frames are not a blocked view
+            float blocked = 0.0f; // seconds the game's camera has been past the blocked threshold without a break
             std::chrono::steady_clock::time_point last{};
         } g_orbit;
 
@@ -1294,6 +1295,7 @@ namespace vcs::input
             o.blend = 0.0f;
             o.dt = 0.0f;
             o.excess = 0.0f;
+            o.blocked = 0.0f;
         }
         else
         {
@@ -1372,9 +1374,13 @@ namespace vcs::input
                 // the way (its own bike geometry), alternating 0.33 <-> 0.38 from frame to frame; at the old 0.15 the
                 // camera was half on it 70% of the time and shook 0.2 m a frame (the user's recorded ride). A blocked
                 // view is ~1.1 rad.
-                // Eased over 0.15 s first: the ride had spikes over 0.6 of 1 - 6 frames only.
+                // Only when it lasts: 0.25 s past 0.6 without a frame's break, then the excess eased over 0.15 s. A
+                // second recorded ride (on a bike, looking up) had the game's camera jump to 7 m on every other frame
+                // for a second, every 1.8 s - single-frame spikes whose average passed the threshold, and the camera
+                // bounced 2 - 3 m up each time. A blocked view stays past it frame after frame.
+                o.blocked = excess > 0.6f ? o.blocked + o.dt : 0.0f;
                 o.excess += (excess - o.excess) * (o.dt > 0.0f ? 1.0f - std::exp(-o.dt / 0.15f) : 1.0f);
-                want = std::clamp((o.excess - 0.6f) / 0.3f, 0.0f, 1.0f);
+                want = o.blocked >= 0.25f ? std::clamp((o.excess - 0.6f) / 0.3f, 0.0f, 1.0f) : 0.0f;
             }
             else
             {

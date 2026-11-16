@@ -368,6 +368,15 @@ found the shake that was left:
 - **Checked.** The grass slope still goes over to the game's camera. On the `camcenter` run this camera's own jolts are
   9; the rest happen where the view is the game's camera (the car stuck by the tree).
 
+A second recorded ride (6116 frames, a bike, looking up at the limit) showed one more case.
+- **What it was.** Every ~1.8 s the game's camera jumped to 7 m above the bike on every other frame, for about a
+  second. The excess ran in single-frame spikes to 1.4: 128 runs of 1 frame, at most 3. Their eased average passed
+  0.6, so the blend went to 0.4 and the camera bounced 2 - 3 m up each time, then sank back. Height shake otherwise:
+  5 frames in the whole ride.
+- **The fix.** The excess must stay past 0.6 frame after frame for 0.25 s before anything blends.
+- **Checked.** The ride's recorded excess, replayed through the new rule, blends on 0 of its 6116 frames. The grass
+  slope still goes over to the game's camera, and the foot camera is unchanged (`camfree`).
+
 Not yet: the game's camera collision
 (walls) works on its own camera, not this one - only its distance carries over.
 
