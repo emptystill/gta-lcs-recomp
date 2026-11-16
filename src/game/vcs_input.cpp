@@ -357,6 +357,8 @@ namespace vcs::input
             float gRel[3] = {0, 0, 0}, gFront[3] = {0, 0, 0}; // the game's camera behind a vehicle, eased (relative)
             float excess = 0.0f;  // its pitch over the given one, eased: spikes of a few frames are not a blocked view
             float blocked = 0.0f; // seconds the game's camera has been past the blocked threshold without a break
+            float slope = 0.0f;   // the vehicle's slope along its nose (rise over run), eased: the road's
+            bool slopeSet = false;
             std::chrono::steady_clock::time_point last{};
         } g_orbit;
 
@@ -1296,6 +1298,7 @@ namespace vcs::input
             o.dt = 0.0f;
             o.excess = 0.0f;
             o.blocked = 0.0f;
+            o.slopeSet = false;
         }
         else
         {
@@ -1338,7 +1341,27 @@ namespace vcs::input
             dist = std::clamp(room / -sa, std::min(0.6f, dist), dist);
         }
         float pos[3] = {pivot[0] - dir[0] * dist, pivot[1] - dir[1] * dist, pivot[2] - dir[2] * dist};
-        pos[2] = std::max(pos[2], std::min(minZ, pivot[2]));
+        if (inCar)
+        {
+            // The ground is not level at the vehicle's height on a steep street: the user saw the camera go through the
+            // road looking up, the street behind higher than the vehicle (driving down it). The vehicle lies on the
+            // road, so its slope along its nose (forward at +0x10 of its matrix; rise over run, eased over 0.2 s,
+            // within +-0.8) gives the road's height where the camera stands. Across the road it is taken as level (a
+            // bike's lean is not a slope).
+            const float fx = rdf(entity + 0x10u), fy = rdf(entity + 0x14u), fz = rdf(entity + 0x18u);
+            const float run = std::sqrt(fx * fx + fy * fy);
+            if (run > 0.3f)
+            {
+                const float slope = std::clamp(fz / run, -0.8f, 0.8f);
+                o.slope = o.slopeSet && o.dt > 0.0f ? o.slope + (slope - o.slope) * (1.0f - std::exp(-o.dt / 0.2f)) : slope;
+                o.slopeSet = true;
+            }
+            const float ahead = run > 0.3f ? ((pos[0] - e[0]) * fx + (pos[1] - e[1]) * fy) / run : 0.0f;
+            const float ground = minZ + (o.slopeSet ? o.slope : 0.0f) * ahead;
+            pos[2] = std::max(pos[2], std::min(ground, pivot[2] + 3.0f));
+        }
+        else
+            pos[2] = std::max(pos[2], std::min(minZ, pivot[2]));
         // The game's own camera, run at the same heading and pitch, knows the world: on open ground it stands where
         // this one does (looking up it stays at its distance, just above the ground), and where its view is blocked (a
         // slope behind the car, a wall, a tree) it rises over the obstacle and looks down - GTA III's camera on a

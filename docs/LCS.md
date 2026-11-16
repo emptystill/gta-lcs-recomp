@@ -377,6 +377,16 @@ A second recorded ride (6116 frames, a bike, looking up at the limit) showed one
 - **Checked.** The ride's recorded excess, replayed through the new rule, blends on 0 of its 6116 frames. The grass
   slope still goes over to the game's camera, and the foot camera is unchanged (`camfree`).
 
+**Steep streets** (a third recording; the user: on steep streets the camera goes through the road looking up):
+- **The cause.** The ground under the camera was taken as level at the vehicle's height (eased height - 0.4). Driving
+  down a street, the road behind the vehicle is higher than that.
+- **Measured** from the recording (the slope from the vehicle's track over 10 frames): in 184 of 4763 vehicle frames
+  the camera was under the sloped road, up to 1.08 m. That was 6 - 7 m behind the vehicle on slopes of -0.1 to -0.2,
+  looking up.
+- **The fix.** The vehicle lies on the road, so its slope along its nose (forward at +0x10: rise over run, eased over
+  0.2 s, within +-0.8) gives the road's height where the camera stands. Across the road it is taken as level, so a
+  bike's lean does not count.
+
 Not yet: the game's camera collision
 (walls) works on its own camera, not this one - only its distance carries over.
 
