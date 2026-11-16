@@ -1302,7 +1302,15 @@ namespace vcs::input
             o.offset[2] += (gameOffset[2] - o.offset[2]) * ease(0.3f);
             // a jump of metres (getting in: the vehicle's height came from a stale value) is taken at once - eased, the
             // camera dived 30 m under the ground for a few frames
-            o.ez = std::fabs(e[2] - o.ez) > 2.0f ? e[2] : o.ez + (e[2] - o.ez) * ease(inCarMode ? 0.15f : 0.08f);
+            if (inCarMode)
+            {
+                // behind a vehicle the eased height never lags by more than 0.3 m: the bounces (smaller) are smoothed,
+                // a slope driven down fast is followed - with the 2 m rule below it lagged up to 2 m and then snapped,
+                // a jolt of 1.5 m
+                o.ez = std::clamp(o.ez + (e[2] - o.ez) * ease(0.15f), e[2] - 0.3f, e[2] + 0.3f);
+            }
+            else
+                o.ez = std::fabs(e[2] - o.ez) > 2.0f ? e[2] : o.ez + (e[2] - o.ez) * ease(0.08f);
             const float kd = along < 0.75f * o.dist ? ease(0.05f) : ease(0.4f);
             o.dist += (along - o.dist) * kd;
         }
@@ -1312,17 +1320,17 @@ namespace vcs::input
         const float ca = std::cos(d.alpha), sa = std::sin(d.alpha);
         float dir[3] = {-std::cos(d.beta) * ca, -std::sin(d.beta) * ca, -sa};
         // The camera orbits the pivot at the full pitch, always looking at it (as the PC games do). Looking up lowers
-        // it; where it would go under the ground (a little below the ped's / vehicle's centre) it moves in towards the
-        // pivot - behind a vehicle no closer than 3/4 of its distance (closer put it inside the car), then it stays on
-        // the ground looking up.
+        // it; where it would go under the ground (a little below the ped's centre) it moves in towards the pivot on
+        // foot. Behind a vehicle it keeps its distance and stays on the ground (its eased height - 0.4) looking up:
+        // moving in there, at the shallow pitches just past level, changed the distance by 1-2 m for each small mouse
+        // step (9.6 <-> 7.2 m), the user's shake turning the view back to level while driving.
         float dist = o.dist;
         const bool inCar = d.mode == L.directCarMode;
-        const float minZ = e[2] - (inCar ? 0.4f : 0.7f);
-        if (sa < -1e-3f)
+        const float minZ = inCar ? o.ez - 0.4f : e[2] - 0.7f;
+        if (!inCar && sa < -1e-3f)
         {
             const float room = pivot[2] - minZ;
-            const float closest = inCar ? std::max(0.6f, 0.75f * o.dist) : 0.6f;
-            dist = std::clamp(room / -sa, std::min(closest, dist), dist);
+            dist = std::clamp(room / -sa, std::min(0.6f, dist), dist);
         }
         float pos[3] = {pivot[0] - dir[0] * dist, pivot[1] - dir[1] * dist, pivot[2] - dir[2] * dist};
         pos[2] = std::max(pos[2], std::min(minZ, pivot[2]));
@@ -1339,11 +1347,34 @@ namespace vcs::input
             const char *v = std::getenv("LCS_CAMERA_GAME_BLEND");
             return !(v && v[0] == '0');
         }();
-        if (gameBlend && d.alpha >= 0.0f)
+        float excess = 0.0f;
+        if (gameBlend && (inCar || d.alpha >= 0.0f))
         {
-            const float rise = src[2] - pos[2];
-            const float want = std::clamp((rise - 0.5f) / 1.0f, 0.0f, 1.0f);
-            const float tau = want > o.blend ? 0.08f : 0.35f;
+            float want;
+            if (inCar)
+            {
+                // Behind a vehicle the view counts as blocked by how much steeper the game's camera looks down than the
+                // pitch it was given (it rises over what is in its way and looks down at the vehicle; unblocked it looks
+                // at the given pitch, measured to 0.003). Its height against this one's was the test before, but
+                // looking down the game's camera orbits higher than this one with nothing in the way, so driving with
+                // the view down and turning it back to level went in and out of a half blend with the game's moving
+                // camera: the user's shake "looking up or down and centring the camera again while driving". The pitch
+                // compared is the one readPad gave it (never above its own limit, -0.07) - the game writes the pitch it
+                // ended at back into its alpha, so that read back always matched. As the game's camera never looks up
+                // it does not fight the ground on open road (excess 0 there), so this holds looking up too: on a hill
+                // behind the car the view goes over to the game's camera, above the grass.
+                const float given = std::max(d.alpha, -0.07f);
+                excess = std::asin(std::clamp(-front[2], -1.0f, 1.0f)) - given;
+                want = std::clamp((excess - 0.15f) / 0.25f, 0.0f, 1.0f);
+            }
+            else
+            {
+                const float rise = src[2] - pos[2];
+                want = std::clamp((rise - 0.5f) / 1.0f, 0.0f, 1.0f);
+            }
+            // behind a vehicle in and out over 0.25 s: in a blocked spot, tilting the view down past the game's raised
+            // camera hands it back to this one, and at 0.12 s that hand-over moved the camera 0.7 m a frame
+            const float tau = inCar ? 0.25f : (want > o.blend ? 0.08f : 0.35f);
             o.blend += (want - o.blend) * (o.dt > 0.0f ? 1.0f - std::exp(-o.dt / tau) : 1.0f);
             if (o.blend > 1e-3f)
             {
@@ -1373,8 +1404,9 @@ namespace vcs::input
             static const bool rlog = rl != nullptr, every = rl && rl[0] == '2';
             static uint32_t n = 0;
             if (rlog && (every || (++n % 15) == 0))
-                std::fprintf(stderr, "[camres] alpha %.3f game src %.2f %.2f %.2f front %.3f %.3f %.3f along %.2f | ours %.2f %.2f %.2f dist %.2f e %.2f %.2f %.2f\n",
-                             d.alpha, src[0], src[1], src[2], front[0], front[1], front[2], along, pos[0], pos[1], pos[2], dist, e[0], e[1], e[2]);
+                std::fprintf(stderr, "[camres] alpha %.3f game src %.2f %.2f %.2f front %.3f %.3f %.3f along %.2f | ours %.2f %.2f %.2f dist %.2f e %.2f %.2f %.2f blend %.2f excess %.3f\n",
+                             d.alpha, src[0], src[1], src[2], front[0], front[1], front[2], along, pos[0], pos[1], pos[2], dist, e[0], e[1], e[2],
+                             o.blend, excess);
         }
         wv(cam + L.directFront, dir);
         wv(cam + L.directSource, pos);

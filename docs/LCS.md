@@ -339,6 +339,23 @@ does not:
 - **Result:** frames with a jolt over the sweep went from 183 to 94. The rest are the test's own pitch steps and the
   eased zoom when the game's distance changes (4.5 to 9.4 m on driving off).
 
+Then (the user: the shake comes when looking up or down and centring the camera again while driving). Found with
+`camcenter`, which tilts the view down and back, then up and back, in small mouse steps while driving, logging every
+frame:
+- **Moving in looking up.** Just past level, moving the camera in so it stays above the ground changed the distance
+  by 1-2 m for each mouse step (9.6 <-> 7.2 m). Behind a vehicle it now keeps its distance and stays on the ground.
+- **The eased height on a slope.** Driving down a slope, the eased height lagged by up to 2 m, then snapped (a 1.5 m
+  jolt). Now it never lags by more than 0.3 m.
+- **The blocked test.** It is now the excess of the game camera's pitch over the pitch it was given. The game writes
+  the pitch it ended at back into its alpha, so the given one (`max(alpha, -0.07)`) is used. It is 0 on open road,
+  even looking up, and 1.11 rad on the blocked grass slope. The old test (its height against this one's) fired looking
+  down with nothing in the way, because the two cameras orbit differently there. Unblocked looking down, the game's
+  camera looks less steeply than asked (0.5 rad for 1.1): a negative excess, never a blend.
+- **The blend behind a vehicle** goes in and out over 0.25 s.
+- **Result:** on open road, jolts beyond the mouse's own movement went from 42 to 4, the worst 0.07 m (was 2.4 m). In
+  the blocked spot the view is the game's own camera, which moves as with a gamepad. The foot camera is unchanged
+  (checked: `camfree` gives the same numbers).
+
 Not yet: the game's camera collision
 (walls) works on its own camera, not this one - only its distance carries over.
 
