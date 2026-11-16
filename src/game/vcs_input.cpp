@@ -117,6 +117,8 @@ namespace vcs::input
         // camera 46, binoculars 47, 45; they turn by +0x78 / +0x7C as the follow camera, and 7 / 46 / 47 zoom (+0x134)
         bool scopeMode(uint32_t mode) { return mode == 7 || mode == 8 || mode == 34 || (mode >= 45 && mode <= 47); }
         bool zoomMode(uint32_t mode) { return mode == 7 || mode == 46 || mode == 47; }
+        // LCS's first-person weapon views: the modes its weapon switch refuses to change weapons in (0x34BE08)
+        bool lcsScopeMode(uint32_t mode) { return mode == 7 || mode == 8 || mode == 34 || mode == 46; }
         uint8_t *g_rdram = nullptr;
 
         uint32_t rd32(uint32_t a)
@@ -744,6 +746,29 @@ namespace vcs::input
                         g_mouse.footTurn = false;
                     if (wallFix && L.camWallSkip && g_mouse.footTurn && rd32(L.camWallSkip) == 0)
                         wr32(L.camWallSkip, 1);
+                }
+                else if (on && !L.extras && dcam && frameAdvanced && !game.driving &&
+                         lcsScopeMode(rd32(dcam + L.directMode) & 0xFFFFu))
+                {
+                    // Liberty City Stories' scopes and first-person weapon views (the snipers' mode 7, the rocket
+                    // launcher's 8, the M16-style 34, the camera's 46), turned by the mouse itself: through the right
+                    // stick it moved them hardly at all (the user's report). Their update (FUN_0027D440, modes 6 / 7 /
+                    // 0x21 / 0x2C / 0x2D + 1) keeps the view's heading at +0xF0 and its pitch at +0xE0 (+ up, kept in
+                    // -1.562 .. 1.047), adds the stick's eased speeds (+0xF4 / +0xE4) to them and builds the view from
+                    // them each frame. Zoomed in they turn slower.
+                    constexpr uint32_t kScopeHeading = 0xF0u, kScopePitch = 0xE0u;
+                    float fov = rdf(dcam + 0xE8u);
+                    fov = fov >= 1.0f && fov <= 130.0f ? fov : 70.0f;
+                    const float look = m.mouseLook * fov / 70.0f;
+                    float heading = std::fmod(rdf(dcam + kScopeHeading) - dx * look, 6.2831855f);
+                    if (heading < 0.0f)
+                        heading += 6.2831855f;
+                    const float pitch = std::clamp(rdf(dcam + kScopePitch) + up * look, -1.56f, 1.04f);
+                    wrf(dcam + kScopeHeading, heading);
+                    wrf(dcam + kScopePitch, pitch);
+                    static const bool slog = std::getenv("VCS_MOUSE_LOG") != nullptr;
+                    if (slog && (dx != 0.0f || dy != 0.0f))
+                        std::fprintf(stderr, "[mouse] scope mode %u heading %.3f pitch %.3f\n", rd32(dcam + L.directMode) & 0xFFFFu, heading, pitch);
                 }
                 else if (on && L.extras && game.driving && carcam::turns(mode))
                 {

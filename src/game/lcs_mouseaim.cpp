@@ -184,6 +184,16 @@ namespace lcs::mouseaim
             const uint32_t ra = GPR_U32(ctx, 31);
             const uint32_t ped = player();
             float f[3];
+            // LCS_SHOT_LOG=1: every line test of the player's shots (return address, from, to, the camera, the aim), and
+            // the line used while aiming
+            static const bool shotLog = std::getenv("LCS_SHOT_LOG") != nullptr;
+            if (shotLog && ped && GPR_U32(ctx, 9) == ped && cameraForward(f))
+            {
+                const uint32_t a = GPR_U32(ctx, 4), b = GPR_U32(ctx, 5);
+                std::fprintf(stderr, "[shot] ra %x aim %d from %.2f %.2f %.2f to %.2f %.2f %.2f cam %.3f %.3f %.3f ang %.3f pitch %.3f\n", ra,
+                             g_aiming.load() ? 1 : 0, rdf(a), rdf(a + 4), rdf(a + 8), rdf(b), rdf(b + 4), rdf(b + 8), f[0], f[1], f[2],
+                             rdf(ped + kPedAimAngle), rdf(ped + kPedPitch));
+            }
             if (g_aiming.load(std::memory_order_relaxed) && (ra == kInstantHitReturn || ra == kShotgunReturn) && ped &&
                 GPR_U32(ctx, 9) == ped && cameraForward(f))
             {
@@ -205,10 +215,26 @@ namespace lcs::mouseaim
                     float dir[3];
                     if (ra == kShotgunReturn)
                     {
-                        // the pellet's own direction turned with the aim: its offset from the gun's aim (the angle /
-                        // pitch written, the camera's forward) kept, put about the camera's ray
-                        for (int i = 0; i < 3; ++i)
-                            dir[i] = d[i] / range;
+                        // The game fires every pellet level (its end at the gun's height, whatever the pitch: logged)
+                        // and spreads them in yaw about his heading. Each keeps its yaw offset from the camera's
+                        // heading, turned about the camera's ray: the spread stays across the picture and the pellets
+                        // go where the circle is, up and down too (before, only their start was on the ray - level
+                        // pellets: the impacts missed the circle, the user's report).
+                        const float hx = f[0], hy = f[1], hl = std::sqrt(hx * hx + hy * hy);
+                        const float dl = std::sqrt(d[0] * d[0] + d[1] * d[1]);
+                        if (hl > 1e-3f && dl > 1e-3f)
+                        {
+                            const float yaw = std::atan2(hx * d[1] - hy * d[0], hx * d[0] + hy * d[1]); // + to the left
+                            const float c = std::cos(yaw), s = std::sin(yaw);
+                            const float left[3] = {-hy / hl, hx / hl, 0.0f};
+                            for (int i = 0; i < 3; ++i)
+                                dir[i] = c * f[i] + s * left[i];
+                        }
+                        else
+                        {
+                            for (int i = 0; i < 3; ++i)
+                                dir[i] = f[i];
+                        }
                     }
                     else
                     {
@@ -224,6 +250,8 @@ namespace lcs::mouseaim
                     wrf(kScratch + 12u, 0.0f);
                     SET_GPR_U32(ctx, 4, kScratch);
                     g_shots.fetch_add(1, std::memory_order_relaxed);
+                    if (shotLog)
+                        std::fprintf(stderr, "[shot]   -> dir %.3f %.3f %.3f range %.1f\n", dir[0], dir[1], dir[2], range);
                 }
             }
             g_origShotLine(rdram, ctx, runtime);

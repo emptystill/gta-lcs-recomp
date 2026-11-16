@@ -513,6 +513,37 @@ cycling did nothing until the detonation, then cycled normally. The same happens
 Tec-9, the flamethrower), each let go 5 ways: plain, while firing, right after firing, while moving, and a 0.08 s
 tap. All 45 ended in state 1 with the flags clear, and he walked normally right after (screenshots).
 
+**Shotgun pellets (2026-11-16, the user's report: "the impact does not go where I aim").** `LCS_SHOT_LOG=1`
+logged every line test of the player's shots. The shotguns' pellets (return 0x2A93E4) are always level: the end is
+at the gun's height whatever the pitch. The game spreads them in yaw only, about his heading. The shotgun (19) has 3
+pellets of 40 m, the combat shotgun and the stubby 5 of 30 m. The mouse aim had moved each pellet's start onto the
+camera's ray but kept its level direction, so aiming up or down the impacts missed the circle. Each pellet now keeps
+its yaw offset from the camera's heading, turned about the camera's ray: dir = cos(yaw)·F + sin(yaw)·left. Checked
+in the log: the middle pellet equals the camera's forward at 3 pitches, and the outer ones keep the spread across the
+picture with the same pitch.
+
+**The scopes and the mouse (2026-11-16, the user's report: the sniper / rocket launcher views did not turn).**
+
+Which modes:
+
+- Mode 7 is both snipers, mode 8 the rocket launcher. 34 (M16-style) and 46 (the camera) are taken with them: these
+  are the modes the weapon switch 0x34BE08 refuses to change weapons in.
+- In CCam::Process (0x27A380, a switch on mode - 1), all of them run **FUN_0027D440**.
+- It keeps the view's **heading at +0xF0** and its **pitch at +0xE0** (+ up, kept in -1.562 .. 1.047). It adds the
+  sticks' eased speeds (+0xF4 / +0xE4) to them and builds Front / Source from them every frame. +0xD4 / +0xD8 are
+  derived afterwards by the shared code.
+- Both sticks move it: the left stick on the PS2, the right too.
+
+Why the mouse did nothing:
+
+- The mouse reached it only as the right stick, a speed that hardly moved it (`VCS_MOUSE_LOG`: 200 counts gave 0.008
+  rad).
+- Writing +0xD4 / +0xD8 was undone the next frame.
+
+`vcs_input.cpp` (the `lcsScopeMode` branch) now writes +0xF0 / +0xE0 from the mouse, slower as the FOV (+0xE8)
+zooms in. Checked for both snipers and the rocket launcher: 200 counts right turn the heading 0.5 rad, 150 up raise
+the pitch 0.375, and it stays there with no drift.
+
 ## Trainer (2026-11-16)
 
 The trainer key (F5, Back + RB) opens VCS's trainer menu (`src/ui/trainer_menu.cpp`, titled LCS TRAINER, `kLcs`: the
