@@ -3,7 +3,9 @@
 // without a target - CPed::SetPointGunAt(ped, nullptr) (FUN_001BA618: state AIM_GUN, the weapon's aim anim held),
 // chained as a guest call - and keeps him aiming where the camera looks: the gun's direction through SetAimFlag's
 // fields (angle +0x6E4, pitch +0xC78, bit 39 of +0x190; AimGun FUN_001D4F58 points the arm), his heading the same. He
-// stands while aiming (LCS has no strafing walk for him). The camera moves over his shoulder, a circle marks the middle
+// stands while aiming (LCS has no strafing walk for him) -
+// except with the guns he aims with his arm alone (pistol, Tec-9, MAC-10: the weapon flag 0x80), which he runs and
+// fires with as in the original: running, the game turns him where he runs and his arm aims at the camera's point. The camera moves over his shoulder, a circle marks the middle
 // of the picture, and his shots are tested down the camera's line through it. Scoped weapons (the snipers) keep the
 // PS2's scope; melee, thrown weapons and the gamepad are untouched. VCS's free aim (game/vcs_aim.h) is the model; LCS
 // has no free-aim mode for the pad to enter (docs/LCS.md).
@@ -28,6 +30,9 @@ namespace lcs::mouseaim
     // Game thread, at the frame boundary (the limiter hook, before the frame): enters, keeps and leaves the aim. True
     // when it chained a guest call (pc / a0 / a1 set): the hook makes it return into the limiter.
     bool onFrame(uint8_t *rdram, R5900Context *ctx);
+
+    // Game thread, at the pad read (GameLayout::aimStick): the left stick as it goes to the game (his walk).
+    void stick(float lx, float ly);
 
     // How far the camera is over the shoulder: 0 not aiming .. 1 aiming (eased). Any thread.
     float cameraShift();

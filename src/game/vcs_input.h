@@ -56,6 +56,7 @@ namespace vcs::input
         // far the direct camera goes over the shoulder while aiming (0..1).
         vcs::aim::Output (*aimUpdate)(const vcs::aim::Input &in) = nullptr;
         float (*aimCameraShift)() = nullptr;
+        void (*aimStick)(float lx, float ly) = nullptr; // the left stick going to the game, each pad read
     };
     void setGameLayout(const GameLayout &layout);
 

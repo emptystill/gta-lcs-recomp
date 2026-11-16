@@ -463,6 +463,43 @@ PC's mouse aim, switched off: CCam::Using3rdPersonMouseCam 0x286F88 and the swit
 - **Each weapon.** Fists / knuckles / grenades unchanged, the snipers' scope (mode 7) unchanged; the pistol, shotgun,
   SMG, rifle and flame-thrower aim.
 
+**Running with the one-handed guns (2026-11-16, the user's report).** With the pistol and the SMGs he moves while
+shooting in the original, but the mouse aim planted him.
+
+Measured in the original (Free aim off, fire held with W, 1 s each): he runs and fires with the **pistol (17), Tec-9
+(22) and MAC-10 (24)**: state 0x10 with bit 39, the arm aimed by the IK. Every other gun plants him, including the
+.357, the micro SMG, the SMG, the M4, the shotguns, the M60 and the minigun. Those three guns are exactly the ones
+with **flag 0x80** in the weapon info's +0x6C, VC's CANAIM_WITHARM. The flags read:
+
+| Weapon | Type | Flags (+0x6C) |
+|---|---|---|
+| pistol | 17 | 0x680C0 |
+| Tec-9 | 22 | 0x280C0 |
+| MAC-10 | 24 | 0x280C0 |
+| micro SMG / SMG | 23 / 25 | 0x28840 |
+| M4 | 26 | 0x28050 |
+| AK-47 | 27 | 0x28040 |
+
+What changed for those three guns:
+
+- **The left stick.** It is no longer centred: the game walks him in AIM_GUN (0x16) too.
+- **His heading while running.** It is left to the game, which turns him where he runs. The mouse aim keeps writing
+  the gun's angle / pitch, so the arm points at the circle as far as it turns.
+- **His heading standing.** Standing (the stick reaches the mouse aim through `GameLayout::aimStick`), he turns to
+  the camera's heading, eased over 0.08 s.
+
+Two variants were tried:
+
+1. **Heading kept on the camera while moving.** He slid sideways and backwards in the run anim, the look the user
+   rejected in the first attempt.
+2. **Heading left to the game.** This looks like the original's run and gun, and it is the one kept.
+
+**Checked** (W / A / S / W+fire / D+fire, then stopped, per weapon):
+
+- **Pistol, Tec-9, MAC-10.** About 3.6 m a second in every direction, firing too. The shots count down the camera's
+  ray, the impact is at the circle running sideways, and he faces the camera again 0.6 s after stopping.
+- **SMG and AK-47.** Planted as before.
+
 ## Trainer (2026-11-16)
 
 The trainer key (F5, Back + RB) opens VCS's trainer menu (`src/ui/trainer_menu.cpp`, titled LCS TRAINER, `kLcs`: the

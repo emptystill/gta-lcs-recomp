@@ -35,6 +35,7 @@ namespace lcs::mouseaim
         constexpr uint32_t kStateIdle = 1u, kStateAttack = 0x10u, kStateAimGun = 0x16u;
         constexpr uint32_t kWeaponInfoPtr = 0x003D9B48u; // *(*(this) + 4) + type * 0x70: +0 the fire type
         constexpr uint32_t kWeaponInfoSize = 0x70u;
+        constexpr uint32_t kWeaponFlags = 0x6Cu, kFlagArmAim = 0x80u;
         constexpr uint32_t kSetPointGunAt = 0x001BA618u; // CPed::SetPointGunAt(ped, entity); entity 0: the pose alone
         constexpr uint32_t kTheCamera = 0x0043BBF0u;     // its matrix: +0x10 forward, +0x30 position
         constexpr uint32_t kActiveCam = 0x10Cu, kCam0 = 0x220u, kCamStride = 0x2B0u, kCamMode = 0x40u;
@@ -60,6 +61,7 @@ namespace lcs::mouseaim
         std::atomic<bool> g_aiming{false};     // as State, for other threads
         std::atomic<float> g_shift{0.0f};      // cameraShift()
         std::atomic<uint32_t> g_shots{0};
+        std::atomic<bool> g_stickMoved{false}; // the left stick (his walk) pushed, as of the last pad read
         State g_state = State::Idle;           // game thread
         uint32_t g_lastClock = 0;
         uint32_t g_retryClock = 0;
@@ -116,6 +118,21 @@ namespace lcs::mouseaim
                 return false;
             const uint32_t fire = rd32(rd32(table + 4) + type * kWeaponInfoSize);
             return fire == 1 || fire == 3;
+        }
+
+        // A gun he aims with his arm alone, so he can run while aiming and firing: the weapon info's flag 0x80 (+0x6C;
+        // VC's CANAIM_WITHARM) - the pistol, the Tec-9 and the MAC-10. In the original these are the ones he runs
+        // and fires with; with every other gun firing plants him (checked weapon by weapon, docs/LCS.md).
+        bool aimsWithArm(uint32_t ped)
+        {
+            const int8_t slot = static_cast<int8_t>(g_rdram[(ped + kPedSlot) & kRamMask]);
+            if (slot < 0 || slot >= 10)
+                return false;
+            const uint32_t type = rd32(ped + kPedWeapons + static_cast<uint32_t>(slot) * kSlotSize);
+            const uint32_t table = rd32(kWeaponInfoPtr);
+            if (type == 0 || type > 36 || !inRam(table) || !inRam(rd32(table + 4)))
+                return false;
+            return (rd32(rd32(table + 4) + type * kWeaponInfoSize + kWeaponFlags) & kFlagArmAim) != 0;
         }
 
         bool followCamera()
@@ -247,7 +264,7 @@ namespace lcs::mouseaim
         {
             out.own = true;
             out.r1 = out.l3 = false;
-            out.leftStick = g_aiming.load(std::memory_order_relaxed);
+            out.leftStick = g_aiming.load(std::memory_order_relaxed) && !aimsWithArm(ped);
         }
         return out;
     }
@@ -300,8 +317,22 @@ namespace lcs::mouseaim
                 const float pitch = -std::asin(std::clamp(f[2], -1.0f, 1.0f));
                 wrf(ped + kPedAimAngle, angle);
                 wrf(ped + kPedPitch, pitch);
-                wrf(ped + kPedRotCur, angle);
-                wrf(ped + kPedRotDest, angle);
+                if (!aimsWithArm(ped))
+                {
+                    wrf(ped + kPedRotCur, angle);
+                    wrf(ped + kPedRotDest, angle);
+                }
+                else if (!g_stickMoved.load(std::memory_order_relaxed))
+                {
+                    // standing: he turns to where the camera looks, quickly but not in one frame (from running
+                    // sideways); running, the game turns him to where he runs and the arm aims (the original's way)
+                    const float cur = rdf(ped + kPedRotCur);
+                    float d = std::remainder(angle - cur, 6.2831853f);
+                    const float k = dt > 0.0f ? 1.0f - std::exp(-dt / 0.08f) : 1.0f;
+                    const float h = std::fabs(d) < 0.01f ? angle : cur + d * k;
+                    wrf(ped + kPedRotCur, h);
+                    wrf(ped + kPedRotDest, h);
+                }
                 wr32(ped + kPedAimTimer, 0u);
                 const uint64_t flags = rd64(ped + kPedFlags);
                 wr64(ped + kPedFlags, (flags & ~kFlagRestoring) | kFlagAiming);
@@ -326,6 +357,8 @@ namespace lcs::mouseaim
         }
         return false;
     }
+
+    void stick(float lx, float ly) { g_stickMoved.store(std::fabs(lx) + std::fabs(ly) > 0.15f, std::memory_order_relaxed); }
 
     float cameraShift() { return g_shift.load(std::memory_order_relaxed); }
 

@@ -519,6 +519,7 @@ namespace
             // the mouse aim (game/lcs_mouseaim.h): the target button at the pad read, the camera over the shoulder
             input.aimUpdate = &lcs::mouseaim::update;
             input.aimCameraShift = &lcs::mouseaim::cameraShift;
+            input.aimStick = &lcs::mouseaim::stick;
             vcs::input::setGameLayout(input);
             lcs::mouseaim::install(runtime);
         }

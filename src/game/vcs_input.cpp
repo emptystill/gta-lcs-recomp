@@ -853,6 +853,8 @@ namespace vcs::input
             rx += g_mouse.x;
             ry += g_mouse.y;
             buttons |= g_mouse.wheelButton;
+            if (g_layout.aimStick)
+                g_layout.aimStick(lx, ly);
             if (g_mouse.aim.own)
             {
                 // free aim has the target button (R1 + L3 to enter the game's free aim, then R1 held; R1 up while the
@@ -861,7 +863,7 @@ namespace vcs::input
                 if (g_mouse.aim.camera)
                     rx = ry = 0.0f;
                 if (g_mouse.aim.leftStick && !g_layout.extras)
-                    lx = ly = 0.0f; // LCS's mouse aim: he stands while aiming
+                    lx = ly = 0.0f; // LCS's mouse aim: he stands while aiming (not with a gun he aims with his arm)
             }
             else if (g_mouse.aim.camera)
             {
