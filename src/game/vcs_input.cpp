@@ -858,6 +858,18 @@ namespace vcs::input
                     wrf(L.scopeZoom, std::clamp(zoomed, mode == 46 ? 4.8f : 15.0f, 70.0f));
                     g_mouse.wheelSteps = 0;
                 }
+                else if (!L.extras && dcam && ((rd32(dcam + L.directMode) & 0xFFFFu) == 7u || (rd32(dcam + L.directMode) & 0xFFFFu) == 46u))
+                {
+                    // Liberty City Stories' zooming scopes (the snipers' mode 7, the camera's 46; FUN_0027D440): the FOV
+                    // (CCam +0xE8) eases toward the zoom at gp - 0x10C (0x3D6DE4) while no zoom button is held, in the
+                    // game's limits 15 (3 for the camera) .. 70. A notch up zooms in, as in VCS.
+                    constexpr uint32_t kLcsScopeZoom = 0x003D6DE4u;
+                    const float lo = (rd32(dcam + L.directMode) & 0xFFFFu) == 46u ? 3.0f : 15.0f;
+                    const float zoom = rdf(kLcsScopeZoom);
+                    if (zoom >= lo - 0.01f && zoom <= 70.01f && (notch[0] || notch[1]))
+                        wrf(kLcsScopeZoom, std::clamp(zoom * (notch[0] ? 0.8f : 1.0f) * (notch[1] ? 1.25f : 1.0f), lo, 70.0f));
+                    g_mouse.wheelSteps = 0;
+                }
                 else if (mode == L.camModeFollowPed || !L.theCamera)
                 {
                     g_mouse.wheelSteps = std::clamp(g_mouse.wheelSteps + (notch[1] ? 1 : 0) - (notch[0] ? 1 : 0), -3, 3);
@@ -1507,6 +1519,19 @@ namespace vcs::input
                     for (float &f : dir)
                         f /= n;
             }
+        }
+        if (!inCar && L.footCameraClear)
+        {
+            // Walls (the user's report: the camera inside a wall / a column on foot). The game's own camera keeps out of
+            // walls, but this one stands elsewhere (its own pitch and height; the game's turns along a wall): in a
+            // street corner it stood 0.1 - 0.5 m inside a building. The line from the pivot to where it would stand,
+            // the shoulder offset included, is tested against the buildings (LCS: game/lcs_camwall.h) and the camera
+            // stands where it is clear. Last, on its final place: the ease over to the game's camera (blend, above)
+            // had taken it back toward the game's - which itself stood 0.4 m from that wall, inside its near plane.
+            const float k = L.footCameraClear(pivot, pos);
+            if (k < 0.999f)
+                for (int i = 0; i < 3; ++i)
+                    pos[i] = pivot[i] + (pos[i] - pivot[i]) * k;
         }
         // Up: the world's up made square to the view
         float up[3] = {-dir[2] * dir[0], -dir[2] * dir[1], 1.0f - dir[2] * dir[2]};

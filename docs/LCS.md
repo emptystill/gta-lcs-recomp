@@ -583,6 +583,30 @@ Why the mouse did nothing:
 zooms in. Checked for both snipers and the rocket launcher: 200 counts right turn the heading 0.5 rad, 150 up raise
 the pitch 0.375, and it stays there with no drift.
 
+**Wheel zoom in the scopes (2026-11-16).** In FUN_0027D440, modes 7 (snipers) and 46 (camera) zoom. The FOV at
+CCam +0xE8 eases toward a zoom target at **gp - 0x10C = 0x3D6DE4** while no zoom button is held, kept in 15 (3 for the
+camera) .. 70. A wheel notch up multiplies the target by 0.8, a notch down by 1.25 (VCS's steps), in
+`vcs_input.cpp`'s wheel code. In those modes the wheel no longer changes weapon, as the switch refuses there anyway.
+Checked: 5 notches up took 70 to 23, the limit stopped it at 15, 3 down gave 29, and the sniper stayed in hand.
+
+**The detonator (2026-11-16).** Enhancements > Combat: **Switch weapons with the detonator**
+(`enhance.detonator_switch`, off; `LCS_DETONATOR_SWITCH`), in `src/game/lcs_weapons.cpp`.
+
+- **The game's rule.** The original refuses to cycle while the detonator (type 0x22) is in hand.
+- **How the pad is read.** CPad's cycle buttons are L2 (+0x0C, previous, 0x171E40) and R2 (+0x10, next, 0x171EB0),
+  "just down" against the last frame's state 0x30 further on. They need the controls enabled (+0x82 zero) and a
+  control mode +0x7E of 0..4.
+- **The hook.** On ProcessWeaponSwitch 0x34BE08 (ped, pad). With the setting on, the detonator in hand and a cycle
+  button just down, it replaces that call by **CPed::SetCurrentWeapon(ped, slot) 0x1E13A0**, a tail call, for the
+  next / previous slot that holds a weapon: fists, melee, or ammunition.
+- **Afterwards.** The detonator stays in slot 9, so the game's own cycling reaches it again, and firing it sets the
+  grenades off.
+
+Checked:
+- **On.** Thrown, then next went to fists, katana, the grenades; previous to the katana. Cycling back reached the
+  detonator, and firing set them off and gave the remote grenades back.
+- **Off.** Blocked, as the original.
+
 ## Trainer (2026-11-16)
 
 The trainer key (F5, Back + RB) opens VCS's trainer menu (`src/ui/trainer_menu.cpp`, titled LCS TRAINER, `kLcs`: the
@@ -667,6 +691,51 @@ menu it answers "Only while you play".
 - **The menu.** F5 → Weapons → Give weapon gives the selected weapon.
 - **Pause and car.** Nothing is given in the pause menu. In a car the weapon is given but not put in his hand.
 - **The mouse aim afterwards.** It still enters, fires through the circle and releases.
+
+## Foot camera and walls (2026-11-16)
+
+The user saw the foot camera inside walls / a column.
+
+**What was found** (`VCS_CAMRES_LOG=2`, a courtyard at 1140, -242):
+- **The game's own camera** pulls in at walls (its distance falls from 4.6 to 1.2 m). At a wall it also turns along
+  it: its view was 15 degrees off the heading given.
+- **The mouse camera** took only that distance. Standing on its own heading, lower and with the shoulder offset, it
+  could end up past a wall.
+
+**The fix** (`src/game/lcs_camwall.cpp`, `GameLayout::footCameraClear`):
+- Once a frame the frame boundary chains **CWorld::ProcessLineOfSight 0x174538** (the weapons' 0x2B0BD0 is a jump to
+  it), from the pivot over Toni to the camera's final place, 0.3 m past it. The test covers buildings and objects,
+  with see-through surfaces included.
+- The camera stands where the line is clear: in at once, out again eased, and never nearer the pivot than 0.9 m.
+- The arguments were read from its calls (the instant-hit shot 0x2A59B4; CCamera's post-process 0x287020):
+
+  | Register / slot | Argument |
+  |---|---|
+  | a0, a1 | from, to |
+  | a2 | CColPoint (the point first) |
+  | a3 | the entity hit (out) |
+  | t0..t3 | buildings, vehicles, peds, objects |
+  | sp+0, +8, +16, +24 (8-byte slots) | dummies, ignore see-through, ignore some objects, ignore shoot-through |
+  | v0 | the hit |
+
+- The chained call's stack arguments sit below a lowered sp (0x40), put back when it returns. The frame hook's
+  `Chain` keeps sp, and `chainMore` runs the line test once a frame, then the trainer's calls. The vectors are at
+  0x7FE00..
+- `LCS_FOOT_WALL=0` turns it off, `LCS_FOOT_WALL_LOG=1` logs each hit. `LCS_CAMWALL_PROBE=1` fires lines 2 m out from
+  the camera in ten directions instead (what is around it).
+
+**What was tried before this:**
+- **A 1 m margin** (for GTA's ~0.9 m near plane) put the camera in his neck in tight spots.
+- **Moving over to the game's camera** when it pulled in: other cases still came from the camera's own height.
+
+**Checked:**
+- **A wall right behind him** (case A). Before, the camera stood on the wall's plane; now it is 0.3 m in front, with
+  the same view.
+- **Aiming at a wall.** Fine.
+
+**A limit of the map, not of the camera.** In that courtyard one wall's visible geometry stands out past its
+collision. The probes found nothing within 2 m but the far wall, and the game's own camera shows the same blur when it
+comes near it, so no line test sees it. The camera can still show it close up there.
 
 ## Tools for LCS debugging
 

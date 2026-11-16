@@ -29,6 +29,7 @@
 #include "game/vcs_hud.h"
 #include "game/lcs_mouseaim.h"
 #include "game/lcs_trainer.h"
+#include "game/lcs_weapons.h"
 #include "game/vcs_input.h"
 #include "game/vcs_prompts.h"
 #include "game/vcs_volume.h"
@@ -751,6 +752,7 @@ namespace
         vcs::prompts::registerSettings(); // the Enhancements page: button prompts by device (game/vcs_prompts.h)
         vcs::world::registerSettings();   // Enhancements > World: density, draw distance (game/vcs_world_detail.h)
         vcs::driveby::registerSettings(); // Enhancements > Combat: drive-by fire rate (game/vcs_driveby.h)
+        lcs::weapons::registerSettings(); // Enhancements > Combat: switching weapons with the detonator (game/lcs_weapons.h)
         vcs::registerEffectsSettings();   // Enhancements > Effects: Reduce Post Processing Effects (game/vcs_effects_timing.h)
 
         s = {};

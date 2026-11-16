@@ -57,6 +57,8 @@ namespace vcs::input
         vcs::aim::Output (*aimUpdate)(const vcs::aim::Input &in) = nullptr;
         float (*aimCameraShift)() = nullptr;
         void (*aimStick)(float lx, float ly) = nullptr; // the left stick going to the game, each pad read
+        // the direct camera on foot: the clear fraction of the line from its pivot to where it would stand (walls)
+        float (*footCameraClear)(const float pivot[3], const float pos[3]) = nullptr;
     };
     void setGameLayout(const GameLayout &layout);
 

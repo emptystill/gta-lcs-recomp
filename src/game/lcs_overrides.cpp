@@ -3,8 +3,10 @@
 // the VCS one it mirrors and how it was found (docs/LCS.md).
 #include "game_overrides.h"
 #include "debug/rig.h"
+#include "game/lcs_camwall.h"
 #include "game/lcs_mouseaim.h"
 #include "game/lcs_trainer.h"
+#include "game/lcs_weapons.h"
 #include "game/vcs_display.h"
 #include "game/vcs_hud.h"
 #include "platform/platform.h"
@@ -262,41 +264,64 @@ namespace
     struct Chain
     {
         bool active = false;
-        uint32_t ra = 0, a0 = 0;
+        uint32_t ra = 0, a0 = 0, sp = 0;
+        bool wall = false; // the foot camera's line test (game/lcs_camwall.h): its answer to take, its stack to free
     } g_chain;
+    bool g_wallDone = false; // the line test chained this frame
+
+    // The next call of the frame after the first (the camera's line test once, then the trainer's): true when chained.
+    bool chainMore(uint8_t *rdram, R5900Context *ctx)
+    {
+        const Chain saved{true, GPR_U32(ctx, 31), GPR_U32(ctx, 4), GPR_U32(ctx, 29), false};
+        bool wall = false;
+        bool chained = false;
+        if (!g_wallDone)
+        {
+            g_wallDone = true;
+            chained = wall = lcs::camwall::chain(rdram, ctx);
+        }
+        if (!chained)
+            chained = lcs::trainer::chainNext(rdram, ctx);
+        if (!chained)
+            return false;
+        g_chain = saved;
+        g_chain.wall = wall;
+        SET_GPR_U32(ctx, 31, kLimiter);
+        return true;
+    }
 
     PS2_GUEST_CC void frameBoundary(uint8_t *rdram, R5900Context *ctx, PS2Runtime *runtime)
     {
         if (g_chain.active && GPR_U32(ctx, 31) == kLimiter) // back from a chained call
         {
             g_chain.active = false;
+            if (g_chain.wall)
+                lcs::camwall::onReturn(rdram, ctx); // (v0 is its answer)
             SET_GPR_U32(ctx, 31, g_chain.ra);
             SET_GPR_U32(ctx, 4, g_chain.a0);
-            const Chain saved{true, g_chain.ra, g_chain.a0};
-            if (lcs::trainer::chainNext(rdram, ctx)) // the trainer's further calls, in the same frame
-            {
-                g_chain = saved;
-                SET_GPR_U32(ctx, 31, kLimiter);
+            SET_GPR_U32(ctx, 29, g_chain.sp);
+            if (chainMore(rdram, ctx)) // further calls, in the same frame
                 return;
-            }
             g_origLimiter(rdram, ctx, runtime);
             return;
         }
-        const Chain saved{true, GPR_U32(ctx, 31), GPR_U32(ctx, 4)};
-        // the mouse aim's way in / out of the aim pose (game/lcs_mouseaim.h), else the trainer's weapons
-        // (game/lcs_trainer.h): a guest call chained (pc, a0.. set)
-        bool chained = lcs::mouseaim::onFrame(rdram, ctx);
+        g_wallDone = false;
+        const Chain saved{true, GPR_U32(ctx, 31), GPR_U32(ctx, 4), GPR_U32(ctx, 29), false};
+        // the mouse aim's way in / out of the aim pose (game/lcs_mouseaim.h) first; then the foot camera's line test
+        // (game/lcs_camwall.h) and the trainer's weapons (game/lcs_trainer.h): guest calls chained (pc, a0.. set),
+        // each returning into the limiter
+        const bool chained = lcs::mouseaim::onFrame(rdram, ctx);
         lcs::trainer::onFrame(rdram);
         vcs::rig::onGameFrame(rdram, ctx, runtime);
         vcs::input::holdInBackground(runtime);
-        if (!chained)
-            chained = lcs::trainer::chainNext(rdram, ctx);
         if (chained)
         {
             g_chain = saved;
             SET_GPR_U32(ctx, 31, kLimiter);
             return;
         }
+        if (chainMore(rdram, ctx))
+            return;
         g_origLimiter(rdram, ctx, runtime);
     }
 
@@ -531,6 +556,7 @@ namespace
             input.aimUpdate = &lcs::mouseaim::update;
             input.aimCameraShift = &lcs::mouseaim::cameraShift;
             input.aimStick = &lcs::mouseaim::stick;
+            input.footCameraClear = &lcs::camwall::clear; // the foot camera kept out of walls (game/lcs_camwall.h)
             vcs::input::setGameLayout(input);
             lcs::mouseaim::install(runtime);
         }
@@ -616,6 +642,7 @@ namespace
             if (g_origFrameKick)
                 runtime.replaceFunction(kFrameKick, &frameKick);
         }
+        lcs::weapons::install(runtime); // the detonator's weapon switch (game/lcs_weapons.h)
         g_origLimiter = runtime.lookupFunction(kLimiter);
         if (g_origLimiter)
             runtime.replaceFunction(kLimiter, &frameBoundary);
