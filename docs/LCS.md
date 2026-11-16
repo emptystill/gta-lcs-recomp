@@ -356,6 +356,18 @@ frame:
   the blocked spot the view is the game's own camera, which moves as with a gamepad. The foot camera is unchanged
   (checked: `camfree` gives the same numbers).
 
+The user's ride, recorded frame by frame (`VCS_CAMRES_LOG=2` under the watch; 7370 frames, mostly on a PCJ-600),
+found the shake that was left:
+- **The bike camera's own pitch.** On a bike the game's camera looks ~0.3 rad steeper than the pitch it is given,
+  with nothing in the way. Its pitch alternates 0.33 <-> 0.38 from frame to frame.
+- **The false blocked view.** At the 0.15 rad threshold the camera was half on the game's camera in 70% of the frames,
+  and its height went up and down 0.2 m a frame.
+- **The fix.** The blocked test starts at 0.6 rad, against an excess eased over 0.15 s: the ride's spikes over 0.6
+  lasted 1 - 6 frames, while a blocked view is ~1.1 rad and lasts. When it does blend, the game's camera is taken
+  eased (0.12 s, relative to the vehicle).
+- **Checked.** The grass slope still goes over to the game's camera. On the `camcenter` run this camera's own jolts are
+  9; the rest happen where the view is the game's camera (the car stuck by the tree).
+
 Not yet: the game's camera collision
 (walls) works on its own camera, not this one - only its distance carries over.
 

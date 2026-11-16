@@ -354,6 +354,8 @@ namespace vcs::input
             float ez = 0.0f;    // the entity's height, eased (a vehicle's suspension, kerbs, steps)
             float blend = 0.0f; // how far the game's own camera has it (its view blocked: it rose over the obstacle)
             float dt = 0.0f;    // seconds since the last result
+            float gRel[3] = {0, 0, 0}, gFront[3] = {0, 0, 0}; // the game's camera behind a vehicle, eased (relative)
+            float excess = 0.0f; // its pitch over the given one, eased: spikes of a few frames are not a blocked view
             std::chrono::steady_clock::time_point last{};
         } g_orbit;
 
@@ -1291,6 +1293,7 @@ namespace vcs::input
             o.ez = e[2];
             o.blend = 0.0f;
             o.dt = 0.0f;
+            o.excess = 0.0f;
         }
         else
         {
@@ -1365,7 +1368,13 @@ namespace vcs::input
                 // behind the car the view goes over to the game's camera, above the grass.
                 const float given = std::max(d.alpha, -0.07f);
                 excess = std::asin(std::clamp(-front[2], -1.0f, 1.0f)) - given;
-                want = std::clamp((excess - 0.15f) / 0.25f, 0.0f, 1.0f);
+                // From 0.6 rad: on a bike the game's camera looks ~0.3 rad steeper than it was given with nothing in
+                // the way (its own bike geometry), alternating 0.33 <-> 0.38 from frame to frame; at the old 0.15 the
+                // camera was half on it 70% of the time and shook 0.2 m a frame (the user's recorded ride). A blocked
+                // view is ~1.1 rad.
+                // Eased over 0.15 s first: the ride had spikes over 0.6 of 1 - 6 frames only.
+                o.excess += (excess - o.excess) * (o.dt > 0.0f ? 1.0f - std::exp(-o.dt / 0.15f) : 1.0f);
+                want = std::clamp((o.excess - 0.6f) / 0.3f, 0.0f, 1.0f);
             }
             else
             {
@@ -1376,14 +1385,33 @@ namespace vcs::input
             // camera hands it back to this one, and at 0.12 s that hand-over moved the camera 0.7 m a frame
             const float tau = inCar ? 0.25f : (want > o.blend ? 0.08f : 0.35f);
             o.blend += (want - o.blend) * (o.dt > 0.0f ? 1.0f - std::exp(-o.dt / tau) : 1.0f);
+            // behind a vehicle the game's camera is taken eased (0.12 s, relative to the vehicle) - it shakes from frame to
+            // frame on a bike; reset to it while it is not used
+            float gSrc[3], gFront[3];
+            for (int i = 0; i < 3; ++i)
+            {
+                gSrc[i] = src[i];
+                gFront[i] = front[i];
+            }
+            if (inCar)
+            {
+                const float kg = o.blend > 1e-3f && o.dt > 0.0f ? 1.0f - std::exp(-o.dt / 0.12f) : 1.0f;
+                for (int i = 0; i < 3; ++i)
+                {
+                    o.gRel[i] += (src[i] - e[i] - o.gRel[i]) * kg;
+                    o.gFront[i] += (front[i] - o.gFront[i]) * kg;
+                    gSrc[i] = e[i] + o.gRel[i];
+                    gFront[i] = o.gFront[i];
+                }
+            }
             if (o.blend > 1e-3f)
             {
                 const float w = o.blend;
                 float n = 0.0f;
                 for (int i = 0; i < 3; ++i)
                 {
-                    pos[i] += (src[i] - pos[i]) * w;
-                    dir[i] += (front[i] - dir[i]) * w;
+                    pos[i] += (gSrc[i] - pos[i]) * w;
+                    dir[i] += (gFront[i] - dir[i]) * w;
                     n += dir[i] * dir[i];
                 }
                 n = std::sqrt(n);
