@@ -26,7 +26,7 @@ namespace lcs::mouseaim
     vcs::aim::Output update(const vcs::aim::Input &in);
 
     // Game thread, at the frame boundary (the limiter hook, before the frame): enters, keeps and leaves the aim. True
-    // when it chained a guest call (pc / a0 / a1 set): the hook must return without running the limiter.
+    // when it chained a guest call (pc / a0 / a1 set): the hook makes it return into the limiter.
     bool onFrame(uint8_t *rdram, R5900Context *ctx);
 
     // How far the camera is over the shoulder: 0 not aiming .. 1 aiming (eased). Any thread.

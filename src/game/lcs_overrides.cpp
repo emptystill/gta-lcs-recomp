@@ -4,6 +4,7 @@
 #include "game_overrides.h"
 #include "debug/rig.h"
 #include "game/lcs_mouseaim.h"
+#include "game/lcs_trainer.h"
 #include "game/vcs_display.h"
 #include "platform/platform.h"
 #include "runtime/ps2_control.h"
@@ -242,14 +243,50 @@ namespace
     }
 
     PS2Runtime::RecompiledFunction g_origLimiter = nullptr;
+    constexpr uint32_t kLimiter = 0x002B5400u; // the frame limiter (a0: its state), called from 0x100714 only
+
+    // A guest call chained from the frame boundary returns into the limiter: its $ra is set to the limiter's entry, so
+    // the hook runs again when it returns - the caller's $ra / a0 put back, the next call chained or the limiter run.
+    // (Skipping the limiter instead broke the game after six frames in a row: a null virtual call at 0x2C8F6C.)
+    struct Chain
+    {
+        bool active = false;
+        uint32_t ra = 0, a0 = 0;
+    } g_chain;
+
     PS2_GUEST_CC void frameBoundary(uint8_t *rdram, R5900Context *ctx, PS2Runtime *runtime)
     {
-        // the mouse aim's way in / out of the aim pose (game/lcs_mouseaim.h): a chained guest call skips the limiter once
-        const bool chained = lcs::mouseaim::onFrame(rdram, ctx);
+        if (g_chain.active && GPR_U32(ctx, 31) == kLimiter) // back from a chained call
+        {
+            g_chain.active = false;
+            SET_GPR_U32(ctx, 31, g_chain.ra);
+            SET_GPR_U32(ctx, 4, g_chain.a0);
+            const Chain saved{true, g_chain.ra, g_chain.a0};
+            if (lcs::trainer::chainNext(rdram, ctx)) // the trainer's further calls, in the same frame
+            {
+                g_chain = saved;
+                SET_GPR_U32(ctx, 31, kLimiter);
+                return;
+            }
+            g_origLimiter(rdram, ctx, runtime);
+            return;
+        }
+        const Chain saved{true, GPR_U32(ctx, 31), GPR_U32(ctx, 4)};
+        // the mouse aim's way in / out of the aim pose (game/lcs_mouseaim.h), else the trainer's weapons
+        // (game/lcs_trainer.h): a guest call chained (pc, a0.. set)
+        bool chained = lcs::mouseaim::onFrame(rdram, ctx);
+        lcs::trainer::onFrame(rdram);
         vcs::rig::onGameFrame(rdram, ctx, runtime);
         vcs::input::holdInBackground(runtime);
         if (!chained)
-            g_origLimiter(rdram, ctx, runtime);
+            chained = lcs::trainer::chainNext(rdram, ctx);
+        if (chained)
+        {
+            g_chain = saved;
+            SET_GPR_U32(ctx, 31, kLimiter);
+            return;
+        }
+        g_origLimiter(rdram, ctx, runtime);
     }
 
     PS2_GUEST_CC void traceOom(uint8_t *rdram, R5900Context *ctx, PS2Runtime *runtime)
@@ -537,9 +574,9 @@ namespace
             if (g_origAfterCam)
                 runtime.replaceFunction(0x00287020u, &afterCamProcess);
         }
-        g_origLimiter = runtime.lookupFunction(0x002B5400u);
+        g_origLimiter = runtime.lookupFunction(kLimiter);
         if (g_origLimiter)
-            runtime.replaceFunction(0x002B5400u, &frameBoundary);
+            runtime.replaceFunction(kLimiter, &frameBoundary);
         vcs::StreamLayout stream;
         stream.read = kStreamRead;
         stream.poll = kStreamPoll;

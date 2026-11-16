@@ -320,7 +320,7 @@ namespace lcs::mouseaim
                 std::fprintf(stderr, "[mouseaim] aim on: SetPointGunAt(%08x, 0)\n", ped);
                 SET_GPR_U32(ctx, 4, ped);
                 SET_GPR_U32(ctx, 5, 0u);
-                ctx->pc = kSetPointGunAt; // returns to the limiter's caller: the limiter is skipped this frame
+                ctx->pc = kSetPointGunAt; // returns into the limiter (lcs_overrides.cpp frameBoundary)
                 return true;
             }
         }

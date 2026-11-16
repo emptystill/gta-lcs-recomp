@@ -28,6 +28,7 @@
 #include "game/vcs_movie.h"
 #include "game/vcs_hud.h"
 #include "game/lcs_mouseaim.h"
+#include "game/lcs_trainer.h"
 #include "game/vcs_input.h"
 #include "game/vcs_prompts.h"
 #include "game/vcs_volume.h"
@@ -980,7 +981,7 @@ int main(int argc, char *argv[])
         PS2Runtime::setIoPaths(paths);
 
         vcs::rig::install(runtime); // control-channel automation commands (debug/rig.h)
-        // the trainer (game/vcs_trainer.h) not installed: its script commands and addresses are VCS's
+        lcs::trainer::install(runtime); // the trainer's weapons (game/lcs_trainer.h; the F5 menu)
         vcs::input::install(runtime);   // the player's bindings feed the pad (game/vcs_input.h)
         vcs::volume::install(runtime);  // the game's music / effects levels follow the settings (game/vcs_volume.h)
         vcs::gameinfo::install(runtime); // the F3 overlay's game-state panel, the `gameinfo` command (debug/game_info.h)

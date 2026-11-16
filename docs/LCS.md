@@ -45,7 +45,7 @@ data and fixes are expected in LCS at other addresses.
   applies. It installs every game hook: widescreen, HUD, frame rate, native rendering, native sound and streaming
   (the IOP is emulated for LCS), the pause menu, aim, cameras, timing fixes.
 - Set off in `src/main.cpp`: the player's bindings (`VCS_INPUT_MAP=0`: the runtime's own pad mapping; the bindings also
-  write VCS's camera / aim / radio memory), the game's volume levels (`VCS_GAME_VOLUME=0`), the trainer (not installed).
+  write VCS's camera / aim / radio memory), the game's volume levels (`VCS_GAME_VOLUME=0`). VCS's trainer is not built; LCS has its own ("Trainer" below).
 - Data folder: `%LOCALAPPDATA%\LCSRecomp` (VCS: `VCSRecomp`), so LCS never touches a VCS memory card.
 - The launcher (`LCSLauncher`) names LCS; its look (sunset, palm trees, pink) is still Vice City's.
 
@@ -463,6 +463,91 @@ PC's mouse aim, switched off: CCam::Using3rdPersonMouseCam 0x286F88 and the swit
 - **Each weapon.** Fists / knuckles / grenades unchanged, the snipers' scope (mode 7) unchanged; the pistol, shotgun,
   SMG, rifle and flame-thrower aim.
 
+## Trainer (2026-11-16)
+
+The trainer key (F5, Back + RB) opens VCS's trainer menu (`src/ui/trainer_menu.cpp`, titled LCS TRAINER, `kLcs`: the
+Weapons page only so far). `src/game/lcs_trainer.cpp` implements `game/vcs_trainer.h`'s interface for it;
+`vcs_trainer.cpp` is left out of the build (CMakeLists.txt), since it works through VCS's script VM addresses and
+commands. What it has: give any weapon (put in his hand on foot), the cheats' three weapon sets, remove all weapons,
+unlimited ammo, no reload. The other actions answer "Not available in Liberty City Stories yet". Control channel:
+`trainer weapon T | loadout N | noweapons | ammo 0|1 | noreload 0|1 | state`.
+
+**How the game gives weapons.** This was found with a write watch (`watch` on the player's weapon slots, ped+0x594,
+with `VCS_WATCH_STACK=1`) while entering the weapons cheat. The writers were CWeapon::Init 0x2A2650, called from
+0x1E1314 inside **CPed::GiveWeapon 0x1E1180** (ped, type, ammo, 1), called from the cheat **FUN_0016C838**. The
+other two sets are FUN_0016CA70 and FUN_0016CC80. Each cheat does the following:
+
+1. Shows its text (0x23EF60).
+2. Calls **CStreaming::RequestModel 0x18B400** (model, 1) for every weapon model.
+3. Calls **LoadAllRequestedModels 0x18F648** (0).
+4. Calls FindPlayerPed 0x107368, then GiveWeapon for each weapon.
+5. Calls **SetModelIsDeletable 0x18FC38** for each model.
+6. Adds 1000 to 0x3D9CE0 and sets gp-0x6600 to 1. These look like the cheat counters. The trainer leaves both
+   alone.
+
+Related functions:
+
+- **CPed::SetCurrentWeapon(ped, slot) 0x1E13A0**: removes the old weapon model (0x1E0F50) and sets +0x6B8. For the
+  player it also sets the player info's +0xB64. Then it adds the new model (0x1E0E10).
+- **SetCurrentWeapon(ped, type) 0x1E1470** goes through the slot lookup 0x1E1380 (the weapon info's +0x68).
+- **CPed::ClearWeapons 0x1E16C8** shuts down the 10 slots (CWeapon::Shutdown 0x2A2728), then selects fists.
+
+**Weapon table.** The table is at `*(*(0x3D9B48)+4) + type*0x70` and has 37 entries (0..36). Its fields:
+
+| Offset | Field |
+|---|---|
+| +0 | fire type: 0 melee, 1 instant hit, 2 projectile, 3 area, 4 camera |
+| +4 | range |
+| +0x10 | clip size |
+| +0x14 | damage |
+| +0x60, +0x64 | models (-1 for none) |
+| +0x68 | slot |
+
+Two weapons have a second model: the remote grenades (270, plus the detonator 291) and the minigun (290 and 294).
+
+Weapon types:
+
+| Type | Weapon |
+|---|---|
+| 1-11 | knuckles, screwdriver, golf club, nightstick, knife, bat, hammer, cleaver, machete, katana, chainsaw |
+| 12-15 | grenades, remote grenades, tear gas, molotovs |
+| 16 | the rocket (the projectile) |
+| 17-18 | pistol, .357 |
+| 19-21 | shotgun, combat shotgun, stubby shotgun |
+| 22-25 | Tec-9, micro SMG, MAC-10, SMG |
+| 26-27 | M4, AK-47 |
+| 28-29 | sniper, laser sniper |
+| 30-33 | rocket launcher, flamethrower, M60, minigun |
+| 34 | detonator |
+| 35 | the helicopter's gun |
+| 36 | camera |
+
+The names were checked against the HUD icon each weapon shows.
+
+**Weapon slot.** Each slot is 0x1C bytes at ped+0x594: type, state, +8 ammo in the clip, +0xC ammo in total.
+
+**Calls from the frame boundary.** The trainer queues the cheat's own sequence. Each call is chained from the
+limiter hook (`frameBoundary`, `lcs_overrides.cpp`) with its `$ra` set to the limiter's entry 0x2B5400. When it
+returns, the hook runs again and recognises the return by `$ra` == 0x2B5400. It then puts the caller's `$ra` / a0
+back and chains the next call or runs the limiter. A whole set is therefore given in one frame, as the cheat does.
+
+The first version skipped the limiter for the frame instead, as the mouse aim had done. Six skipped limiters in a row
+killed the game thread: `[guest-branch:missing-target] JALR source=0x2c8f6c target=0x0`. That is FUN_002C8E40
+calling a virtual function on each entry of the list at 0x60E408, and one entry had a null vtable entry. The mouse aim
+now returns into the limiter the same way. The trainer only acts while the game clock (0x3D9B70) runs. In the pause
+menu it answers "Only while you play".
+
+**Checked** (scratch tests: the trainer command, then the slots read back, screenshots at 1920x1080):
+
+- **Each weapon on its own.** All 33 weapons were given one by one. Each lands in its slot with its ammunition and
+  goes into his hand, with the right icon on the HUD.
+- **Sets and removal.** The three sets match the cheats' slot for slot. Remove all weapons leaves every slot empty.
+- **Ammo toggles.** Unlimited ammo keeps the total at 9999. No reload keeps the pistol's clip at 17 through 3 s of
+  firing.
+- **The menu.** F5 → Weapons → Give weapon gives the selected weapon.
+- **Pause and car.** Nothing is given in the pause menu. In a car the weapon is given but not put in his hand.
+- **The mouse aim afterwards.** It still enters, fires through the circle and releases.
+
 ## Tools for LCS debugging
 
 - `tools/xglobal.py --vcs-lcs 0xADDR...`: a VCS global's LCS address, from the code around its uses (votes).
@@ -502,3 +587,5 @@ PC's mouse aim, switched off: CCam::Using3rdPersonMouseCam 0x286F88 and the swit
   `game/lcs/manual_functions.csv`.
 - 2026-11-15: frame rate above 30: VCS's frame-rate module at LCS's addresses, the step floor and two dead-branch
   patches; 60 / 144 checked against 30. Uncapped ~130 fps.
+- 2026-11-16: the trainer (F5): weapons - any weapon, the cheats' sets, remove, unlimited ammo, no reload
+  ("Trainer").

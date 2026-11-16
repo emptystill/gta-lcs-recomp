@@ -75,6 +75,8 @@ file(GLOB_RECURSE VCS_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_SOURCE_DIR}/src/*.cpp"
 )
 list(REMOVE_ITEM VCS_SOURCES "${CMAKE_SOURCE_DIR}/src/main.cpp")
+# VCS's trainer (its script VM addresses / commands); LCS's is src/game/lcs_trainer.cpp, the same interface
+list(REMOVE_ITEM VCS_SOURCES "${CMAKE_SOURCE_DIR}/src/game/vcs_trainer.cpp")
 # The platform layer, RHI and renderer are their own libraries (src/*/CMakeLists.txt), linked into the runtime.
 list(FILTER VCS_SOURCES EXCLUDE REGEX "/src/(platform|rhi|render)/")
 # VU1 microprograms compiled to C++ by tools/vu1_recomp.py (from the user's ELF; see game/vcs/vu1_uploads.txt)

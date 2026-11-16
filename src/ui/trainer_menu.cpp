@@ -71,6 +71,7 @@ namespace ui
             int top = 0; // first row shown
         };
 
+        constexpr bool kLcs = true; // Liberty City Stories: only the pages game/lcs_trainer.cpp has (the weapons)
         bool g_open = false;
         bool g_releaseWait = false;
         bool g_chordWasDown = false;
@@ -209,8 +210,11 @@ namespace ui
             switch (page)
             {
             case Main:
+                // Liberty City Stories: the weapons so far (game/lcs_trainer.h); VCS's other pages come back as LCS gets them
+                rows.push_back(pageRow("Weapons", Weapons, "Any weapon, the cheats' weapon sets, unlimited ammo."));
+                if (kLcs)
+                    break;
                 rows.push_back(pageRow("Player", Player, "God mode, health, wanted level, money."));
-                rows.push_back(pageRow("Weapons", Weapons, "Any weapon, loadouts, unlimited ammo."));
                 rows.push_back(pageRow("Vehicles", Vehicles, "Spawn any vehicle; repair, flip and boost the one you drive."));
                 rows.push_back(pageRow("Teleport", Teleport, "Every district of Vice City, and a position of your own."));
                 rows.push_back(pageRow("Camera", Camera, "Free camera: fly anywhere. Hide the HUD."));
@@ -238,15 +242,22 @@ namespace ui
                 rows.push_back(pageRow("Give weapon", WeaponList, "Any of the game's weapons, with ammunition."));
                 const std::vector<tr::Entry> loadouts = tr::loadouts();
                 g_loadout = std::clamp(g_loadout, 0, static_cast<int>(loadouts.size()) - 1);
-                rows.push_back(choiceRow("Give loadout", loadouts[g_loadout].name,
+                static const char *const kSets[] = {
+                    "Brass knuckles, knife, molotovs, pistol, shotgun, Tec-9, AK-47, sniper rifle, flamethrower.",
+                    "Katana, remote grenades, .357, stubby shotgun, MAC-10, M4, laser sniper, rocket launcher.",
+                    "Chainsaw, grenades, .357, combat shotgun, SMG, M4, laser sniper, minigun.",
+                };
+                rows.push_back(choiceRow(kLcs ? "Give weapon set" : "Give loadout", loadouts[g_loadout].name,
                                          [n = static_cast<int>(loadouts.size())](int d) { g_loadout = wrap(g_loadout + d, n); },
                                          [] { tr::giveLoadout(g_loadout); },
-                                         "Street: bat, molotovs, pistol, shotgun, micro SMG. Military: machete, grenades, "
-                                         "Equalizer, Spaz, AK, sniper, rocket launcher. Heavy: chainsaw, grenades, "
-                                         "Equalizer, Spaz, SMG, assault rifle, laser sniper, minigun."));
+                                         kLcs ? kSets[std::clamp(g_loadout, 0, 2)]
+                                              : "Street: bat, molotovs, pistol, shotgun, micro SMG. Military: machete, grenades, "
+                                                "Equalizer, Spaz, AK, sniper, rocket launcher. Heavy: chainsaw, grenades, "
+                                                "Equalizer, Spaz, SMG, assault rifle, laser sniper, minigun."));
                 rows.push_back(toggleRow("Unlimited ammo", tr::UnlimitedAmmo, "Every weapon you carry stays full."));
                 rows.push_back(toggleRow("No reload", tr::NoReload, "The clip never runs out: fire without reloading."));
-                rows.push_back(toggleRow("Fast reload", tr::FastReload, "The game's own quick reload."));
+                if (!kLcs)
+                    rows.push_back(toggleRow("Fast reload", tr::FastReload, "The game's own quick reload."));
                 rows.push_back(actionRow("Remove all weapons", tr::removeWeapons, "Empty hands."));
                 break;
             }
@@ -429,7 +440,7 @@ namespace ui
             // header: the Vice City sunset
             const float headerH = 66.0f * s;
             dl->AddRectFilledMultiColor(ImVec2(x, y), ImVec2(x + w, y + headerH), pink, violet, violet, pink);
-            const std::string title = "VCS TRAINER";
+            const std::string title = "LCS TRAINER";
             const float titleSize = 34.0f * s;
             const ImVec2 ts = textSize(titleSize, title.c_str());
             text(dl, titleSize, ImVec2(x + (w - ts.x) * 0.5f, y + (headerH - ts.y) * 0.5f), rgba(255, 255, 255), title, true);
