@@ -300,6 +300,17 @@ the vehicle after Keyboard > Car camera return (`vcs_carcam.cpp`). LCS's direct 
 - **Vehicle limits:** looking up 0.45 rad, moving in no closer than 3/4 of the distance (closer, the car was seen from
   inside).
 
+The user's play, recorded (a screenshot a second and the camera ten times a second while they played; the user's
+report: "se están repitiendo errores"):
+- **The bike shake.** On a PCJ-600 looking up at the limit, the game's camera found the ground in its way time after
+  time. Its height jumped by up to 2 m between frames, and its Front went from 0.15 up to 0.94 down. The blend
+  followed it, so the view's pitch shook by ±3°.
+- **The fix.** The blend now runs only from level and down. Behind a vehicle the game camera's height is a floor,
+  eased (0.3 s up, 0.6 s down) and never above the pivot + 1.5 m. A lifted camera keeps looking at the point at its
+  distance ahead, so it tilts down by just the lift's angle.
+- **Checked.** On flat ground it still looks 24° up. On the grass slope it stays above the grass, the car at the
+  bottom of the picture: before, it was inside the hill.
+
 Not yet: the game's camera collision
 (walls) works on its own camera, not this one - only its distance carries over.
 

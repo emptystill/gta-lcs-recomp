@@ -352,6 +352,8 @@ namespace vcs::input
             float offset[3] = {0, 0, 0};
             float dist = 0.0f;
             float blend = 0.0f; // how far the game's own camera has it (its view blocked: it rose over the obstacle)
+            float floor = 0.0f; // the game camera's height, eased (the lowest this one goes behind a vehicle)
+            bool floorSet = false;
             float dt = 0.0f;    // seconds since the last result
             std::chrono::steady_clock::time_point last{};
         } g_orbit;
@@ -1278,6 +1280,7 @@ namespace vcs::input
             o.dist = along;
             o.blend = 0.0f;
             o.dt = 0.0f;
+            o.floorSet = false;
         }
         else
         {
@@ -1317,19 +1320,46 @@ namespace vcs::input
         // The game's own camera, run at the same heading and pitch, knows the world: on open ground it stands where
         // this one does (looking up it stays at its distance, just above the ground), and where its view is blocked (a
         // slope behind the car, a wall, a tree) it rises over the obstacle and looks down - GTA III's camera on a
-        // string. A little above this one: this one rises to its height (the ground on a slope). Well above it (1.5 m
-        // and more): it eases over to the game's camera, as VCS's mouse camera is the game's own; back when clear.
-        // On foot looking up this one is low on purpose (moved in towards Toni), so there only from level and down.
+        // string. Behind a vehicle its height, eased, is a floor this one rises to, still looking at the pivot (the
+        // ground on a slope). Well above this one (1.5 m and more) it eases over to the game's camera, as VCS's mouse camera is the
+        // game's own; back when clear.
         // LCS_CAMERA_GAME_BLEND=0: never (the camera goes through what is in the way).
         static const bool gameBlend = [] {
             const char *v = std::getenv("LCS_CAMERA_GAME_BLEND");
             return !(v && v[0] == '0');
         }();
-        if (gameBlend && (inCar || d.alpha >= 0.0f))
+        // Looking up (pitch < 0) the game's camera is near the ground and keeps finding it in the way: it rose and fell
+        // by up to 2 m from frame to frame on a bike, and this one shook with it (the user's report, seen in a recording
+        // of their play). So: only its height is taken there, eased, as a floor; the blend only from level and down.
+        if (gameBlend && inCar)
+        {
+            // eased (0.3 s up, 0.6 s down: its frame-to-frame jumps average out) and never above the pivot + 1.5 m
+            const float k = o.dt > 0.0f ? 1.0f - std::exp(-o.dt / (src[2] > o.floor ? 0.3f : 0.6f)) : 1.0f;
+            o.floor = o.floorSet ? o.floor + (src[2] - o.floor) * k : src[2];
+            o.floorSet = true;
+            const float lift = std::min(o.floor, pivot[2] + 1.5f) - pos[2];
+            if (lift > 0.0f)
+            {
+                // raised, it still looks at the point it looked at, at the orbit's distance ahead (the pivot, unless
+                // the ground had stopped it), so the view tilts down by just the lift's angle - smoothly with the
+                // lift, the vehicle kept in the picture
+                const float aim[3] = {pos[0] + dir[0] * dist, pos[1] + dir[1] * dist, pos[2] + dir[2] * dist};
+                pos[2] += lift;
+                float n = 0.0f;
+                for (int i = 0; i < 3; ++i)
+                {
+                    dir[i] = aim[i] - pos[i];
+                    n += dir[i] * dir[i];
+                }
+                n = std::sqrt(n);
+                if (n > 1e-3f)
+                    for (float &f : dir)
+                        f /= n;
+            }
+        }
+        if (gameBlend && d.alpha >= 0.0f)
         {
             const float rise = src[2] - pos[2];
-            if (rise > 0.0f && rise < 0.5f)
-                pos[2] = src[2];
             const float want = std::clamp((rise - 0.5f) / 1.0f, 0.0f, 1.0f);
             const float tau = want > o.blend ? 0.08f : 0.35f;
             o.blend += (want - o.blend) * (o.dt > 0.0f ? 1.0f - std::exp(-o.dt / tau) : 1.0f);
