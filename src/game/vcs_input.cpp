@@ -351,6 +351,7 @@ namespace vcs::input
             uint32_t mode = 0, cam = 0, entity = 0;
             float offset[3] = {0, 0, 0};
             float dist = 0.0f;
+            float ez = 0.0f;    // the entity's height, eased (a vehicle's suspension, kerbs, steps)
             float blend = 0.0f; // how far the game's own camera has it (its view blocked: it rose over the obstacle)
             float floor = 0.0f; // the game camera's height, eased (the lowest this one goes behind a vehicle)
             bool floorSet = false;
@@ -1264,11 +1265,17 @@ namespace vcs::input
         const float along = (e[0] - src[0]) * front[0] + (e[1] - src[1]) * front[1] + (e[2] - src[2]) * front[2];
         if (!(along > 0.3f && along < 60.0f)) // not a following camera's geometry: leave it
             return;
-        // The pivot: the followed entity plus the game's offset to the point it looked at, both the offset and the
-        // distance eased over ~0.2 s - the game's own camera shakes on a bike (lean, bumps) and that came through.
+        // The pivot: above the followed entity, by the game's height offset to the point it looked at (its look-at point
+        // is over the entity: across the ground it was off by < 0.1 m, noise). Measured against the game's own camera
+        // (driving with the mouse still, a sample every 0.05 s): taking the game's look-at point and distance as they
+        // came each frame moved this camera 0.25 m a sample in distance and 0.16 m in height, the game's own 0.002 and
+        // 0.05 - the user: "demasiado movimiento ... no mantienes una posición fija como con un mando". So the
+        // entity's height is eased (bounces), the offset over 0.3 s, and the distance over 0.4 s - quickly only when
+        // the game's camera came in by a quarter or more (a wall).
         const float gameOffset[3] = {src[0] + front[0] * along - e[0], src[1] + front[1] * along - e[1],
                                      src[2] + front[2] * along - e[2]};
         DirectOrbit &o = g_orbit;
+        const bool inCarMode = d.mode == L.directCarMode;
         const auto now = ps2x::hostNow();
         if (!o.valid || o.mode != d.mode || o.cam != cam || o.entity != entity)
         {
@@ -1278,6 +1285,7 @@ namespace vcs::input
             o.entity = entity;
             std::memcpy(o.offset, gameOffset, sizeof(o.offset));
             o.dist = along;
+            o.ez = e[2];
             o.blend = 0.0f;
             o.dt = 0.0f;
             o.floorSet = false;
@@ -1286,19 +1294,16 @@ namespace vcs::input
         {
             const float dt = std::clamp(std::chrono::duration<float>(now - o.last).count(), 0.0f, 0.1f);
             o.dt = dt;
-            const float k = 1.0f - std::exp(-dt / 0.2f);
-            // only the height and the distance are eased: the offset across the ground turns with the view, and easing
-            // it made the camera trail behind the mouse (the user: "un movimiento suave")
-            o.offset[0] = gameOffset[0];
-            o.offset[1] = gameOffset[1];
-            o.offset[2] += (gameOffset[2] - o.offset[2]) * k;
-            // the distance comes in quickly (the game's camera pulled in at a wall: no look through it) and goes back
-            // out eased
-            const float kd = along < o.dist ? 1.0f - std::exp(-dt / 0.04f) : k;
+            auto ease = [dt](float tau) { return 1.0f - std::exp(-dt / tau); };
+            // nothing across the ground is eased: it turns with the view, and easing it made the camera trail behind
+            // the mouse (the user: "un movimiento suave")
+            o.offset[2] += (gameOffset[2] - o.offset[2]) * ease(0.3f);
+            o.ez += (e[2] - o.ez) * ease(inCarMode ? 0.15f : 0.08f);
+            const float kd = along < 0.75f * o.dist ? ease(0.05f) : ease(0.4f);
             o.dist += (along - o.dist) * kd;
         }
         o.last = now;
-        const float pivot[3] = {e[0] + o.offset[0], e[1] + o.offset[1], e[2] + o.offset[2]};
+        const float pivot[3] = {e[0], e[1], o.ez + o.offset[2]};
         // the mouse's view: heading beta (Front.xy = -(cos, sin)), pitch alpha (+ looks down: Front.z = -sin)
         const float ca = std::cos(d.alpha), sa = std::sin(d.alpha);
         float dir[3] = {-std::cos(d.beta) * ca, -std::sin(d.beta) * ca, -sa};
@@ -1387,9 +1392,10 @@ namespace vcs::input
         for (float &u : up)
             u /= ulen;
         {
-            static const bool rlog = std::getenv("VCS_CAMRES_LOG") != nullptr;
+            static const char *rl = std::getenv("VCS_CAMRES_LOG");
+            static const bool rlog = rl != nullptr, every = rl && rl[0] == '2';
             static uint32_t n = 0;
-            if (rlog && (++n % 15) == 0)
+            if (rlog && (every || (++n % 15) == 0))
                 std::fprintf(stderr, "[camres] alpha %.3f game src %.2f %.2f %.2f front %.3f %.3f %.3f along %.2f | ours %.2f %.2f %.2f dist %.2f e %.2f %.2f %.2f\n",
                              d.alpha, src[0], src[1], src[2], front[0], front[1], front[2], along, pos[0], pos[1], pos[2], dist, e[0], e[1], e[2]);
         }

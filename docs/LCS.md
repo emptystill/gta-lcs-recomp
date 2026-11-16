@@ -311,6 +311,19 @@ report: "se están repitiendo errores"):
 - **Checked.** On flat ground it still looks 24° up. On the grass slope it stays above the grass, the car at the
   bottom of the picture: before, it was inside the hill.
 
+Then (the user: on foot and driving the mouse camera "moves too much", it does not keep a fixed place as with a
+gamepad). The camera was measured with the mouse still, driving through the park. It had taken the game's look-at point
+and distance as they came each frame. Now:
+- **Look-at point:** the entity's x / y (the game's look-at point is over the entity: < 0.1 m across, noise), at the
+  entity's height eased (0.15 s in a vehicle, 0.08 s on foot) plus the game's height offset (eased over 0.3 s).
+- **Distance:** eased over 0.4 s, and quickly (0.05 s) only when the game's camera comes in by a quarter or more.
+- **Measured** in the hook, every frame (`VCS_CAMRES_LOG=2`; `LCS_CAMERA_GAME_BLEND=0` for the orbit alone): the car's
+  height jumped 0.10 m a frame on the grass, and the camera's distance to it changed by 0.008 m a frame.
+- **Measuring from outside:** sampling TheCamera and the entity through the control channel is not a frame-exact pair.
+  Its "wobble" of 0.1 m and more is partly that, so judge frame-to-frame motion from the log.
+- **What still moves the most:** the blend into the game's camera where its view is blocked. It rises over the
+  obstacle like GTA III's camera; the PC games move in instead (to do).
+
 Not yet: the game's camera collision
 (walls) works on its own camera, not this one - only its distance carries over.
 
