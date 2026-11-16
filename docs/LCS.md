@@ -200,8 +200,47 @@ wider, nothing stretched, the HUD at 4:3 in the middle, trees drawn to both edge
 
 Not yet: entity culling's side planes (VCS widens `CCamera::IsSphereVisible`'s, FUN_003816F8 at cam+0xB60 / +0xB70;
 without it VCS lost buildings, peds and cars in the outer eighths of a 16:9 picture - LCS's twin is not found by its
-VCS code shape: watch the edges in the city); HUD **Screen edges** (VCS names its HUD's draws, `vcs_hud.cpp`: on LCS
-it behaves as Keep 4:3); the game's own Vert- widescreen option and the cutscene bars setting.
+VCS code shape: watch the edges in the city); the game's own Vert- widescreen option and the cutscene bars setting.
+
+### HUD (2026-11-16)
+
+The user reported the HUD and radar still at 4:3 in full screen, and the weapon icon out of place.
+
+Display > HUD **Screen edges** now works on LCS. It uses VCS's `vcs_hud.cpp`, which records the HUD's 2D draws,
+groups them into elements, anchors each to the edge it is near, and draws them on the native HUD layer. The module's
+addresses became a `vcs::HudLayout` (`setHudLayout`), and LCS's are set in `lcs_overrides.cpp` (`LCS_HUD=0`: off).
+
+| Routine | LCS | VCS | How it was found |
+|---|---|---|---|
+| RwIm2DRenderPrimitive | **0x2B1A70** | 0x2FBE08 | xmatch, unique |
+| its indexed form | **0x2B1AD0** | 0x2FBE68 | xmatch, unique |
+| VIF1 display-list kick | **0x212810** | 0x2723E8 | xmatch, unique; hooked to end the HUD context and anchor the frame's elements |
+| CHud::Draw | **0x23F438** | | data: it calls the money (0x245730, "$%08d") and the clock (0x2457B0, "%02d:%02d"); called from the 2D pass **0x1F6338** |
+| RwRenderStateSet | **0x144B58** | 0x175198 | the most-called function with a0 = 6 (ZTESTENABLE); the same code as VCS's, its jump table elsewhere |
+| rect fill | **0x3219C0** | 0x3E0B10 | xmatch |
+
+What the port does:
+
+- **The weapon icon.** With "Keep 4:3", the icon sat apart from the cluster: it is drawn at its own z, outside the
+  renderer's HUD plane (VCS's old bug, game-internals 6f). The HUD context now moves it onto the plane, so it is in
+  place in every HUD mode.
+- **The anchors.** The coordinates are 640x448 as VCS's. Traced: the clock / health / money / weapon cluster (x 480..626)
+  goes to the right edge, the radar (26..126) to the left. The zone name stays on the right, and the pause menu is
+  untouched (it is drawn outside CHud::Draw).
+- **The scope mask.** The 2D pass draws two black rects through the rect fill on each of its two scope branches
+  (returns 0x1F64B0 / 0x1F64E0 and 0x1F6520 / 0x1F6550). These are the PSP's bars, above and below the 480x272 screen,
+  so they draw nothing. The mask sprite covers the whole 4:3 picture, so the world showed beside it. In widescreen the
+  two rects become the side strips (`maskFromBars`).
+  - Their corners are 2 units off the screen. On its corners they shared vertex positions with the mask sprite, and
+    the renderer, which knows HUD vertices by position, squeezed half of each bar into a slant.
+- **Not hooked:** the radar / font routines (the radar and centred text are known by position only), the menu and the
+  loading screen (drawn as before).
+- **A rule that was dropped.** Leaving draws half the screen wide or more out of the grouping split the scope's
+  mask pieces to different edges. In a scope the cluster stays with the mask, in the middle.
+
+**Checked** at 16:9, 1920x1080, with Screen edges: on foot, aiming, the sniper's scope (black to the edges), the
+rocket launcher, the pause menu, getting into a car. With Keep 4:3: the icon in the cluster.
+
 
 ## Picture sharpness (2026-11-15, to look at again later)
 

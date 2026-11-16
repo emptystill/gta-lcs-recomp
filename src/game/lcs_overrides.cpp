@@ -6,6 +6,7 @@
 #include "game/lcs_mouseaim.h"
 #include "game/lcs_trainer.h"
 #include "game/vcs_display.h"
+#include "game/vcs_hud.h"
 #include "platform/platform.h"
 #include "runtime/ps2_control.h"
 
@@ -240,6 +241,16 @@ namespace
     {
         vcs::input::directCameraResult(rdram, GPR_U32(ctx, 4));
         g_origAfterCam(rdram, ctx, runtime);
+    }
+
+    // The frame's VIF1 display list kick (FUN_00212810; VCS FUN_002723E8 by xmatch: identical code): the HUD context
+    // ends and its elements are anchored for the frame going out (game/vcs_hud.h)
+    constexpr uint32_t kFrameKick = 0x00212810u;
+    PS2Runtime::RecompiledFunction g_origFrameKick = nullptr;
+    PS2_GUEST_CC void frameKick(uint8_t *rdram, R5900Context *ctx, PS2Runtime *runtime)
+    {
+        vcs::onFrameKick();
+        g_origFrameKick(rdram, ctx, runtime);
     }
 
     PS2Runtime::RecompiledFunction g_origLimiter = nullptr;
@@ -574,6 +585,36 @@ namespace
             g_origAfterCam = runtime.lookupFunction(0x00287020u);
             if (g_origAfterCam)
                 runtime.replaceFunction(0x00287020u, &afterCamProcess);
+        }
+        // The HUD at the screen edges (Display > HUD: Screen edges) and on its own layer, as VCS's (game/vcs_hud.h,
+        // docs/LCS.md "HUD"): the 2D routines found by xmatch / their data. LCS_HUD=0: as before (all of it at 4:3).
+        if (!envOff("LCS_HUD"))
+        {
+            vcs::HudLayout hud;
+            hud.im2dRender = 0x002B1A70u;        // VCS 0x2FBE08 (xmatch)
+            hud.im2dRenderIndexed = 0x002B1AD0u; // VCS 0x2FBE68 (xmatch)
+            hud.hudDraw = 0x0023F438u;           // CHud::Draw: calls the money ("$%08d", 0x245730) and the clock
+                                                 // ("%02d:%02d", 0x2457B0); called from the 2D pass 0x1F6338
+            hud.renderStateSet = 0x00144B58u;    // RwRenderStateSet: VCS 0x175198's code, its table elsewhere
+            hud.menuDraw = hud.loadingScreen = 0u;
+            hud.radarDraw = hud.fontRender = hud.glyphBatch = 0u;
+            hud.afterRadar[0] = hud.afterRadar[1] = hud.afterRadar[2] = 0u;
+            // The scope mask (the 2D pass 0x1F6338, before CHud::Draw): two black bars through the rect fill 0x3219C0
+            // (VCS 0x3E0B10, xmatch) on each of its two branches - the PSP's, above and below the 480x272 screen, so
+            // they draw nothing - and the mask sprite over the whole 4:3 picture. In widescreen the world showed in the
+            // strips beside it; the bars are made those strips (maskFromBars).
+            hud.rectFill = 0x003219C0u;
+            hud.maskLeftReturn = 0x001F64B0u;
+            hud.maskRightReturn = 0x001F64E0u;
+            hud.maskLeftReturn2 = 0x001F6520u;
+            hud.maskRightReturn2 = 0x001F6550u;
+            hud.maskFromBars = true;
+            hud.spriteUvReturn = hud.tunnelVision = hud.tunnelVisionEnd = 0u;  // (VCS's Purple Haze only)
+            vcs::setHudLayout(hud);
+            vcs::installHudHooks(runtime);
+            g_origFrameKick = runtime.lookupFunction(kFrameKick);
+            if (g_origFrameKick)
+                runtime.replaceFunction(kFrameKick, &frameKick);
         }
         g_origLimiter = runtime.lookupFunction(kLimiter);
         if (g_origLimiter)

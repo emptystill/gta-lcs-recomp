@@ -47,21 +47,16 @@ namespace vcs
 {
     namespace
     {
-        constexpr uint32_t kIm2DRender = 0x002FBE08u;        // (prim, vertices, count): RwIm2DRenderPrimitive
-        constexpr uint32_t kIm2DRenderIndexed = 0x002FBE68u; // (prim, vertices, count, indices, indexCount)
-        constexpr uint32_t kHudDraw = 0x0031C628u;           // CHud::Draw
+        HudLayout g_hl;                                      // the game's addresses (setHudLayout; VCS's by default)
         constexpr uint32_t kHudZ = 0x00FFFFFEu;              // the HUD's Im2D z (the far plane)
-        constexpr uint32_t kRenderStateSet = 0x00175198u;    // RwRenderStateSet(state, value); 6 = rwRENDERSTATEZTESTENABLE
 
         PS2Runtime::RecompiledFunction g_origRender = nullptr, g_origRenderIndexed = nullptr, g_origHudDraw = nullptr,
                                        g_origRenderStateSet = nullptr;
         bool g_inHud = false;    // game thread
         bool g_inMenu = false;   // the frontend's draw (FUN_003b53f8) to the frame kick; game thread
-        constexpr uint32_t kMenuDraw = 0x003B53F8u; // the frontend / pause menu's draw, called from FUN_0021f7d8
         PS2Runtime::RecompiledFunction g_origMenuDraw = nullptr;
         // the loading screen (FUN_0021E170, GTA's LoadingScreen: splash, text, progress bar, its own frame) to the frame
         // kick; laid out like a menu (game-internals.md 6f)
-        constexpr uint32_t kLoadingScreen = 0x0021E170u;
         bool g_inLoading = false; // game thread
         PS2Runtime::RecompiledFunction g_origLoadingScreen = nullptr;
         bool g_zTest = true;     // RenderWare's ZTESTENABLE as the game last set it (off: the GS's ZTST ALWAYS)
@@ -69,10 +64,6 @@ namespace vcs
         // What the HUD is drawing (game-internals.md 6f "Radar and text"), for the anchoring below. Set at the entry of
         // the routines (hooks work before the original only - AGENTS.md rule 2): the radar from its entry to the entry
         // of whatever CHud::Draw calls after it; a text line from the font's render to its glyph batch.
-        constexpr uint32_t kRadarDraw = 0x00321500u;  // CHud's radar: map tiles (huge quads, scissored), ring, blips
-        constexpr uint32_t kAfterRadar[] = {0x00113D50u, 0x00321758u, 0x002DFE10u}; // CHud::Draw's next call on each path
-        constexpr uint32_t kFontRender = 0x00261BE8u; // font render(font, string, x, y, colour, rect, ...): every line
-        constexpr uint32_t kGlyphBatch = 0x003DFE24u; // Im2D's return address in the font's glyph batch (FUN_003dfdd8)
         PS2Runtime::RecompiledFunction g_origRadarDraw = nullptr, g_origFontRender = nullptr;
         PS2Runtime::RecompiledFunction g_origAfterRadar[3] = {};
         bool g_inRadar = false;      // game thread
@@ -85,8 +76,6 @@ namespace vcs
         // scope are squeezed into the middle 4:3 and clipped there, so the 3D world showed in the strips beside it. The
         // bars are made to reach the screen edges: drawn unsqueezed (Stretch) from the edge to where the squeezed bar
         // ends. VCS_SCOPE_FILL=0: as before.
-        constexpr uint32_t kRectFill = 0x003E0B10u;
-        constexpr uint32_t kMaskLeftReturn = 0x0021F6F0u, kMaskRightReturn = 0x0021F728u;
         PS2Runtime::RecompiledFunction g_origRectFill = nullptr;
         std::atomic<float> g_squeeze{1.0f}; // the HUD's squeeze in widescreen ((4:3) / aspect; 1: none)
         bool g_maskBar = false;             // the next Im2D call is a mask bar (game thread)
@@ -98,8 +87,6 @@ namespace vcs
         // one HUD element - with every HUD element they touch - and kept at 4:3 in the middle: the haze left the sides
         // of the picture clear and pulled the clock and the weapon in from the screen edge (GitHub issue 93). They are a
         // screen effect: drawn unsqueezed and never grouped. VCS_HAZE_FILL=0: as before.
-        constexpr uint32_t kSpriteUvReturn = 0x003DFFC0u;
-        constexpr uint32_t kTunnelVision = 0x00323FE8u, kTunnelVisionEnd = 0x0032437Cu;
         bool g_hazeFill = true;
 
         // one window for all trace lines: from 30 s after the hooks went in, VCS_TRACE_IM2D lines in total
@@ -216,17 +203,17 @@ namespace vcs
             Prim p{1e9f, 1e9f, -1e9f, -1e9f, static_cast<uint32_t>(g_primKeys.size()), n, g_inMenu || g_inLoading};
             if (maskBar)
                 p.part = Part::MaskBar;
-            else if (g_hazeFill && GPR_U32(ctx, 31) == kSpriteUvReturn)
+            else if (g_hazeFill && g_hl.spriteUvReturn && GPR_U32(ctx, 31) == g_hl.spriteUvReturn)
             {
                 // the sprite routine's caller (its saved return address): the tunnel vision's draw
                 const uint32_t sp = GPR_U32(ctx, 29) & 0x01FFFFFFu;
                 uint32_t caller = 0;
                 if (sp + 12u <= 0x02000000u)
                     std::memcpy(&caller, rdram + sp + 8u, 4);
-                if (caller >= kTunnelVision && caller < kTunnelVisionEnd)
+                if (caller >= g_hl.tunnelVision && caller < g_hl.tunnelVisionEnd)
                     p.part = Part::Screen;
             }
-            else if (GPR_U32(ctx, 31) == kGlyphBatch)
+            else if (g_hl.glyphBatch && GPR_U32(ctx, 31) == g_hl.glyphBatch)
                 p.part = g_textCentred ? Part::CentredText : Part::Other;
             else if (g_inRadar)
                 p.part = Part::Radar;
@@ -414,7 +401,7 @@ namespace vcs
             if (!g_hooked) // VCS_HUD_RW=0: only for Hide HUD
                 return g_origHudDraw(rdram, ctx, runtime);
             if (traceNow())
-                std::fprintf(stderr, "[im2d] --- hud (%08x)\n", kHudDraw);
+                std::fprintf(stderr, "[im2d] --- hud (%08x)\n", g_hl.hudDraw);
             g_inHud = true;
             g_inRadar = false;
             g_origHudDraw(rdram, ctx, runtime);
@@ -476,12 +463,24 @@ namespace vcs
             const uint32_t ra = GPR_U32(ctx, 31);
             const float s = g_squeeze.load(std::memory_order_relaxed);
             const uint32_t rect = GPR_U32(ctx, 4) & 0x01FFFFFFu;
-            if ((ra == kMaskLeftReturn || ra == kMaskRightReturn) && s < 0.999f && g_anchoring.load(std::memory_order_relaxed) &&
-                rect + 16u <= 0x02000000u)
+            const bool left = ra == g_hl.maskLeftReturn || (g_hl.maskLeftReturn2 && ra == g_hl.maskLeftReturn2);
+            const bool right = ra == g_hl.maskRightReturn || (g_hl.maskRightReturn2 && ra == g_hl.maskRightReturn2);
+            if (ra && (left || right) && s < 0.999f && g_anchoring.load(std::memory_order_relaxed) && rect + 16u <= 0x02000000u)
             {
                 float r[4];
                 std::memcpy(r, rdram + rect, 16);
-                if (ra == kMaskLeftReturn)
+                if (g_hl.maskFromBars)
+                {
+                    // LCS: the scope's bars are the PSP's, above and below the screen (y -44..0, 272..306), and the
+                    // mask is the whole 4:3 picture: the bars become the strips beside it, full height
+                    // (the corners just off the screen: on its corners they shared vertex positions with the mask
+                    // sprite, and the renderer, which knows HUD vertices by position, squeezed half of each bar)
+                    r[1] = 274.0f;
+                    r[3] = -2.0f;
+                    r[0] = left ? -2.0f : 240.0f + 240.0f * s;
+                    r[2] = left ? 240.0f - 240.0f * s : 482.0f;
+                }
+                else if (left)
                 {
                     r[0] = 0.0f;
                     r[2] = 240.0f + (r[2] - 240.0f) * s;
@@ -500,7 +499,7 @@ namespace vcs
         PS2_GUEST_CC void menuDraw(uint8_t *rdram, R5900Context *ctx, PS2Runtime *runtime)
         {
             if (traceNow())
-                std::fprintf(stderr, "[im2d] --- menu (%08x)\n", kMenuDraw);
+                std::fprintf(stderr, "[im2d] --- menu (%08x)\n", g_hl.menuDraw);
             g_inMenu = true;
             g_origMenuDraw(rdram, ctx, runtime);
         }
@@ -508,7 +507,7 @@ namespace vcs
         PS2_GUEST_CC void loadingScreen(uint8_t *rdram, R5900Context *ctx, PS2Runtime *runtime)
         {
             if (traceNow())
-                std::fprintf(stderr, "[im2d] --- loading screen (%08x)\n", kLoadingScreen);
+                std::fprintf(stderr, "[im2d] --- loading screen (%08x)\n", g_hl.loadingScreen);
             g_inLoading = true;
             g_origLoadingScreen(rdram, ctx, runtime);
         }
@@ -537,6 +536,8 @@ namespace vcs
 
     void setHudSqueeze(float factor) { g_squeeze.store(factor, std::memory_order_relaxed); }
 
+    void setHudLayout(const HudLayout &layout) { g_hl = layout; }
+
     void installHudHooks(PS2Runtime &runtime)
     {
         const char *rw = std::getenv("VCS_HUD_RW");
@@ -549,48 +550,49 @@ namespace vcs
         g_traceStart = ps2x::hostNow();
         if (const char *delay = std::getenv("VCS_TRACE_IM2D_DELAY")) // (VCS_TRACE_HUDANCHOR's too)
             g_traceDelay = std::atoi(delay);
-        g_origHudDraw = runtime.lookupFunction(kHudDraw);
+        g_origHudDraw = g_hl.hudDraw ? runtime.lookupFunction(g_hl.hudDraw) : nullptr;
         if (g_origHudDraw) // (the trainer's Hide HUD needs it in any case)
-            runtime.replaceFunction(kHudDraw, &hudDraw);
+            runtime.replaceFunction(g_hl.hudDraw, &hudDraw);
         if (!on && !traceEnv)
             return;
         if (traceEnv)
             g_traceLeft = std::atoi(traceEnv);
-        g_origRender = runtime.lookupFunction(kIm2DRender);
-        g_origRenderIndexed = runtime.lookupFunction(kIm2DRenderIndexed);
-        g_origRenderStateSet = runtime.lookupFunction(kRenderStateSet);
+        g_origRender = runtime.lookupFunction(g_hl.im2dRender);
+        g_origRenderIndexed = runtime.lookupFunction(g_hl.im2dRenderIndexed);
+        g_origRenderStateSet = runtime.lookupFunction(g_hl.renderStateSet);
         if (!g_origRender || !g_origRenderIndexed || !g_origHudDraw || !g_origRenderStateSet)
             return;
-        runtime.replaceFunction(kRenderStateSet, &renderStateSet);
-        runtime.replaceFunction(kIm2DRender, &im2dRender);
-        runtime.replaceFunction(kIm2DRenderIndexed, &im2dRenderIndexed);
+        runtime.replaceFunction(g_hl.renderStateSet, &renderStateSet);
+        runtime.replaceFunction(g_hl.im2dRender, &im2dRender);
+        runtime.replaceFunction(g_hl.im2dRenderIndexed, &im2dRenderIndexed);
         if (on)
         {
             const char *menus = std::getenv("VCS_MENU_NATIVE"); // 0: menus drawn into the frame buffer as before
-            g_origMenuDraw = runtime.lookupFunction(kMenuDraw);
+            g_origMenuDraw = g_hl.menuDraw ? runtime.lookupFunction(g_hl.menuDraw) : nullptr;
             if (g_origMenuDraw && !(menus && menus[0] == '0'))
-                runtime.replaceFunction(kMenuDraw, &menuDraw);
+                runtime.replaceFunction(g_hl.menuDraw, &menuDraw);
             const char *loading = std::getenv("VCS_LOADING_NATIVE"); // 0: loading screens drawn into the frame buffer
-            g_origLoadingScreen = runtime.lookupFunction(kLoadingScreen);
+            g_origLoadingScreen = g_hl.loadingScreen ? runtime.lookupFunction(g_hl.loadingScreen) : nullptr;
             if (g_origLoadingScreen && !(loading && loading[0] == '0'))
-                runtime.replaceFunction(kLoadingScreen, &loadingScreen);
+                runtime.replaceFunction(g_hl.loadingScreen, &loadingScreen);
             // the radar and centred text, known by who draws them (resolveAnchors)
             const PS2Runtime::RecompiledFunction after[] = {&afterRadar<0>, &afterRadar<1>, &afterRadar<2>};
-            bool parts = (g_origRadarDraw = runtime.lookupFunction(kRadarDraw)) != nullptr &&
-                         (g_origFontRender = runtime.lookupFunction(kFontRender)) != nullptr;
+            bool parts = g_hl.radarDraw && g_hl.fontRender &&
+                         (g_origRadarDraw = runtime.lookupFunction(g_hl.radarDraw)) != nullptr &&
+                         (g_origFontRender = runtime.lookupFunction(g_hl.fontRender)) != nullptr;
             for (int i = 0; i < 3; ++i)
-                parts = parts && (g_origAfterRadar[i] = runtime.lookupFunction(kAfterRadar[i])) != nullptr;
+                parts = parts && (g_origAfterRadar[i] = runtime.lookupFunction(g_hl.afterRadar[i])) != nullptr;
             if (parts)
             {
-                runtime.replaceFunction(kRadarDraw, &radarDraw);
-                runtime.replaceFunction(kFontRender, &fontRender);
+                runtime.replaceFunction(g_hl.radarDraw, &radarDraw);
+                runtime.replaceFunction(g_hl.fontRender, &fontRender);
                 for (int i = 0; i < 3; ++i)
-                    runtime.replaceFunction(kAfterRadar[i], after[i]);
+                    runtime.replaceFunction(g_hl.afterRadar[i], after[i]);
             }
             // the scope mask's side bars to the screen edges (the frontend's hook of the same routine chains onto this)
             const char *fill = std::getenv("VCS_SCOPE_FILL");
-            if (!(fill && fill[0] == '0') && (g_origRectFill = runtime.lookupFunction(kRectFill)) != nullptr)
-                runtime.replaceFunction(kRectFill, &rectFill);
+            if (!(fill && fill[0] == '0') && g_hl.rectFill && (g_origRectFill = runtime.lookupFunction(g_hl.rectFill)) != nullptr)
+                runtime.replaceFunction(g_hl.rectFill, &rectFill);
             const char *haze = std::getenv("VCS_HAZE_FILL"); // the tunnel vision across the whole picture (see the top)
             g_hazeFill = !(haze && haze[0] == '0');
             const char *native = std::getenv("VCS_HUD_NATIVE");
