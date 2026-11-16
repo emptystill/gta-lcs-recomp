@@ -27,6 +27,7 @@
 #include "game/vcs_framerate.h"
 #include "game/vcs_movie.h"
 #include "game/vcs_hud.h"
+#include "game/lcs_mouseaim.h"
 #include "game/vcs_input.h"
 #include "game/vcs_prompts.h"
 #include "game/vcs_volume.h"
@@ -956,6 +957,8 @@ int main(int argc, char *argv[])
                                         vcs::volume::onHostFrame();
                                         vcs::prompts::onHostFrame();
                                         drawFrameRateCounter();
+                                        if (!ui::settingsMenuOpen() && !ui::trainerMenuBlocksInput())
+                                            lcs::mouseaim::drawCrosshair(); // the mouse aim's circle (game/lcs_mouseaim.h)
                                     },
                                     nullptr, nullptr);
         if (!runtime.initialize(vcs::disc::kGameName))

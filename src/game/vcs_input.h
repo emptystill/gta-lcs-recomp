@@ -2,6 +2,8 @@
 // mouse camera and vibration - all turned into the one DualShock 2 the game reads.
 #pragma once
 
+#include "game/vcs_aim.h"
+
 #include <cstdint>
 
 class PS2Runtime;
@@ -49,6 +51,11 @@ namespace vcs::input
         unsigned directFront = 0, directSource = 0, directSource2 = 0, directUp = 0;
         float directAlphaMin = -0.5f, directAlphaMax = 1.46f;       // on foot
         float directCarAlphaMin = -0.5f, directCarAlphaMax = 1.46f; // behind a vehicle
+        // A game's own mouse aim in place of VCS's free aim (extras off; Liberty City Stories: game/lcs_mouseaim.h):
+        // called at the pad read with the keyboard / mouse's target button, its Output used as free aim's is; and how
+        // far the direct camera goes over the shoulder while aiming (0..1).
+        vcs::aim::Output (*aimUpdate)(const vcs::aim::Input &in) = nullptr;
+        float (*aimCameraShift)() = nullptr;
     };
     void setGameLayout(const GameLayout &layout);
 

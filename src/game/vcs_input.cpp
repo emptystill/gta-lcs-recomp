@@ -213,7 +213,7 @@ namespace vcs::input
             m.mouseLook = settings::value("mouse.sensitivity") / 100.0f * 0.0025f;
             m.carLook = m.mouseLook * settings::value("mouse.car_sensitivity") / 100.0f;
             m.mouseInvertY = settings::value("mouse.invert_y") != 0;
-            m.freeAimMouse = settings::value("mouse.free_aim") != 0;
+            m.freeAimMouse = settings::value("mouse.aim") != 0;
             m.freeAimPad = settings::value("pad.free_aim") != 0;
             m.mouseWheel = settings::value("mouse.wheel") != 0;
             m.swapSticks = settings::value("pad.swap_sticks") != 0;
@@ -539,6 +539,15 @@ namespace vcs::input
                     }
                     g_mouse.aim = aim::update(in);
                 }
+                else if (!L.extras && L.aimUpdate)
+                {
+                    // the game's own mouse aim (GameLayout::aimUpdate; LCS: game/lcs_mouseaim.h): the keyboard / mouse's
+                    // target button
+                    aim::Input in;
+                    in.want = !blocked && m.freeAimMouse && keyR1;
+                    in.on = m.freeAimMouse;
+                    g_mouse.aim = L.aimUpdate(in);
+                }
 
                 // The direct mouse camera of a game with GameLayout::direct* (Liberty City Stories): on foot and behind a
                 // vehicle the mouse turns the camera itself - its heading and pitch written in the game, each with the
@@ -851,6 +860,8 @@ namespace vcs::input
                 buttons = static_cast<uint16_t>((buttons & ~(kR1 | kL3)) | (g_mouse.aim.r1 ? kR1 : 0) | (g_mouse.aim.l3 ? kL3 : 0));
                 if (g_mouse.aim.camera)
                     rx = ry = 0.0f;
+                if (g_mouse.aim.leftStick && !g_layout.extras)
+                    lx = ly = 0.0f; // LCS's mouse aim: he stands while aiming
             }
             else if (g_mouse.aim.camera)
             {
@@ -1011,15 +1022,17 @@ namespace vcs::input
                 settings::add(s);
 
                 s = {};
-                s.key = "mouse.free_aim";
+                // LCS (game/lcs_mouseaim.h): a key of its own - lcs.ini files keep VCS's mouse.free_aim=0, its old default
+                s.key = "mouse.aim";
                 s.page = kKeys;
                 s.section = "Mouse";
                 s.label = "Free aim";
-                s.help = "With a gun, the target button (right mouse button / E) aims where the mouse points, with the "
-                         "game's aiming circle, instead of locking on; shots go through the circle. You move while aiming "
-                         "as you do locked on with that gun. Fists, melee and scoped weapons lock on as on the PS2.";
+                s.help = "With a gun, holding the target button (right mouse button / E) aims where the camera looks: Toni "
+                         "raises the gun and stands, the camera moves over his shoulder and a circle marks the aim; shots "
+                         "go through the circle. Fists, melee, thrown weapons and the sniper rifles' scope as on the PS2; the "
+                         "gamepad aims as on the PS2. Off: the target button locks on.";
                 s.type = Type::Toggle;
-                s.defaultValue = 0;
+                s.defaultValue = 1;
                 s.onChange = onChange;
                 settings::add(s);
 
@@ -1341,6 +1354,22 @@ namespace vcs::input
             dist = std::clamp(room / -sa, std::min(0.6f, dist), dist);
         }
         float pos[3] = {pivot[0] - dir[0] * dist, pivot[1] - dir[1] * dist, pivot[2] - dir[2] * dist};
+        if (!inCar && L.aimCameraShift)
+        {
+            // aiming with the mouse (LCS: game/lcs_mouseaim.h): over the right shoulder and nearer, the same direction -
+            // the aiming circle in the middle of the picture is then clear of him
+            const float k = L.aimCameraShift();
+            const float hr = std::sqrt(dir[0] * dir[0] + dir[1] * dir[1]);
+            if (k > 1e-3f && hr > 1e-3f)
+            {
+                const float right[2] = {dir[1] / hr, -dir[0] / hr}; // the view's right across the ground
+                for (int i = 0; i < 3; ++i)
+                    pos[i] += dir[i] * dist * 0.3f * k;
+                pos[0] += right[0] * 0.6f * k;
+                pos[1] += right[1] * 0.6f * k;
+                pos[2] += 0.12f * k;
+            }
+        }
         if (inCar)
         {
             // The ground is not level at the vehicle's height on a steep street: the user saw the camera go through the

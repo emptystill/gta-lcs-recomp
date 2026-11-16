@@ -3,7 +3,12 @@
 // the VCS one it mirrors and how it was found (docs/LCS.md).
 #include "game_overrides.h"
 #include "debug/rig.h"
+#include "game/lcs_mouseaim.h"
 #include "game/vcs_display.h"
+#include "platform/platform.h"
+#include "runtime/ps2_control.h"
+
+#include <cmath>
 #include "game/vcs_framerate.h"
 #include "game/vcs_input.h"
 #include "game/vcs_stream.h"
@@ -239,9 +244,12 @@ namespace
     PS2Runtime::RecompiledFunction g_origLimiter = nullptr;
     PS2_GUEST_CC void frameBoundary(uint8_t *rdram, R5900Context *ctx, PS2Runtime *runtime)
     {
+        // the mouse aim's way in / out of the aim pose (game/lcs_mouseaim.h): a chained guest call skips the limiter once
+        const bool chained = lcs::mouseaim::onFrame(rdram, ctx);
         vcs::rig::onGameFrame(rdram, ctx, runtime);
         vcs::input::holdInBackground(runtime);
-        g_origLimiter(rdram, ctx, runtime);
+        if (!chained)
+            g_origLimiter(rdram, ctx, runtime);
     }
 
     PS2_GUEST_CC void traceOom(uint8_t *rdram, R5900Context *ctx, PS2Runtime *runtime)
@@ -471,7 +479,11 @@ namespace
             input.directAlphaMax = 1.40f;
             input.directCarAlphaMin = -0.45f;
             input.directCarAlphaMax = 1.30f;
+            // the mouse aim (game/lcs_mouseaim.h): the target button at the pad read, the camera over the shoulder
+            input.aimUpdate = &lcs::mouseaim::update;
+            input.aimCameraShift = &lcs::mouseaim::cameraShift;
             vcs::input::setGameLayout(input);
+            lcs::mouseaim::install(runtime);
         }
         if (envOn("LCS_CHECK_READS"))
         {

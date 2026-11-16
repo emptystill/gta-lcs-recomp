@@ -401,6 +401,68 @@ felt no difference. Its test had passed by the stick path's own turning.
 game-thread jobs run there, so the control channel's `poke` / `pokef` / `dump` / `scm` work on LCS now (they never
 ran: their jobs waited for VCS's frame kick); the hold while the window is in the background too.
 
+## Mouse aim (2026-11-16)
+
+**First attempt, reverted** (commits f246419 / de7ead8, reverted by 4171abc / dfdd611). LCS still holds GTA Vice City
+PC's mouse aim, switched off: CCam::Using3rdPersonMouseCam 0x286F88 and the switch CCamera::m_bUseMouse3rdPerson at
+0x3D6C98, cleared every frame by the menu manager at 0x34B160. Switching it on gave VC PC's firing turn and strafing.
+- **The user's verdict:** "totally broken": the shots did not match, walking animations broke. Every movement went
+  through VC PC's strafe velocity code (FUN_001D5830: `(lock-on cam || mouse cam) && player && state in
+  {0,1,8,9,0x10,0x11,0x16,0x29}`), which slides the walk, and LCS has no strafe anims for that.
+- **Not used now.** The patch is gone.
+
+**Not portable from VCS.** VCS's free aim is the game's own: R1 + L3, a lock-on to an invisible dummy object.
+- **The button.** In LCS the only code that reads the free-aim button (FUN_00172730: L3, or +0x26 in control
+  config 4) is a script opcode (in FUN_0024DD28); the pad's L3 (+0x30 of CPad) is otherwise read only by
+  GetLookBehindForPed (0x171478).
+- **The help text.** HELP42 ("while aiming press L3 for free aim") exists in the GXT.
+- **The mechanism.** None of VCS's free-aim functions (start 0x2394D8, update 0x2343E0, end 0x23ADC0) match by code.
+
+**What the aim is built on** (found by decompiling the ped code, then tested one field at a time with
+`LCS_AIMTEST`-style probes):
+- **CPed's aim fields.** The 64-bit flags at **+0x190**: bit 35 AIM_GUN's, **bit 36 the head's look**, **bit 39
+  aiming the gun**, bit 40 restoring it. **+0x34C** is the state (1 idle, 0x10 attack, 0x11 fight, 0x16 AIM_GUN,
+  0x2 look entity). **+0x6E4** is the look / aim angle and +0x6F4 its timer. **+0x6E0** is the look target,
+  **+0x530** m_pPointGunAt, **+0xC78** the player's aim pitch (+ down). +0x4E0 / +0x4E4 are the heading now /
+  wanted (atan2(-x, y) of the forward vector).
+- **The functions.** SetLookFlag(angle) 0x1D4D60 writes the angle and bit 39 (it is VC's SetAimFlag(float));
+  SetLookFlag(entity) 0x1D4850 sets bit 36; SetAimFlag(entity) 0x1D4E28 writes +0x6E0 / +0x530.
+- **What runs them.** The ped update (0x1DA5B8..) runs AimGun **0x1D4F58** on bit 39: PedIK::PointGunInDirection
+  (0x270730) at the angle / pitch, or at m_pPointGunAt. It runs RestoreGunPosition 0x1D50E8 on bit 40, and the
+  head's Look 0x1D4A08 on bit 36.
+- **Why the arm did not rise.** The IK only turns an arm that is in the weapon's aim anim. **CPed::SetPointGunAt
+  0x1BA618** blends that anim (0xC9, speed 0, blend 8), sets state 0x16 and bit 35 - **with a null entity too**: the
+  pose with no target. Measured: bit 39 + angle alone, or state 0x16 written, left the arm down; SetPointGunAt(ped, 0)
+  raised it.
+
+`src/game/lcs_mouseaim.cpp` (Keyboard > **Free aim**, `mouse.aim`, on; keyboard / mouse only; `LCS_MOUSE_AIM=0` off):
+- **Entering.** With the right mouse button (R1's binding) held and a gun in hand, on foot, in the follow camera:
+  the first frame chains `SetPointGunAt(ped, 0)` as a guest tail call from the frame hook (pc / a0 / a1, returning
+  to the limiter's caller; the limiter is skipped that one frame).
+- **Each frame.** It writes the camera's heading into +0x6E4 and his heading, the camera's pitch into +0xC78 (sign
+  checked: +down), and sets bit 39 / clears bit 40. R1 goes nowhere (no lock-on) and the left stick is centred: he
+  stands (no strafe anims).
+- **Leaving.** Restoring the gun (bit 40), clearing bits 39 / 35, state 0x16 -> 1. If the game puts him back to idle
+  (hit, reload), SetPointGunAt is chained again after 0.3 s.
+- **Shots.** The instant-hit shot (line test 0x2B0BD0, return 0x2A59BC) is tested down the camera's ray through the
+  middle of the picture, from the ray's point nearest the gun. The shotgun's pellets (return 0x2A93E4) keep their
+  direction, moved onto the ray. The start vector is at 0x7FF00 (EE kernel RAM above the runtime's heap / pools,
+  zero in play).
+- **The camera and the circle.** The direct camera goes over the right shoulder while aiming: 0.6 m right, 0.12 m
+  up, 30% nearer, eased 0.12 s (GameLayout::aimCameraShift). A circle with a dot is drawn in the middle (ImGui).
+- **Which weapons.** Fire types 1 (instant hit) and 3 (the flame-thrower). The snipers (types 28 / 29: the target
+  button opens their scope, camera mode 7) are left to the game, as are melee (0) and thrown (2) weapons.
+- **Weapon info.** `*(*(0x3D9B48) + 4) + type * 0x70`: +0 the fire type, +4 the range, +0x6C flags.
+
+**Checked** (aimlab2: the weapons cheat, each step screenshotted at 1920x1080, the state read back):
+- **Aiming.** State 22 with the arm up, the camera at 3.3 m (4.6 not aiming), Toni's heading equal to the camera's
+  through three 21.5-degree turns.
+- **Pitch.** The arm rises looking up and falls looking down.
+- **Movement and fire.** W while aiming leaves him where he stands. Firing shows the impact at the circle. Releasing
+  gives state 1, the camera back, and normal walking.
+- **Each weapon.** Fists / knuckles / grenades unchanged, the snipers' scope (mode 7) unchanged; the pistol, shotgun,
+  SMG, rifle and flame-thrower aim.
+
 ## Tools for LCS debugging
 
 - `tools/xglobal.py --vcs-lcs 0xADDR...`: a VCS global's LCS address, from the code around its uses (votes).
