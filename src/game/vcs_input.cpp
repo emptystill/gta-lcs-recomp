@@ -353,8 +353,6 @@ namespace vcs::input
             float dist = 0.0f;
             float ez = 0.0f;    // the entity's height, eased (a vehicle's suspension, kerbs, steps)
             float blend = 0.0f; // how far the game's own camera has it (its view blocked: it rose over the obstacle)
-            float floor = 0.0f; // the game camera's height, eased (the lowest this one goes behind a vehicle)
-            bool floorSet = false;
             float dt = 0.0f;    // seconds since the last result
             std::chrono::steady_clock::time_point last{};
         } g_orbit;
@@ -628,8 +626,12 @@ namespace vcs::input
                             }
                             wrf(dcam + L.directBeta, dstate.beta);
                             wrf(dcam + L.directBetaTarget, dstate.beta);
-                            wrf(dcam + L.directAlpha, dstate.alpha);
-                            wrf(dcam + L.directAlphaNeg, -dstate.alpha);
+                            // behind a vehicle the game's own camera is never asked to look up past its own limit
+                            // (-0.07): looking up near the ground it kept finding the ground in its way and rose and
+                            // fell by metres. This camera's result is the mouse's anyway (directCameraResult).
+                            const float gameAlpha = inCar && L.directFront ? std::max(dstate.alpha, -0.07f) : dstate.alpha;
+                            wrf(dcam + L.directAlpha, gameAlpha);
+                            wrf(dcam + L.directAlphaNeg, -gameAlpha);
                         }
                     }
                 }
@@ -984,10 +986,11 @@ namespace vcs::input
                 s.label = "Car camera return";
                 s.help = "Behind a car, boat or bike the camera stays where the mouse puts it while the mouse moves; this "
                          "long after the mouse stops it eases back behind the vehicle (not while a fire truck sprays water). "
-                         "Never: it stays until the game's own camera turns it (when driving on).";
+                         "Never (the default): it stays where the mouse put it, as on foot.";
                 s.type = Type::Choice;
                 s.choices = {{"0.5 s", 5}, {"1 s", 10}, {"1.5 s", 15}, {"2 s", 20}, {"3 s", 30}, {"5 s", 50}, {"Never", -1}};
-                s.defaultValue = 15;
+                // Never by default (LCS): the user wants the vehicle camera as free as the one on foot
+                s.defaultValue = -1;
                 s.onChange = [](int v) { carcam::setReturnDelay(v < 0 ? -1.0f : v / 10.0f); };
                 settings::add(s);
 
@@ -1269,7 +1272,7 @@ namespace vcs::input
         // is over the entity: across the ground it was off by < 0.1 m, noise). Measured against the game's own camera
         // (driving with the mouse still, a sample every 0.05 s): taking the game's look-at point and distance as they
         // came each frame moved this camera 0.25 m a sample in distance and 0.16 m in height, the game's own 0.002 and
-        // 0.05 - the user: "demasiado movimiento ... no mantienes una posición fija como con un mando". So the
+        // 0.05 - the user: "demasiado movimiento ... no mantienes una posiciÃ³n fija como con un mando". So the
         // entity's height is eased (bounces), the offset over 0.3 s, and the distance over 0.4 s - quickly only when
         // the game's camera came in by a quarter or more (a wall).
         const float gameOffset[3] = {src[0] + front[0] * along - e[0], src[1] + front[1] * along - e[1],
@@ -1288,7 +1291,6 @@ namespace vcs::input
             o.ez = e[2];
             o.blend = 0.0f;
             o.dt = 0.0f;
-            o.floorSet = false;
         }
         else
         {
@@ -1298,7 +1300,9 @@ namespace vcs::input
             // nothing across the ground is eased: it turns with the view, and easing it made the camera trail behind
             // the mouse (the user: "un movimiento suave")
             o.offset[2] += (gameOffset[2] - o.offset[2]) * ease(0.3f);
-            o.ez += (e[2] - o.ez) * ease(inCarMode ? 0.15f : 0.08f);
+            // a jump of metres (getting in: the vehicle's height came from a stale value) is taken at once - eased, the
+            // camera dived 30 m under the ground for a few frames
+            o.ez = std::fabs(e[2] - o.ez) > 2.0f ? e[2] : o.ez + (e[2] - o.ez) * ease(inCarMode ? 0.15f : 0.08f);
             const float kd = along < 0.75f * o.dist ? ease(0.05f) : ease(0.4f);
             o.dist += (along - o.dist) * kd;
         }
@@ -1325,43 +1329,16 @@ namespace vcs::input
         // The game's own camera, run at the same heading and pitch, knows the world: on open ground it stands where
         // this one does (looking up it stays at its distance, just above the ground), and where its view is blocked (a
         // slope behind the car, a wall, a tree) it rises over the obstacle and looks down - GTA III's camera on a
-        // string. Behind a vehicle its height, eased, is a floor this one rises to, still looking at the pivot (the
-        // ground on a slope). Well above this one (1.5 m and more) it eases over to the game's camera, as VCS's mouse camera is the
-        // game's own; back when clear.
+        // string. Well above this one (1.5 m and more) it eases over to the game's camera, as VCS's mouse camera is the
+        // game's own; back when clear. Only from level and down: looking up, the camera is low on purpose. (Behind a
+        // vehicle the game's camera never looks up - it is given its own limit, see readPad - so it does not fight the
+        // ground; its height as a floor here, taken while it did, made this one float up and down by metres: the user's
+        // "temblores" in a vehicle, gone on foot, which never had it.)
         // LCS_CAMERA_GAME_BLEND=0: never (the camera goes through what is in the way).
         static const bool gameBlend = [] {
             const char *v = std::getenv("LCS_CAMERA_GAME_BLEND");
             return !(v && v[0] == '0');
         }();
-        // Looking up (pitch < 0) the game's camera is near the ground and keeps finding it in the way: it rose and fell
-        // by up to 2 m from frame to frame on a bike, and this one shook with it (the user's report, seen in a recording
-        // of their play). So: only its height is taken there, eased, as a floor; the blend only from level and down.
-        if (gameBlend && inCar)
-        {
-            // eased (0.3 s up, 0.6 s down: its frame-to-frame jumps average out) and never above the pivot + 1.5 m
-            const float k = o.dt > 0.0f ? 1.0f - std::exp(-o.dt / (src[2] > o.floor ? 0.3f : 0.6f)) : 1.0f;
-            o.floor = o.floorSet ? o.floor + (src[2] - o.floor) * k : src[2];
-            o.floorSet = true;
-            const float lift = std::min(o.floor, pivot[2] + 1.5f) - pos[2];
-            if (lift > 0.0f)
-            {
-                // raised, it still looks at the point it looked at, at the orbit's distance ahead (the pivot, unless
-                // the ground had stopped it), so the view tilts down by just the lift's angle - smoothly with the
-                // lift, the vehicle kept in the picture
-                const float aim[3] = {pos[0] + dir[0] * dist, pos[1] + dir[1] * dist, pos[2] + dir[2] * dist};
-                pos[2] += lift;
-                float n = 0.0f;
-                for (int i = 0; i < 3; ++i)
-                {
-                    dir[i] = aim[i] - pos[i];
-                    n += dir[i] * dir[i];
-                }
-                n = std::sqrt(n);
-                if (n > 1e-3f)
-                    for (float &f : dir)
-                        f /= n;
-            }
-        }
         if (gameBlend && d.alpha >= 0.0f)
         {
             const float rise = src[2] - pos[2];

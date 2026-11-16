@@ -52,7 +52,7 @@ namespace vcs::carcam
         uint8_t *g_rdram = nullptr;
         PS2Runtime::RecompiledFunction g_orig = nullptr;
         std::atomic<bool> g_installed{false};
-        std::atomic<float> g_delay{1.5f};
+        std::atomic<float> g_delay{-1.0f}; // never (LCS: the setting's default)
 
         // game thread
         enum class State

@@ -324,6 +324,21 @@ and distance as they came each frame. Now:
 - **What still moves the most:** the blend into the game's camera where its view is blocked. It rises over the
   obstacle like GTA III's camera; the PC games move in instead (to do).
 
+Then (the user: the foot camera is perfect - leave it; the vehicle camera is not free yet, shakes in some positions,
+and does not move as smoothly as on foot). Found by turning the vehicle camera 360 degrees at three pitches, standing
+and driving, and logging every frame (`camsweep`; `VCS_CAMRES_LOG=2`). The vehicle path still had what the foot path
+does not:
+- **The floor.** Behind a vehicle the game camera's height was used as a floor. Looking up, the game's camera (asked
+  for the same pitch) kept finding the ground in its way, and its height went from -0.2 to +2.9 m, so this one floated
+  with it. Now the floor is gone. The game's camera is given at most its own limit looking up (-0.07, in `readPad`),
+  so it never fights the ground.
+- **Getting in.** The eased height started from a stale value, and the camera dived 30 m under the ground for 5
+  frames. A jump of more than 2 m is now taken at once.
+- **The return behind the vehicle.** It moved the camera by itself. Keyboard > Car camera return now defaults to
+  Never on LCS.
+- **Result:** frames with a jolt over the sweep went from 183 to 94. The rest are the test's own pitch steps and the
+  eased zoom when the game's distance changes (4.5 to 9.4 m on driving off).
+
 Not yet: the game's camera collision
 (walls) works on its own camera, not this one - only its distance carries over.
 
