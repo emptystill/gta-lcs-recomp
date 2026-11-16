@@ -1357,7 +1357,10 @@ namespace vcs::input
                 o.slopeSet = true;
             }
             const float ahead = run > 0.3f ? ((pos[0] - e[0]) * fx + (pos[1] - e[1]) * fy) / run : 0.0f;
-            const float ground = minZ + (o.slopeSet ? o.slope : 0.0f) * ahead;
+            // Only ever higher than the level ground: where the road is lower at the camera (behind the vehicle driving
+            // up a street) the road between them rises in front of the camera, and following it down put the camera
+            // into that rise (the user's next report: "now it happens the other way, on streets going up").
+            const float ground = minZ + std::max(0.0f, (o.slopeSet ? o.slope : 0.0f) * ahead);
             pos[2] = std::max(pos[2], std::min(ground, pivot[2] + 3.0f));
         }
         else

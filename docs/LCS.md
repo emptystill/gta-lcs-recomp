@@ -386,6 +386,9 @@ A second recorded ride (6116 frames, a bike, looking up at the limit) showed one
 - **The fix.** The vehicle lies on the road, so its slope along its nose (forward at +0x10: rise over run, eased over
   0.2 s, within +-0.8) gives the road's height where the camera stands. Across the road it is taken as level, so a
   bike's lean does not count.
+- **Only ever up.** Next the user saw the opposite on streets going up. Behind a vehicle driving up a street, the road
+  at the camera is lower, and following it down put the camera into the road that rises between it and the vehicle.
+  The slope now only ever raises the ground over the level one (as before the fix, uphill was fine).
 
 Not yet: the game's camera collision
 (walls) works on its own camera, not this one - only its distance carries over.
