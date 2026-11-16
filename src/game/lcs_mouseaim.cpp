@@ -37,6 +37,7 @@ namespace lcs::mouseaim
         constexpr uint32_t kWeaponInfoSize = 0x70u;
         constexpr uint32_t kWeaponFlags = 0x6Cu, kFlagArmAim = 0x80u;
         constexpr uint32_t kSetPointGunAt = 0x001BA618u; // CPed::SetPointGunAt(ped, entity); entity 0: the pose alone
+        constexpr uint32_t kClearPointGunAt = 0x001BAA70u; // CPed::ClearPointGunAt(ped): out of it, the anim faded
         constexpr uint32_t kTheCamera = 0x0043BBF0u;     // its matrix: +0x10 forward, +0x30 position
         constexpr uint32_t kActiveCam = 0x10Cu, kCam0 = 0x220u, kCamStride = 0x2B0u, kCamMode = 0x40u;
         constexpr uint32_t kModeFollowPed = 4u;
@@ -158,22 +159,22 @@ namespace lcs::mouseaim
             return true;
         }
 
-        void leave(uint32_t ped, const char *why)
+        // Out of the aim as letting go of a target does: CPed::ClearPointGunAt(ped) (FUN_001BAA70) chained - the look
+        // and aim flags cleared, AIM_GUN (or ATTACK) back to idle, and the weapon's aim anim (0xC9, or 0xCA) faded out.
+        // Writing the state alone left that anim held at speed 0 now and then: Toni frozen in the pose after letting
+        // go (the user's report, 2026-11-16). True when it chained the call.
+        bool leave(uint32_t ped, const char *why, R5900Context *ctx)
         {
             if (g_state != State::Aiming)
-                return;
+                return false;
             g_state = State::Idle;
             g_aiming.store(false, std::memory_order_relaxed);
-            if (ped)
-            {
-                // as letting go of a target does: the gun restored (bit 40), aiming and AIM_GUN's bit off, idle
-                uint64_t flags = rd64(ped + kPedFlags);
-                flags = (flags & ~(kFlagAiming | kFlagAimGunState)) | kFlagRestoring;
-                wr64(ped + kPedFlags, flags);
-                if (rd32(ped + kPedState) == kStateAimGun)
-                    wr32(ped + kPedState, kStateIdle);
-            }
             std::fprintf(stderr, "[mouseaim] aim off (%s)\n", why);
+            if (!ped)
+                return false;
+            SET_GPR_U32(ctx, 4, ped);
+            ctx->pc = kClearPointGunAt; // returns into the limiter (lcs_overrides.cpp frameBoundary)
+            return true;
         }
 
         // The line of one of the player's shots, down the camera's ray through the circle: from the ray's point
@@ -288,8 +289,7 @@ namespace lcs::mouseaim
             const uint32_t state = ped ? rd32(ped + kPedState) : 0u;
             if (!want || !ped || !onFoot(ped) || !gunInHand(ped) || !followCamera())
             {
-                leave(ped, !want ? "released" : "no gun / not on foot / another camera");
-                return false;
+                return leave(ped, !want ? "released" : "no gun / not on foot / another camera", ctx);
             }
             if (state != kStateAimGun && state != kStateAttack)
             {
@@ -304,8 +304,7 @@ namespace lcs::mouseaim
                 }
                 if (state != kStateIdle)
                 {
-                    leave(ped, "the game changed his state");
-                    return false;
+                    return leave(ped, "the game changed his state", ctx);
                 }
             }
             // where the camera looks: his heading and the gun's (SetAimFlag(angle)'s fields), its pitch

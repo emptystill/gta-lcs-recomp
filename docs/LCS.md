@@ -442,8 +442,12 @@ PC's mouse aim, switched off: CCam::Using3rdPersonMouseCam 0x286F88 and the swit
 - **Each frame.** It writes the camera's heading into +0x6E4 and his heading, the camera's pitch into +0xC78 (sign
   checked: +down), and sets bit 39 / clears bit 40. R1 goes nowhere (no lock-on) and the left stick is centred: he
   stands (no strafe anims).
-- **Leaving.** Restoring the gun (bit 40), clearing bits 39 / 35, state 0x16 -> 1. If the game puts him back to idle
-  (hit, reload), SetPointGunAt is chained again after 0.3 s.
+- **Leaving.** **CPed::ClearPointGunAt 0x1BAA70** (ped) is chained, the game's own way out of a target. It clears the
+  look / aim flags (0x1D4930, 0x1D4ED8) and bit 35, and takes state 0x16 or 0x10 to 1 (0x1D3CF0). It also fades out the
+  weapon's aim anim: 0xC9, or 0xCA for the weapons with flag 0x20000, blend delta -4. The first version only wrote
+  the flags and the state, which left that anim held at speed 0 now and then: Toni frozen in the aim pose after letting
+  go, seen by the user with the micro SMG. If the game puts him back to idle (hit, reload), SetPointGunAt is chained
+  again after 0.3 s.
 - **Shots.** The instant-hit shot (line test 0x2B0BD0, return 0x2A59BC) is tested down the camera's ray through the
   middle of the picture, from the ray's point nearest the gun. The shotgun's pellets (return 0x2A93E4) keep their
   direction, moved onto the ray. The start vector is at 0x7FF00 (EE kernel RAM above the runtime's heap / pools,
@@ -499,6 +503,15 @@ Two variants were tried:
 - **Pistol, Tec-9, MAC-10.** About 3.6 m a second in every direction, firing too. The shots count down the camera's
   ray, the impact is at the circle running sideways, and he faces the camera again 0.6 s after stopping.
 - **SMG and AK-47.** Planted as before.
+
+**The detonator blocks weapon switching: the original's rule, not a bug.** After a remote grenade is thrown he
+holds the detonator (type 34, slot 9). CPlayerPed::ProcessWeaponSwitch **0x34BE08** skips the whole cycle while the
+weapon in hand is type 0x22, so the weapon can only be switched again once the grenade is set off. Checked in game:
+cycling did nothing until the detonation, then cycled normally. The same happens with the cheat's weapon set.
+
+**Checked** (the release fix): 9 guns (micro SMG, SMG, M4, AK, the shotgun, the combat shotgun, the pistol, the
+Tec-9, the flamethrower), each let go 5 ways: plain, while firing, right after firing, while moving, and a 0.08 s
+tap. All 45 ended in state 1 with the flags clear, and he walked normally right after (screenshots).
 
 ## Trainer (2026-11-16)
 
