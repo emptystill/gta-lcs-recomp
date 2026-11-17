@@ -195,9 +195,9 @@
 {"How far the left stick is tilted while Walk is held (the game walks below about half).", "Cuánto se inclina el stick izquierdo mientras se mantiene Caminar (el juego camina por debajo de la mitad, más o menos)."},
 {"Settings menu", "Menú de ajustes"},
 {"Opens and closes this menu. On a gamepad: press Back + Start together.", "Abre y cierra este menú. En un mando: pulsa Back + Start a la vez."},
-{"Trainer menu", "Menú del entrenador"},
+{"Trainer menu", "Menú del trainer"},
 {"Opens and closes the trainer (god mode, weapons, vehicles, teleports...). On a gamepad: press Back + RB together.",
- "Abre y cierra el entrenador (modo dios, armas, vehículos, teletransporte...). En un mando: pulsa Back + RB a la vez."},
+ "Abre y cierra el trainer (modo dios, armas, vehículos, teletransporte...). En un mando: pulsa Back + RB a la vez."},
 {"Screenshot", "Captura de pantalla"},
 {"Saves what is on screen (menus and overlays included) as a PNG in the screenshots folder next to lcs.exe.",
  "Guarda lo que hay en pantalla (menús y paneles incluidos) como PNG en la carpeta screenshots junto a lcs.exe."},
@@ -308,7 +308,7 @@
  "La vibración del DualShock 2 en tu mando cuando el juego la pide (choques, disparos, terreno irregular): tan fuerte como en el PS2 al 100%, más débil o más fuerte; 0% la desactiva."},
 
 // ---- the trainer (F5) ----------------------------------------------------------------------------------------------
-{"TRAINER", "ENTRENADOR"},
+{"TRAINER", "TRAINER"},
 {"MAIN MENU", "MENÚ PRINCIPAL"},
 {"PLAYER", "JUGADOR"},
 {"WEAPONS", "ARMAS"},
