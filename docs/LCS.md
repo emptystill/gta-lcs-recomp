@@ -558,18 +558,34 @@ which the game keeps after he gets out (his last vehicle; FindPlayerVehicle 0x10
 getting out with F the mouse aim never started and the game's own lock-on aim (state 0x16) took the button. Now the flag
 alone. Checked: out of a car with F, his last car still at +0x534, the aim active (before: inactive).
 
-**The gun off to the side after getting out (2026-11-17, the user's next report: an odd pose until the first shot).**
-With the AK-47, aiming after getting out of a car pointed the gun to his left; a shot put it right. The anims (0xC9 at
-full blend, its end), his heading, the aim angle and the camera all matched the case before the car. The difference
-was **CPedIK at ped +0x310**: its torso yaw / pitch (+0x31C / +0x320) stayed at 0.873 / 0.372 rad after the car, and
-from there **PointGunInDirection (0x270730**, called by 0x1D4F58 with the aim angle +0x6E4 and pitch +0xC78) failed
-every frame - its result is bCanPointGunAtTarget, bit 41 of +0x190, which was off; the IK's flags (+0x33C, bit 0
-"pointed") off too. The attack straightens the torso, hence the shot. The aim now zeroes the torso when it starts and
-whenever bit 41 is off. Also: a look left on (bIsLooking, bit 36 - +0x190 follows GTA III's flag order: 35 pointing
-the gun, 36 looking, 37 keep trying to look, 38 restoring the look, 39 aiming, 40 restoring the gun, 41 can point the
-gun) is ended with the game's **ClearLookFlag 0x1D4930** (ClearAimFlag is 0x1D4ED8): SetPointGunAt sets a look of its
-own only with a target. Checked: out of a car, aiming before any shot, the torso 0, bit 41 on, the gun at his shoulder
-where the circle is (screenshots).
+**The gun off to the side after getting out (2026-11-17, the user's next reports: an odd pose until the first shot;
+then, after a first fix, "it got worse").** With the AK-47, aiming after getting out of a car or off a bike pointed the
+gun to his side, the torso twisted and bent over; a shot put it right.
+
+- **What drives it.** CPed::ProcessControl (0x1D6F30, at 0x1DA5B8..) runs, by the flags at +0x190 (GTA III's order:
+  35 pointing the gun, 36 looking, 37 keep trying to look, 38 restoring the look, 39 aiming, 40 restoring the gun, 41
+  can point the gun): the aim **0x1D4F58** if aiming, else the gun's restore 0x1D50E8; then the look 0x1D4A08 if
+  looking, else its restore 0x1D4D10. The aim, with **m_pPointGunAt (+0x530) empty**, calls **PointGunInDirection
+  0x270730** (the angle +0x6E4, the pitch +0xC78, CPedIK at +0x310); with an entity there, it points at that entity
+  (0x270608). The result is bit 41. Both turn the torso (CPedIK +0xC / +0x10 = ped +0x31C / +0x320) with RotateTorso
+  0x26FFD8, 0.14 / 0.087 rad a frame, within the limits at 0x393598 (yaw +-0.873, pitch +-0.785); a target past them
+  fails (0).
+- **The cause.** Getting out of a vehicle leaves **the vehicle in +0x530**. The aim then pointed at the bike / car
+  behind and below him: the torso at both limits (-0.87, 0.79 off a bike, 0.38 off a car) and the gun off to the side.
+  A shot sets the attack's own target. Found with the user's recorded play (`watch_aim`: the aim's state 10 times a
+  second and screenshots) and a test reading +0x530 = +0x534 (his last vehicle) after getting out.
+- **The fix.** The mouse aim drops a target left in +0x530 when it starts and while it aims, as the game clears its
+  references: **CEntity::CleanUpOldReference(entity, &ref) 0x2B5CF8** chained, the pointer 0.
+- **Also.** The pitch given is kept within the torso's limit (+-0.75): looking down steeply (with no vehicle at all)
+  the IK failed the same way. A look left on (bit 36) is ended with the game's **ClearLookFlag 0x1D4930** (ClearAimFlag
+  is 0x1D4ED8); SetPointGunAt sets a look of its own only with a target.
+- **What was wrong first.** The first fix straightened the torso whenever bit 41 was off. The IK stepped it back toward
+  the target past its limit, 0.14 rad a frame, and failed again: the torso shook between straight and the limit. That
+  is what the user saw as worse.
+
+Checked: off a PCJ-600 and out of a Kuruma, aiming before any shot: +0x530 empty, bit 41 on, the torso 0 / 0.05 (as
+before getting in), the gun at his shoulder on the circle (screenshot). Looking down: the torso still at 0.75, no
+shaking.
 
 **Shotgun pellets (2026-11-16, the user's report: "the impact does not go where I aim").** `LCS_SHOT_LOG=1`
 logged every line test of the player's shots. The shotguns' pellets (return 0x2A93E4) are always level: the end is

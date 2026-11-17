@@ -46,6 +46,12 @@ namespace lcs::mouseaim
         // limits by PointGunInDirection (0x270730, from 0x1D4F58), whose result is bCanPointGunAtTarget (bit 41)
         constexpr uint32_t kPedTorsoYaw = 0x31Cu, kPedTorsoPitch = 0x320u;
         constexpr uint64_t kFlagCanPointGun = 0x20000000000ull;
+        // CPed::m_pPointGunAt (+0x530): set, the aim (0x1D4F58) points the gun at that entity instead of the direction
+        // given. Getting out of a vehicle leaves the vehicle there - he aimed at the bike / car behind him, the torso at
+        // its limits, the gun off to the side, until a shot replaced it (the user's reports, 2026-11-17). Cleared as the
+        // game clears its references: CEntity::CleanUpOldReference(entity, &ref) (0x2B5CF8) and the pointer 0.
+        constexpr uint32_t kPedPointGunAt = 0x530u;
+        constexpr uint32_t kCleanUpOldReference = 0x002B5CF8u;
         constexpr uint32_t kTheCamera = 0x0043BBF0u;     // its matrix: +0x10 forward, +0x30 position
         constexpr uint32_t kActiveCam = 0x10Cu, kCam0 = 0x220u, kCamStride = 0x2B0u, kCamMode = 0x40u;
         constexpr uint32_t kModeFollowPed = 4u;
@@ -174,6 +180,21 @@ namespace lcs::mouseaim
         // and aim flags cleared, AIM_GUN (or ATTACK) back to idle, and the weapon's aim anim (0xC9, or 0xCA) faded out.
         // Writing the state alone left that anim held at speed 0 now and then: Toni frozen in the pose after letting
         // go (the user's report, 2026-11-16). True when it chained the call.
+        // A gun target left over (kPedPointGunAt) dropped; true when it chained the reference's clean-up.
+        bool dropGunTarget(uint32_t ped, R5900Context *ctx)
+        {
+            const uint32_t target = rd32(ped + kPedPointGunAt);
+            if (!target)
+                return false;
+            wr32(ped + kPedPointGunAt, 0u);
+            if (!inRam(target))
+                return false;
+            SET_GPR_U32(ctx, 4, target);
+            SET_GPR_U32(ctx, 5, ped + kPedPointGunAt);
+            ctx->pc = kCleanUpOldReference;
+            return true;
+        }
+
         bool leave(uint32_t ped, const char *why, R5900Context *ctx)
         {
             if (g_state != State::Aiming)
@@ -330,6 +351,8 @@ namespace lcs::mouseaim
             {
                 return leave(ped, !want ? "released" : "no gun / not on foot / another camera", ctx);
             }
+            if (dropGunTarget(ped, ctx)) // (a target set while aiming too)
+                return true;
             if (state != kStateAimGun && state != kStateAttack)
             {
                 // the game took him out of the pose (hit, a fall, a reload's state): back in after a moment
@@ -352,7 +375,11 @@ namespace lcs::mouseaim
             {
                 const float angle = std::atan2(-f[0], f[1]);
                 // the IK's pitch is + down (checked: the camera's own sign raised his arm looking down)
-                const float pitch = -std::asin(std::clamp(f[2], -1.0f, 1.0f));
+                // Kept within what the torso can bend (its limits, 0x393598: pitch +-0.785, yaw +-0.873). Past it
+                // PointGunInDirection fails every frame and the torso stands at its limit, bent over with the gun off
+                // to the side - looking down at the ground, as the camera does just out of a vehicle (the user's
+                // reports, 2026-11-17). The shots still go along the camera (the line test is redirected below).
+                const float pitch = std::clamp(-std::asin(std::clamp(f[2], -1.0f, 1.0f)), -0.75f, 0.75f);
                 wrf(ped + kPedAimAngle, angle);
                 wrf(ped + kPedPitch, pitch);
                 if (!aimsWithArm(ped))
@@ -373,14 +400,8 @@ namespace lcs::mouseaim
                 }
                 wr32(ped + kPedAimTimer, 0u);
                 const uint64_t flags = rd64(ped + kPedFlags);
-                // Out of a vehicle the torso stays turned (0.87 / 0.37 rad), and from there the IK fails every frame:
-                // the gun pointed off to the side until a shot, whose attack straightens the torso (the user's report,
-                // 2026-11-17). Straightened here too whenever it fails.
-                if (!(flags & kFlagCanPointGun))
-                {
-                    wrf(ped + kPedTorsoYaw, 0.0f);
-                    wrf(ped + kPedTorsoPitch, 0.0f);
-                }
+                // (Straightening the torso whenever the IK failed, the first fix for the above, only made it shake:
+                // the IK stepped it back toward a target past its limit, 0.14 rad a frame, and failed again.)
                 wr64(ped + kPedFlags, (flags & ~kFlagRestoring) | kFlagAiming);
                 // He looks at something (getting out of a vehicle he turns his head and torso to it; the game looks
                 // about on its own): the look's twist stayed on top of the aim, the gun pointing off to the side until
@@ -401,11 +422,13 @@ namespace lcs::mouseaim
             const uint32_t state = rd32(ped + kPedState);
             if ((state == kStateIdle || state == kStateAttack) && (rd64(ped + kPedFlags) & kFlagLooking))
             {
-                // a look first ends (see above); into the aim the next frame
+                // a look first ends (see above), and a gun target left over goes; into the aim the next frame
                 SET_GPR_U32(ctx, 4, ped);
                 ctx->pc = kClearLookFlag;
                 return true;
             }
+            if ((state == kStateIdle || state == kStateAttack) && dropGunTarget(ped, ctx))
+                return true;
             if (state == kStateIdle || state == kStateAttack)
             {
                 g_state = State::Aiming;
