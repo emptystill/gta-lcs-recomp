@@ -166,7 +166,13 @@ void gsHwSetReducedPostFx(bool on) { g_reducedPostFx.store(on, std::memory_order
 void gsHwSetTrailsBlur(bool on) { g_trailsBlur.store(on, std::memory_order_relaxed); }
 void gsHwSetHudUpscale(int k) { g_hudUpscale.store(k == 2 || k == 4 ? k : 1, std::memory_order_relaxed); }
 void gsHwSetHudPackDir(const char *dir) { g_hudPackDir = dir ? dir : ""; }
-void gsHwSetHudPack(bool on) { g_hudPackOn.store(on, std::memory_order_relaxed); }
+void gsHwPreloadHudPack(); // [gta-recomp] below, after hudpack::
+void gsHwSetHudPack(bool on)
+{
+    g_hudPackOn.store(on, std::memory_order_relaxed);
+    if (on)
+        gsHwPreloadHudPack();
+}
 void gsHwSetFill2d(bool on) { g_fill2d.store(on, std::memory_order_relaxed); }
 
 // [gta-recomp] gsHwShownInputNs (gs_hw.h)
@@ -850,7 +856,7 @@ namespace
                 if (std::sscanf(line, "%u %u %u %u %255s %255s %511[^\n]", &e.pw, &e.ph, &e.fw, &e.fh, probe, full, name) < 6)
                     continue;
                 if (!e.pw || !e.ph || e.fw % e.pw || e.fh % e.ph || e.fw / e.pw != e.fh / e.ph)
-                    continue;
+                    continue; // (tools/hud_pack.py makes a PCSX2 image of another shape the texture's)
                 if (!readRaw(dir + "/" + probe, size_t(e.pw) * e.ph, e.probe))
                     continue;
                 e.full = dir + "/" + full;
@@ -1246,9 +1252,11 @@ namespace
         uint32_t displayWidth() const { return m_display ? m_display->desc().width : m_displayW * m_scale; }
         uint32_t displayHeight() const { return m_display ? m_display->desc().height : m_displayH * m_scale; }
 
+        bool m_exec2d = false; // [gta-recomp] execute: the frame has no 3D (the pack's flat2d)
         void execute(const Frame &f, bool logDraws)
         {
             m_execWide = f.shown != 0; // [gta-recomp] the shape the frame's drawing is for (shapeOf)
+            m_exec2d = !f.had3d;       // [gta-recomp] a frame without 3D: every 2D draw may take a pack's image
             m_dev.pushMarker("gs frame");
             const size_t bytes = f.vertices.size() * sizeof(HwVertex);
             if (bytes)
@@ -2731,6 +2739,13 @@ namespace
         // else with Sharp HUD hudxbr::apply - the radar's map tiles come as he moves, ~5 ms each and 25 ms for a 256x256
         // at 4x, a hitch each when made on this thread (measured 2026-11-17); until it is done the HUD draws from the
         // original. Null when off, not ready, or nothing for it.
+        bool hudUpWait(uint64_t key)
+        {
+            auto job = m_hudUpJobs.find(key);
+            return job != m_hudUpJobs.end() &&
+                   job->second.result.wait_for(std::chrono::milliseconds(1000)) == std::future_status::ready;
+        }
+
         rhi::Texture *hudUpscaled(uint64_t key, rhi::Texture &src, bool hud)
         {
             const uint32_t k = static_cast<uint32_t>(g_hudUpscale.load(std::memory_order_relaxed));
@@ -2999,14 +3014,24 @@ namespace
             // map, loading screens), the pack only
             const bool hudDraw = layer && layer->hud;
             static const bool anyFlat = std::getenv("PS2X_HUD_PACK_ANY") != nullptr; // (diagnosis: no depth condition)
-            const bool flat2d = !hudDraw && !native && !layer && (anyFlat || !s.zte || s.ztst == 1u) &&
+            // [gta-recomp] in a frame without 3D (a menu, a loading screen) the depth test does not matter: the pause
+            // menu draws its text and frames depth-tested at the far plane (a PS2 frontend pack's images, 2026-11-17)
+            const bool flat2d = !hudDraw && !native && !layer && (anyFlat || m_exec2d || !s.zte || s.ztst == 1u) &&
                                 g_hudPackOn.load(std::memory_order_relaxed);
             if ((hudDraw || flat2d) && s.tme && !s.texIsRt && !plainTexture && tex && s.tw && s.th && hudDump(s.texKey, *tex))
-                if (rhi::Texture *up = hudUpscaled(s.texKey, *tex, hudDraw))
+            {
+                rhi::Texture *up = hudUpscaled(s.texKey, *tex, hudDraw);
+                // [gta-recomp] a frame without 3D waits for its match (up to a second; tens of ms once the pack is
+                // read): a loading screen draws its picture and then loads with the frame standing still, so a match
+                // that came later never showed (2026-11-17); a menu's textures no longer change under the player's eyes
+                if (!up && m_exec2d && hudUpWait(s.texKey))
+                    up = hudUpscaled(s.texKey, *tex, hudDraw);
+                if (up)
                 {
                     hudK = up->desc().width / tex->desc().width;
                     tex = up;
                 }
+            }
 
             bindPass(colorTarget, depthTarget);
             {
@@ -3732,7 +3757,20 @@ namespace
             // screen (x -750..449 and beyond) clipped to x 80..558, under a dark box over the locked islands; taken as
             // full width it was stretched (and enlarged with gsHwSetFill2d) while the box was squeezed - the two
             // apart (the user, 2026-11-17).
-            const bool fullWidth = x0 <= 1.0f && x1 >= 639.0f && s.scx0 == 0u && s.scx1 >= 630u;
+            // Zoomed further the map's scissor opens to x 0..637 but stays y 0..367 (above the menu's buttons): the
+            // whole height counts too.
+            const bool fullWidth = x0 <= 1.0f && x1 >= 639.0f && s.scx0 == 0u && s.scx1 >= 630u && s.scy0 == 0u &&
+                                   s.scy1 >= 440u;
+            // The dark box over the map's locked islands keeps the menu's scissor (x 80..558) while the map zoomed in
+            // opens its own to the screen: the map shows unshaded left of x 80 (or right of 558) - the game's own
+            // seam, plain once the picture is wide. With gsHwSetFill2d the box is clipped as the map is: an
+            // untextured draw reaching far past the menu's scissor gets the screen's.
+            if (g_fill2d.load(std::memory_order_relaxed) && s.fbw == 10u && !s.tme && far && s.scx0 == 80u &&
+                s.scx1 == 558u && (x0 < -100.0f || x1 > 740.0f))
+            {
+                s.scx0 = 0u;
+                s.scx1 = 637u;
+            }
             // [gta-recomp] gsHwSetFill2d: a full-screen picture of the game's (textured, not the frame itself; a loading
             // screen's illustration, a menu backdrop) is drawn to the full width of a wide picture: enlarged as much in
             // height about the middle, it keeps its shape and is cropped top and bottom (the user's choice, 2026-11-17)
@@ -6185,4 +6223,13 @@ std::string gsHwDrawSourceReport(bool reset) // [gta-recomp]
 {
     std::lock_guard<std::mutex> lock(g_drawSourcesMutex);
     return g_drawSources.report(reset);
+}
+
+// [gta-recomp] The pack's probes read on a helper thread as soon as it is switched on: read at the first draw that wanted
+// them (a few hundred files), the matches came after the first loading screen had gone.
+void gsHwPreloadHudPack()
+{
+    if (g_hudPackDir.empty())
+        return;
+    std::thread([dir = g_hudPackDir] { hudpack::entries(dir); }).detach();
 }

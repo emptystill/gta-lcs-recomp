@@ -202,6 +202,30 @@ Not yet: entity culling's side planes (VCS widens `CCamera::IsSphereVisible`'s, 
 without it VCS lost buildings, peds and cars in the outer eighths of a 16:9 picture - LCS's twin is not found by its
 VCS code shape: watch the edges in the city); the game's own Vert- widescreen option and the cutscene bars setting.
 
+### More texture packs: the frontend (2026-11-17)
+
+The user added two more packs: "Remastered Frontend PCSX2 [LCS]" (made for PCSX2 and this very disc, SLUS-21423: 141
+menu / loading / HUD images) and "GTA LCS HD" (PPSSPP, the PSP's: interface plus 3D world textures). `tools/hud_pack.py
+install` takes several packs now (the first one's image wins for the same path); installed: v2.1 x256, the frontend,
+GTA LCS HD - 309 images.
+
+- **PCSX2's names** are `<texture hash>-<CLUT hash>-<bits>`: the bits are TEX0's PSM (6 bits), TW and TH (4 each) - the
+  game texture's size (0x5dd4: PSMT4 128x128; 0x2653: PSMT8 512x512). The probe is the image box-averaged to exactly that
+  size, also when the image has another shape (1024x512 for a 512x512 loading screen; the shown image is then stretched
+  to the texture's shape, as the runtime wants one scale for both sides).
+- **PCSX2 keeps the GS's alpha** (128 opaque, its images go up to 128 - one to 166): converting it like a PPSSPP pack's
+  halved it and nothing matched.
+- **Where**: in a frame without 3D every textured 2D draw may take a pack image (the pause menu draws its text and
+  frames depth-tested at the far plane, which the HUD-only condition left out), and the frame waits for the match (up
+  to a second; ~30 ms once the pack is read, which now starts when the option is switched on): a loading screen draws
+  its picture once and then loads with the frame standing still, so a later match never showed.
+- **What matched** (2026-11-17, 1080p): the loading screens - the PSP pack's (same drawings as the PS2's: difference 15),
+  the pause menu's backdrop, map, title font (Pricedown), its arrows and the HUD's numbers, health bar, radar centre and
+  north from the frontend pack; fonts and the rest of the HUD from v2.1 as before. Not matched: the controller drawing
+  on the Controls page (best 127), a few 64x64 / 16x16 icons.
+- **Not used**: GTA LCS HD's 3D world folders (Buildings, Vehicles, Signs, World, Props, Pedestrians, Particles; skipped
+  by the tool) - the world is drawn natively from the game's models, another path; and its "Alt" variants.
+
 ### Menus and loading screens (2026-11-17)
 
 The user asked for the loading screens and menus to fill a 16:9 picture "like the game", the pictures enlarged and
@@ -224,6 +248,10 @@ cropped. Display: **Wide menus and loading screens** (`display.fill_2d`, off; `L
   change (found in a recording of their play, then 20 screenshots a second while changing page). Now only untextured
   draws follow, and only until something textured is drawn after the picture (the menu's text and icons; a loading
   screen draws nothing textured after its picture).
+- **Zoomed further** (the user's next screenshot): the map's scissor opens to x 0..637 (y 0..367 still) while its dark
+  box keeps the menu's x 80..558 - the PS2's own seam, a strip of unshaded map left of x 80. Full width now needs the
+  whole height of scissor too (the map stays with the menu), and with the option an untextured draw reaching far past
+  the menu's scissor gets the screen's (the box covers what the map covers).
 - **The map zoomed in** (the user's screenshot, 2026-11-17): the map is one 512x512 picture drawn larger than the
   screen (x -750..449 and further) and clipped to the menu's x 80..558, with a dark box over the islands not yet open
   (untextured, alpha 0x6e). Once the picture spanned the width it counted as full-width - stretched, and enlarged as a
