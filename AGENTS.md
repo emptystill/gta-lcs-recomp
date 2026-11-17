@@ -98,6 +98,8 @@ python3 tools/release.py --platform macos [--worktree]   # the macOS .dmg: the a
                                              # (tools/dmg.py writes the Finder layout; `dmg.py show X.dmg` prints it)
 python tools/deps.py list|fetch|check        # the libraries CMake downloads; deps/ makes the build offline
 python tools/backup.py create|list|restore   # memory card backups (VCS_DATA_DIR honoured: test on copies)
+python tools/hud_pack.py install PACK|status|remove   # an HD HUD texture pack into the data folder (Graphics >
+                                             # HD HUD textures; docs/LCS.md "HUD texture pack")
 python tools/setup_vs.py status|install [--dry-run]   # Visual Studio Build Tools (+ clang) from Microsoft, elevated
 python tools/hlsl_dxbc.py ... [--check-fxc FXC]       # HLSL -> DXBC through Windows' d3dcompiler_47.dll (no Windows SDK)
 python tools/update.py check|apply [--zip F]  # a release folder to the newest GitHub release (not a clone)

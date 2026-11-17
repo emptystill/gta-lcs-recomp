@@ -712,6 +712,24 @@ namespace
         s.onChange = [](int v) { gsHwSetHudUpscale(v ? 4 : 1); };
         settings::add(s);
 
+        // HUD texture pack (the user's, 2026-11-17): a high-resolution HUD made for another version of the game (a
+        // PPSSPP pack), prepared once by tools/hud_pack.py into <data>/hud_pack and matched to the game's HUD textures
+        // by content (gs_hw.cpp hudpack::). docs/LCS.md "HUD texture pack".
+        gsHwSetHudPackDir((dataDirectory() / "hud_pack").string().c_str());
+        s = {};
+        s.key = "display.hud_pack";
+        s.page = "Graphics";
+        s.section = "Image quality";
+        s.label = "HD HUD textures";
+        s.help = "Draws the HUD with the high-resolution pictures of a texture pack you installed (python "
+                 "tools/hud_pack.py install <the pack's folder>). Whatever the pack has no picture for stays as it was, "
+                 "or Sharp HUD's. Off is the original.";
+        s.type = Type::Toggle;
+        s.defaultValue = 0;
+        s.env = "LCS_HUD_PACK";
+        s.onChange = [](int v) { gsHwSetHudPack(v != 0); };
+        settings::add(s);
+
         // The reflection on car paint (docs/vcs-reference/game-internals.md 6g): the PS2 samples the frame once per spot, so a panel
         // flickers as the camera moves - the same at every resolution, but plainer to see when the rest of the picture is
         // sharp. Always Auto: the original at 1x, Smooth above it - no setting (the user's choice, DECISIONS.md

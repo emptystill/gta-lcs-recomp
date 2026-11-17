@@ -55,6 +55,8 @@ namespace
     std::atomic<bool> g_reducedPostFx{false};           // [gta-recomp] gsHwSetReducedPostFx
     std::atomic<bool> g_trailsBlur{true};                // [gta-recomp] gsHwSetTrailsBlur
     std::atomic<int> g_hudUpscale{1};                    // [gta-recomp] gsHwSetHudUpscale
+    std::atomic<bool> g_hudPackOn{false};                // [gta-recomp] gsHwSetHudPack
+    std::string g_hudPackDir;                            // (set before rendering starts)
     std::atomic<uint32_t> g_frameW{0}, g_frameH{0};     // [gta-recomp] gsHwSetFrameSize
     struct TargetRole                                   // [gta-recomp] gsHwSetTargetRole
     {
@@ -162,6 +164,8 @@ void gsHwSetAspectWidening(float widening) { g_aspectWidening.store(widening, st
 void gsHwSetReducedPostFx(bool on) { g_reducedPostFx.store(on, std::memory_order_relaxed); }
 void gsHwSetTrailsBlur(bool on) { g_trailsBlur.store(on, std::memory_order_relaxed); }
 void gsHwSetHudUpscale(int k) { g_hudUpscale.store(k == 2 || k == 4 ? k : 1, std::memory_order_relaxed); }
+void gsHwSetHudPackDir(const char *dir) { g_hudPackDir = dir ? dir : ""; }
+void gsHwSetHudPack(bool on) { g_hudPackOn.store(on, std::memory_order_relaxed); }
 
 // [gta-recomp] gsHwShownInputNs (gs_hw.h)
 static int64_t steadyNs()
@@ -785,6 +789,109 @@ namespace
                 w *= 2u;
                 h *= 2u;
             }
+        }
+    }
+
+    // [gta-recomp] HUD texture pack (gsHwSetHudPack): replacement images for the HUD's textures, prepared by
+    // tools/hud_pack.py into <data>/hud_pack: index.txt (one line per probe: probe w h, full W H, probe file, full file,
+    // name), each image as raw RGBA8 (rows top-down), and for each a probe - the image box-averaged down to a size the
+    // game's texture may have (colour weighted by alpha, alpha the mean). A HUD texture is matched to the probes of its
+    // own size by content: the mean of the alpha difference and the colour difference weighted by the larger alpha
+    // (0..255); the best under kMatchLimit wins. By content, not by the texture's key: the same picture comes with
+    // several keys (the health bar: 64 of them in one session, one content each of two).
+    namespace hudpack
+    {
+        constexpr float kMatchLimit = 85.0f; // measured: true pairs 24..81, the best wrong one 97
+
+        struct Entry
+        {
+            uint32_t pw = 0, ph = 0, fw = 0, fh = 0;
+            std::string full, name;
+            std::vector<uint32_t> probe;
+        };
+
+        bool readRaw(const std::string &path, size_t texels, std::vector<uint32_t> &out)
+        {
+            FILE *f = std::fopen(path.c_str(), "rb");
+            if (!f)
+                return false;
+            out.assign(texels, 0u);
+            const size_t n = std::fread(out.data(), 4, texels, f);
+            std::fclose(f);
+            return n == texels;
+        }
+
+        // the index and every probe, once (on the first match: a helper thread)
+        const std::vector<Entry> &entries(const std::string &dir)
+        {
+            static std::mutex mutex;
+            static std::string loadedFrom;
+            static std::vector<Entry> list;
+            std::lock_guard<std::mutex> lock(mutex);
+            if (loadedFrom == dir)
+                return list;
+            loadedFrom = dir;
+            list.clear();
+            FILE *f = std::fopen((dir + "/index.txt").c_str(), "r");
+            if (!f)
+                return list;
+            char line[1024];
+            while (std::fgets(line, sizeof(line), f))
+            {
+                Entry e;
+                char probe[256] = {}, full[256] = {}, name[512] = {};
+                if (std::sscanf(line, "%u %u %u %u %255s %255s %511[^\n]", &e.pw, &e.ph, &e.fw, &e.fh, probe, full, name) < 6)
+                    continue;
+                if (!e.pw || !e.ph || e.fw % e.pw || e.fh % e.ph || e.fw / e.pw != e.fh / e.ph)
+                    continue;
+                if (!readRaw(dir + "/" + probe, size_t(e.pw) * e.ph, e.probe))
+                    continue;
+                e.full = dir + "/" + full;
+                e.name = name;
+                list.push_back(std::move(e));
+            }
+            std::fclose(f);
+            std::fprintf(stderr, "[gs-hw] HUD texture pack: %zu probes from %s\n", list.size(), dir.c_str());
+            return list;
+        }
+
+        inline int ch(uint32_t c, int s) { return static_cast<int>((c >> s) & 0xFFu); }
+
+        float difference(const std::vector<uint32_t> &a, const std::vector<uint32_t> &b)
+        {
+            double e = 0.0;
+            for (size_t i = 0; i < a.size(); ++i)
+            {
+                const uint32_t x = a[i], y = b[i];
+                const int ax = ch(x, 24), ay = ch(y, 24);
+                const double w = std::max(ax, ay) / 255.0;
+                e += std::abs(ax - ay) +
+                     w * (std::abs(ch(x, 0) - ch(y, 0)) + std::abs(ch(x, 8) - ch(y, 8)) + std::abs(ch(x, 16) - ch(y, 16))) / 3.0;
+            }
+            return a.empty() ? 1e9f : static_cast<float>(e / static_cast<double>(a.size()));
+        }
+
+        // the pack's image for a game texture (w x h, its pixels): empty when none is close enough
+        std::vector<uint32_t> match(const std::string &dir, const std::vector<uint32_t> &pixels, uint32_t w, uint32_t h,
+                                    uint32_t &outW, uint32_t &outH, std::string &outName, float &outErr)
+        {
+            const Entry *best = nullptr;
+            float bestErr = 1e9f;
+            for (const Entry &e : entries(dir))
+                if (e.pw == w && e.ph == h)
+                    if (const float d = difference(pixels, e.probe); d < bestErr)
+                    {
+                        bestErr = d;
+                        best = &e;
+                    }
+            outErr = bestErr;
+            std::vector<uint32_t> out;
+            if (!best || bestErr > kMatchLimit || !readRaw(best->full, size_t(best->fw) * best->fh, out))
+                return {};
+            outW = best->fw;
+            outH = best->fh;
+            outName = best->name;
+            return out;
         }
     }
 
@@ -2438,46 +2545,78 @@ namespace
         }
 
         // the layer over m_display, which shows the buffer from PS2 pixel (displayX, displayY)
-        // [gta-recomp] Sharp HUD: the larger copy of a game texture the HUD draws from. The first time: read back from
-        // the GPU (a small texture), then hudxbr::apply on a helper thread - the radar's map tiles come as he moves, ~5 ms
-        // each and 25 ms for a 256x256 at 4x, a hitch each when made on this thread (measured 2026-11-17); until it is
-        // done the HUD draws from the original. Null when off, not ready, or not possible.
+        // [gta-recomp] PS2X_HUD_DUMP=<dir>: each game texture the HUD layer draws from, once, as <key>_<w>x<h>.rgba (raw
+        // RGBA8, rows top-down) - to match replacement textures to (tools/hud_textures.py). Always true (an && link).
+        bool hudDump(uint64_t key, rhi::Texture &src)
+        {
+            static const char *dir = std::getenv("PS2X_HUD_DUMP");
+            if (!dir || !m_hudDumped.insert(key).second)
+                return true;
+            const uint32_t w = src.desc().width, h = src.desc().height;
+            if (!w || !h || w > 1024u || h > 1024u || src.desc().format != rhi::Format::RGBA8)
+                return true;
+            std::vector<uint32_t> pixels(size_t(w) * h);
+            endPass();
+            if (!m_dev.readTexture(src, 0, 0, w, h, pixels.data(), w * 4u))
+                return true;
+            char path[1024];
+            std::snprintf(path, sizeof(path), "%s/%016llx_%ux%u.rgba", dir, static_cast<unsigned long long>(key), w, h);
+            if (FILE *f = std::fopen(path, "wb"))
+            {
+                std::fwrite(pixels.data(), 4, pixels.size(), f);
+                std::fclose(f);
+            }
+            return true;
+        }
+
+        // [gta-recomp] Sharp HUD / HUD texture pack: the larger copy of a game texture the HUD draws from. The first time:
+        // read back from the GPU (a small texture), then on a helper thread the pack's matching image (hudpack::match),
+        // else with Sharp HUD hudxbr::apply - the radar's map tiles come as he moves, ~5 ms each and 25 ms for a 256x256
+        // at 4x, a hitch each when made on this thread (measured 2026-11-17); until it is done the HUD draws from the
+        // original. Null when off, not ready, or nothing for it.
         rhi::Texture *hudUpscaled(uint64_t key, rhi::Texture &src)
         {
             const uint32_t k = static_cast<uint32_t>(g_hudUpscale.load(std::memory_order_relaxed));
-            if (k != m_hudUpK)
+            const bool pack = g_hudPackOn.load(std::memory_order_relaxed) && !g_hudPackDir.empty();
+            if (k != m_hudUpK || pack != m_hudUpPack)
             {
                 m_hudUp.clear();
                 m_hudUpJobs.clear(); // (waits for running jobs: a setting change, rare)
                 m_hudUpK = k;
+                m_hudUpPack = pack;
             }
-            if (k <= 1u)
+            if (k <= 1u && !pack)
                 return nullptr;
             auto it = m_hudUp.find(key);
             if (it != m_hudUp.end())
                 return it->second.get();
+            static const bool log = std::getenv("PS2X_HUD_UPSCALE_LOG") != nullptr;
             auto job = m_hudUpJobs.find(key);
             if (job != m_hudUpJobs.end())
             {
-                if (job->second.pixels.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+                if (job->second.result.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
                     return nullptr;
                 HudUpJob j = std::move(job->second);
                 m_hudUpJobs.erase(job);
-                const std::vector<uint32_t> pixels = j.pixels.get();
+                const HudUpResult r = j.result.get();
                 std::unique_ptr<rhi::Texture> &made = m_hudUp[key];
-                if (pixels.size() != size_t(j.w) * j.h)
+                if (r.pixels.empty() || r.pixels.size() != size_t(r.w) * r.h)
+                {
+                    if (log)
+                        std::fprintf(stderr, "[gs-hw] HUD texture %llx %ux%u: kept (%s)\n", static_cast<unsigned long long>(key), j.srcW,
+                                     j.srcH, r.what.c_str());
                     return nullptr;
+                }
                 rhi::TextureDesc d;
-                d.width = j.w;
-                d.height = j.h;
+                d.width = r.w;
+                d.height = r.h;
                 d.usage = rhi::UsageSampled;
                 d.mipLevels = 1;
                 d.name = "gs hud upscaled";
-                made = m_dev.createTexture(d, pixels.data(), j.w * 4u);
-                static const bool log = std::getenv("PS2X_HUD_UPSCALE_LOG") != nullptr;
+                made = m_dev.createTexture(d, r.pixels.data(), r.w * 4u);
                 if (log)
-                    std::fprintf(stderr, "[gs-hw] sharp HUD: texture %llx %ux%u -> %ux%u, ready after %.2f ms\n",
-                                 static_cast<unsigned long long>(key), j.srcW, j.srcH, j.w, j.h,
+                    std::fprintf(stderr, "[gs-hw] HUD texture %llx %ux%u -> %ux%u %s, ready after %.2f ms\n",
+                                 static_cast<unsigned long long>(key), j.srcW, j.srcH, r.w, r.h, r.what.c_str(),
                                  std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - j.start).count());
                 return made.get();
             }
@@ -2497,13 +2636,33 @@ namespace
             HudUpJob &j = m_hudUpJobs[key];
             j.srcW = w;
             j.srcH = h;
-            j.w = w * k;
-            j.h = h * k;
             j.start = std::chrono::steady_clock::now();
-            j.pixels = std::async(std::launch::async, [pixels = std::move(pixels), w, h, k]() mutable {
-                uint32_t ow = w, oh = h;
-                hudxbr::apply(pixels, ow, oh, k);
-                return std::move(pixels);
+            const std::string dir = pack ? g_hudPackDir : std::string();
+            j.result = std::async(std::launch::async, [pixels = std::move(pixels), w, h, k, dir]() mutable {
+                HudUpResult r;
+                if (!dir.empty())
+                {
+                    float err = 0.0f;
+                    r.pixels = hudpack::match(dir, pixels, w, h, r.w, r.h, r.what, err);
+                    char note[64];
+                    std::snprintf(note, sizeof(note), " (pack, difference %.1f)", err);
+                    if (!r.pixels.empty())
+                    {
+                        r.what = "\"" + r.what + "\"" + note;
+                        return r;
+                    }
+                    r.what = std::string("no pack image") + note;
+                }
+                if (k > 1u)
+                {
+                    uint32_t ow = w, oh = h;
+                    hudxbr::apply(pixels, ow, oh, k);
+                    r.pixels = std::move(pixels);
+                    r.w = ow;
+                    r.h = oh;
+                    r.what = "xBR";
+                }
+                return r;
             });
             return nullptr;
         }
@@ -2678,7 +2837,7 @@ namespace
             // [gta-recomp] Sharp HUD: a HUD layer draw from a game texture reads its larger copy (gs_draw.hlsl
             // sampleUpscaled: bilinear at the copy's own texels, the wrap / clamp scaled to it)
             uint32_t hudK = 1;
-            if (layer && layer->hud && s.tme && !s.texIsRt && !plainTexture && tex && s.tw && s.th)
+            if (layer && layer->hud && s.tme && !s.texIsRt && !plainTexture && tex && s.tw && s.th && hudDump(s.texKey, *tex))
                 if (rhi::Texture *up = hudUpscaled(s.texKey, *tex))
                 {
                     hudK = up->desc().width / tex->desc().width;
@@ -2894,14 +3053,22 @@ namespace
         // [gta-recomp] Sharp HUD (gsHwSetHudUpscale): the larger copies of the textures the HUD layer drew from, by the
         // texture's key (null: could not be made); made at m_hudUpK times, all dropped when the setting changes
         std::unordered_map<uint64_t, std::unique_ptr<rhi::Texture>> m_hudUp;
+        struct HudUpResult // a HUD texture's larger copy: the pack's image or xBR's; empty: none
+        {
+            std::vector<uint32_t> pixels;
+            uint32_t w = 0, h = 0;
+            std::string what;
+        };
         struct HudUpJob // a copy being made on a helper thread
         {
-            std::future<std::vector<uint32_t>> pixels;
-            uint32_t w = 0, h = 0, srcW = 0, srcH = 0;
+            std::future<HudUpResult> result;
+            uint32_t srcW = 0, srcH = 0;
             std::chrono::steady_clock::time_point start;
         };
         std::unordered_map<uint64_t, HudUpJob> m_hudUpJobs;
+        std::unordered_set<uint64_t> m_hudDumped; // PS2X_HUD_DUMP: written already
         uint32_t m_hudUpK = 1;
+        bool m_hudUpPack = false;
         std::unique_ptr<rhi::Texture> m_display, m_feedback;
         std::unordered_map<uint32_t, HudLayer> m_hud; // [gta-recomp] native HUD layer per frame buffer
         // [gta-recomp] Per frame buffer, the shape (wide or 4:3) of the frame that last drew into it; a plain copy carries

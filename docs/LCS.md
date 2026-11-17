@@ -291,6 +291,32 @@ hence the helper thread.
 Checked: crops at 2560x1440 off / on (the clock, money, ammo, the AK's icon, the radar's map and its N): the edges and
 outlines sharp, no texels of the next atlas cell along the quads' edges.
 
+### HUD texture pack (2026-11-17)
+
+The user gave a high-resolution HUD made for PPSSPP ("GTA LCS HD+ Interface v2.1", x256: the PSP version ULES00151).
+Graphics > **HD HUD textures** (`display.hud_pack`, off; `LCS_HUD_PACK`) draws the HUD from its images after
+`python tools/hud_pack.py install <the pack's folder>` (into `<data>/hud_pack`; `status`, `remove`).
+
+- **Why by content.** The pack names its images through PPSSPP's table of the PSP's texture hashes, unrelated to this
+  game. And this game's texture keys are not the picture alone: the health bar's two pictures came with 64 keys in one
+  session. So each HUD texture is matched by content, the first time the HUD draws it (`gs_hw.cpp` `hudpack::`): against
+  the pack's probes of its own size (each image box-averaged by 2, 4 and 8, colour weighted by alpha), the difference
+  the mean of the alpha difference and the colour difference weighted by the larger alpha; the best under 85 wins
+  (true pairs measured 17..81, the best wrong one 97). On a helper thread, as Sharp HUD's xBR, which still does what
+  the pack has nothing for (the radar's map tiles, the N).
+- **What `install` takes.** The folders Text, HUD (its Radar and weapons), Radio, Buttons; the weapon icons are
+  recognised through the pack's "Original Icons" (the PS2's look) and drawn from its HUD/weapons (`--icons original`:
+  the originals). `--maps` adds the radar's map tiles: the pack redraws them in the PSP's style (black roads, white
+  edges, the airport's planes), and their match is uncertain (one in three under a wrong tile in the first test) -
+  off by default. Images over 1024 (loading screens, menus) are left out: not the HUD layer's.
+- **Found with** `PS2X_HUD_DUMP=<dir>` (each texture the HUD layer draws from, once, raw) over play with every weapon:
+  132 textures - 26 radar tiles 128x128, the HUD's numbers 128x64, the fonts 256x256, the bars 64x16, the icons 64x64,
+  the radar's blip and N 16x16.
+
+Checked (2560x1440, the user's graphics settings): matched to the right image - the numbers (Text/HUD_Numbers), the
+three fonts (Main_Text, Street_Text), health and armour with their backgrounds, the bars' outline, the AK and pistol
+icons, the radar's ring and centre; the radar's tiles and N went to xBR. Screenshots off / on.
+
 ## Mouse camera (2026-11-15)
 
 The mouse turns the camera itself on foot and behind a vehicle (it was the right stick before: capped at the stick's
