@@ -202,6 +202,16 @@ Not yet: entity culling's side planes (VCS widens `CCamera::IsSphereVisible`'s, 
 without it VCS lost buildings, peds and cars in the outer eighths of a 16:9 picture - LCS's twin is not found by its
 VCS code shape: watch the edges in the city); the game's own Vert- widescreen option and the cutscene bars setting.
 
+### Radio logos the pack redrew (2026-11-17)
+
+The Audio page's Double Clef (texture 64 x 64) and The Liberty Jam stayed the PS2's: the pack's (and the frontend
+pack's) images are the PSP's drawings - The Liberty Jam with a white rim and "THE", Double Clef in other colours - so
+the difference (117 for The Liberty Jam) or the brightness's correlation (0.62 / 0.42) failed the rule. After the
+rule, a 64 x 64 texture is tried against the Radio/ images by the alpha's and the brightness's correlations summed:
+the best at 1.2 and 0.05 over the next (Double Clef 1.43 against 0.91, The Liberty Jam 1.23 against 1.16; the page's
+particles and clouds reach 1.03 with some logo, the fist icon 0.86). The Liberty Free Radio logo before that had been
+taken for a radar tile: map tiles are matched by structure at 128 x 128 only.
+
 ### More texture packs: the frontend (2026-11-17)
 
 The user added two more packs: "Remastered Frontend PCSX2 [LCS]" (made for PCSX2 and this very disc, SLUS-21423: 141

@@ -1056,7 +1056,51 @@ namespace
                 outErr = bestErr;
                 static const float limit = std::getenv("PS2X_HUD_PACK_LIMIT") ? std::strtof(std::getenv("PS2X_HUD_PACK_LIMIT"), nullptr) : kMatchLimit;
                 if (!best || bestErr > limit)
-                    return {};
+                {
+                    // A radio logo the pack redrew (the PSP's design: Liberty City Stories' The Liberty Jam with its
+                    // white rim and "THE", Double Clef's colours): the same shape and drawing, other colours - the
+                    // difference or one correlation fails. The Radio/ images of the logos' size, by the alpha's and
+                    // the brightness's correlations summed: the best at 1.2 and 0.05 over the next (measured on the
+                    // Audio page, 2026-11-17: Double Clef 1.43 / 0.91, The Liberty Jam 1.23 / 1.16; the page's
+                    // particles and clouds at most 1.03 with any logo).
+                    if (w != 64u || h != 64u)
+                        return {};
+                    const Entry *radio = nullptr;
+                    float top = -2.0f, next = -2.0f;
+                    std::vector<float> aa(pixels.size()), la(pixels.size());
+                    for (size_t i = 0; i < pixels.size(); ++i)
+                    {
+                        aa[i] = static_cast<float>(ch(pixels[i], 24));
+                        la[i] = (0.299f * ch(pixels[i], 0) + 0.587f * ch(pixels[i], 8) + 0.114f * ch(pixels[i], 16)) * aa[i] / 128.0f;
+                    }
+                    for (const Entry &e : entries(dir))
+                    {
+                        if (e.pw != w || e.ph != h || (e.name.rfind("Radio/", 0) != 0 && e.name.rfind("radio/", 0) != 0))
+                            continue;
+                        std::vector<float> ab(e.probe.size()), lb(e.probe.size());
+                        for (size_t i = 0; i < e.probe.size(); ++i)
+                        {
+                            ab[i] = static_cast<float>(ch(e.probe[i], 24));
+                            lb[i] = (0.299f * ch(e.probe[i], 0) + 0.587f * ch(e.probe[i], 8) + 0.114f * ch(e.probe[i], 16)) * ab[i] / 128.0f;
+                        }
+                        float ca = -1.0f, cl = -1.0f;
+                        if (!pearson(aa, ab, ca) || !pearson(la, lb, cl))
+                            continue;
+                        const float score = ca + cl;
+                        if (score > top)
+                        {
+                            next = top;
+                            top = score;
+                            radio = &e;
+                        }
+                        else if (score > next)
+                            next = score;
+                    }
+                    if (!radio || top < 1.2f || top - next < 0.05f)
+                        return {};
+                    best = radio;
+                    outErr = top;
+                }
             }
             if (!readRaw(best->full, size_t(best->fw) * best->fh, out))
                 return {};
