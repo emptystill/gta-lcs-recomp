@@ -801,13 +801,16 @@ namespace
     // several keys (the health bar: 64 of them in one session, one content each of two).
     namespace hudpack
     {
-        constexpr float kMatchLimit = 85.0f; // measured: true pairs 24..81, the best wrong one 97
+        constexpr float kMatchLimit = 110.0f; // the difference's bound, with alike: the right pairs measured up to 98 (a
+                                              // font), two wrong ones that passed alike 127 and 169 (glows)
+        constexpr float kShapeCorr = 0.65f;   // alike: the alpha's and the brightness's correlation, each
 
         struct Entry
         {
             uint32_t pw = 0, ph = 0, fw = 0, fh = 0;
             std::string full, name;
             std::vector<uint32_t> probe;
+            bool map = false; // a map tile (the radar's, the pause map's): matched by structure (see match)
         };
 
         bool readRaw(const std::string &path, size_t texels, std::vector<uint32_t> &out)
@@ -848,6 +851,7 @@ namespace
                     continue;
                 e.full = dir + "/" + full;
                 e.name = name;
+                e.map = e.name.rfind("Map/Map_", 0) == 0 || e.name.rfind("map/map_", 0) == 0;
                 list.push_back(std::move(e));
             }
             std::fclose(f);
@@ -857,36 +861,185 @@ namespace
 
         inline int ch(uint32_t c, int s) { return static_cast<int>((c >> s) & 0xFFu); }
 
+        // Over the texels either picture shows (alpha above 8 of 128): a mostly empty texture - a radar tile of sea -
+        // averaged over all its texels was "close" to any sparse image (it took the rocket launcher's sight). Under 5% of
+        // texels shown: no match. Alpha is the PS2's scale (128 opaque) on both sides (tools/hud_pack.py converts).
         float difference(const std::vector<uint32_t> &a, const std::vector<uint32_t> &b)
         {
             double e = 0.0;
+            size_t shown = 0;
             for (size_t i = 0; i < a.size(); ++i)
             {
                 const uint32_t x = a[i], y = b[i];
                 const int ax = ch(x, 24), ay = ch(y, 24);
-                const double w = std::max(ax, ay) / 255.0;
-                e += std::abs(ax - ay) +
+                if (std::max(ax, ay) <= 8)
+                    continue;
+                ++shown;
+                const double w = std::min(std::max(ax, ay), 128) / 128.0;
+                e += 2.0 * std::abs(ax - ay) +
                      w * (std::abs(ch(x, 0) - ch(y, 0)) + std::abs(ch(x, 8) - ch(y, 8)) + std::abs(ch(x, 16) - ch(y, 16))) / 3.0;
             }
-            return a.empty() ? 1e9f : static_cast<float>(e / static_cast<double>(a.size()));
+            if (a.empty() || shown * 20 < a.size())
+                return 1e9f;
+            return static_cast<float>(e / static_cast<double>(shown));
         }
 
-        // the pack's image for a game texture (w x h, its pixels): empty when none is close enough
+        // Pearson's correlation; false when either side does not vary (a one-colour ring, an opaque picture's alpha)
+        bool pearson(const std::vector<float> &a, const std::vector<float> &b, float &out)
+        {
+            const size_t n = a.size();
+            double ma = 0, mb = 0;
+            for (size_t i = 0; i < n; ++i)
+            {
+                ma += a[i];
+                mb += b[i];
+            }
+            ma /= double(n);
+            mb /= double(n);
+            double c = 0, va = 0, vb = 0;
+            for (size_t i = 0; i < n; ++i)
+            {
+                c += (a[i] - ma) * (b[i] - mb);
+                va += (a[i] - ma) * (a[i] - ma);
+                vb += (b[i] - mb) * (b[i] - mb);
+            }
+            if (va < 1e-3 * double(n) || vb < 1e-3 * double(n))
+                return false;
+            out = static_cast<float>(c / std::sqrt(va * vb));
+            return true;
+        }
+
+        // The same drawing, not only close colours: the alpha (the shape) and the brightness times alpha (the drawing)
+        // correlate, each at least kShapeCorr where it can be measured, and one of them can. Measured on 21 pairs from
+        // the user's pack (2026-11-17): the right ones 0.72..0.99, the wrong ones - a particle's glow taken for a radar
+        // icon, the moon for a radio logo, an X for the N, a loading screen for the memory card's - at most 0.61 on the
+        // side that tells them apart; a colour difference alone ranked several wrong ones above right fonts.
+        bool alike(const std::vector<uint32_t> &a, const std::vector<uint32_t> &b)
+        {
+            std::vector<float> aa(a.size()), ab(a.size()), la(a.size()), lb(a.size());
+            for (size_t i = 0; i < a.size(); ++i)
+            {
+                aa[i] = static_cast<float>(ch(a[i], 24));
+                ab[i] = static_cast<float>(ch(b[i], 24));
+                la[i] = (0.299f * ch(a[i], 0) + 0.587f * ch(a[i], 8) + 0.114f * ch(a[i], 16)) * aa[i] / 128.0f;
+                lb[i] = (0.299f * ch(b[i], 0) + 0.587f * ch(b[i], 8) + 0.114f * ch(b[i], 16)) * ab[i] / 128.0f;
+            }
+            float ca = 0.0f, cl = 0.0f;
+            const bool hasA = pearson(aa, ab, ca), hasL = pearson(la, lb, cl);
+            return (hasA || hasL) && (!hasA || ca >= kShapeCorr) && (!hasL || cl >= kShapeCorr);
+        }
+
+        // A picture's structure at 32 x 32: the brightness (weighted by alpha) and alpha of each cell.
+        struct Structure
+        {
+            float luma[32 * 32], alpha[32 * 32];
+        };
+        bool structure(const std::vector<uint32_t> &px, uint32_t w, uint32_t h, Structure &out)
+        {
+            if (w < 32 || h < 32 || w % 32 || h % 32)
+                return false;
+            const uint32_t fx = w / 32, fy = h / 32;
+            for (uint32_t y = 0; y < 32; ++y)
+                for (uint32_t x = 0; x < 32; ++x)
+                {
+                    double l = 0.0, a = 0.0;
+                    for (uint32_t yy = y * fy; yy < y * fy + fy; ++yy)
+                        for (uint32_t xx = x * fx; xx < x * fx + fx; ++xx)
+                        {
+                            const uint32_t c = px[size_t(yy) * w + xx];
+                            const double al = ch(c, 24);
+                            l += (0.299 * ch(c, 0) + 0.587 * ch(c, 8) + 0.114 * ch(c, 16)) * al;
+                            a += al;
+                        }
+                    out.luma[y * 32 + x] = a > 0.0 ? static_cast<float>(l / a) : 0.0f;
+                    out.alpha[y * 32 + x] = static_cast<float>(a / (fx * fy));
+                }
+            return true;
+        }
+        // the brightness's correlation where both have land (alpha), weighted by it; 0 with too little land
+        float correlation(const Structure &p, const Structure &q)
+        {
+            double ws = 0, ma = 0, mb = 0;
+            int n = 0;
+            for (int i = 0; i < 32 * 32; ++i)
+                if (const float w = std::min(p.alpha[i], q.alpha[i]); w > 16.0f)
+                {
+                    ws += w;
+                    ma += p.luma[i] * w;
+                    mb += q.luma[i] * w;
+                    ++n;
+                }
+            if (n < 20 || ws <= 0.0)
+                return 0.0f;
+            ma /= ws;
+            mb /= ws;
+            double cov = 0, va = 0, vb = 0;
+            for (int i = 0; i < 32 * 32; ++i)
+                if (const float w = std::min(p.alpha[i], q.alpha[i]); w > 16.0f)
+                {
+                    const double da = p.luma[i] - ma, db = q.luma[i] - mb;
+                    cov += da * db * w;
+                    va += da * da * w;
+                    vb += db * db * w;
+                }
+            return va > 0 && vb > 0 ? static_cast<float>(cov / std::sqrt(va * vb)) : 0.0f;
+        }
+
+        // The pack's image for a game texture (w x h, its pixels): empty when none is close enough. Map tiles go by
+        // structure - the pack redraws them in another style (black roads with white edges where the PS2's are grey
+        // and half-transparent), so colours differ, but the roads and coasts are where they are: the brightness's
+        // correlation, measured 0.80..0.94 for the right tile against at most 0.57 for the next (26 radar tiles);
+        // a tile needs 0.7 and 0.2 over the next. Everything else by the colour / alpha difference under kMatchLimit.
         std::vector<uint32_t> match(const std::string &dir, const std::vector<uint32_t> &pixels, uint32_t w, uint32_t h,
                                     uint32_t &outW, uint32_t &outH, std::string &outName, float &outErr)
         {
             const Entry *best = nullptr;
             float bestErr = 1e9f;
+            const Entry *bestMap = nullptr;
+            float mapCorr = 0.0f, mapNext = 0.0f;
+            Structure mine{};
+            const bool haveStructure = structure(pixels, w, h, mine);
             for (const Entry &e : entries(dir))
-                if (e.pw == w && e.ph == h)
-                    if (const float d = difference(pixels, e.probe); d < bestErr)
+            {
+                if (e.pw != w || e.ph != h)
+                    continue;
+                if (e.map)
+                {
+                    Structure theirs{};
+                    if (!haveStructure || !structure(e.probe, e.pw, e.ph, theirs))
+                        continue;
+                    const float c = correlation(mine, theirs);
+                    if (c > mapCorr)
                     {
-                        bestErr = d;
-                        best = &e;
+                        mapNext = mapCorr;
+                        mapCorr = c;
+                        bestMap = &e;
                     }
-            outErr = bestErr;
+                    else if (c > mapNext)
+                        mapNext = c;
+                    continue;
+                }
+                if (const float d = difference(pixels, e.probe); d < bestErr && alike(pixels, e.probe))
+                {
+                    bestErr = d;
+                    best = &e;
+                }
+            }
             std::vector<uint32_t> out;
-            if (!best || bestErr > kMatchLimit || !readRaw(best->full, size_t(best->fw) * best->fh, out))
+            if (bestMap && mapCorr >= 0.7f && mapCorr - mapNext >= 0.2f)
+            {
+                best = bestMap;
+                bestErr = 0.0f;
+                outErr = mapCorr; // (the correlation, for the log)
+            }
+            else
+            {
+                outErr = bestErr;
+                static const float limit = std::getenv("PS2X_HUD_PACK_LIMIT") ? std::strtof(std::getenv("PS2X_HUD_PACK_LIMIT"), nullptr) : kMatchLimit;
+                if (!best || bestErr > limit)
+                    return {};
+            }
+            if (!readRaw(best->full, size_t(best->fw) * best->fh, out))
                 return {};
             outW = best->fw;
             outH = best->fh;
@@ -2574,9 +2727,10 @@ namespace
         // else with Sharp HUD hudxbr::apply - the radar's map tiles come as he moves, ~5 ms each and 25 ms for a 256x256
         // at 4x, a hitch each when made on this thread (measured 2026-11-17); until it is done the HUD draws from the
         // original. Null when off, not ready, or nothing for it.
-        rhi::Texture *hudUpscaled(uint64_t key, rhi::Texture &src)
+        rhi::Texture *hudUpscaled(uint64_t key, rhi::Texture &src, bool hud)
         {
             const uint32_t k = static_cast<uint32_t>(g_hudUpscale.load(std::memory_order_relaxed));
+            const uint32_t kHere = hud ? k : 1u; // (xBR only for the HUD layer)
             const bool pack = g_hudPackOn.load(std::memory_order_relaxed) && !g_hudPackDir.empty();
             if (k != m_hudUpK || pack != m_hudUpPack)
             {
@@ -2621,7 +2775,7 @@ namespace
                 return made.get();
             }
             const uint32_t w = src.desc().width, h = src.desc().height;
-            if (!w || !h || w > 512u || h > 512u || src.desc().format != rhi::Format::RGBA8)
+            if (!w || !h || w > 1024u || h > 1024u || src.desc().format != rhi::Format::RGBA8 || (kHere <= 1u && !pack))
             {
                 m_hudUp[key] = nullptr; // never: drawn from the original
                 return nullptr;
@@ -2638,14 +2792,14 @@ namespace
             j.srcH = h;
             j.start = std::chrono::steady_clock::now();
             const std::string dir = pack ? g_hudPackDir : std::string();
-            j.result = std::async(std::launch::async, [pixels = std::move(pixels), w, h, k, dir]() mutable {
+            j.result = std::async(std::launch::async, [pixels = std::move(pixels), w, h, k = kHere, dir]() mutable {
                 HudUpResult r;
                 if (!dir.empty())
                 {
                     float err = 0.0f;
                     r.pixels = hudpack::match(dir, pixels, w, h, r.w, r.h, r.what, err);
-                    char note[64];
-                    std::snprintf(note, sizeof(note), " (pack, difference %.1f)", err);
+                    char note[96];
+                    std::snprintf(note, sizeof(note), " (pack, score %.2f: a map tile's correlation, else the difference)", err);
                     if (!r.pixels.empty())
                     {
                         r.what = "\"" + r.what + "\"" + note;
@@ -2837,8 +2991,14 @@ namespace
             // [gta-recomp] Sharp HUD: a HUD layer draw from a game texture reads its larger copy (gs_draw.hlsl
             // sampleUpscaled: bilinear at the copy's own texels, the wrap / clamp scaled to it)
             uint32_t hudK = 1;
-            if (layer && layer->hud && s.tme && !s.texIsRt && !plainTexture && tex && s.tw && s.th && hudDump(s.texKey, *tex))
-                if (rhi::Texture *up = hudUpscaled(s.texKey, *tex))
+            // and with the HUD texture pack, any other 2D draw (not the native world's, no depth test: menus, the pause
+            // map, loading screens), the pack only
+            const bool hudDraw = layer && layer->hud;
+            static const bool anyFlat = std::getenv("PS2X_HUD_PACK_ANY") != nullptr; // (diagnosis: no depth condition)
+            const bool flat2d = !hudDraw && !native && !layer && (anyFlat || !s.zte || s.ztst == 1u) &&
+                                g_hudPackOn.load(std::memory_order_relaxed);
+            if ((hudDraw || flat2d) && s.tme && !s.texIsRt && !plainTexture && tex && s.tw && s.th && hudDump(s.texKey, *tex))
+                if (rhi::Texture *up = hudUpscaled(s.texKey, *tex, hudDraw))
                 {
                     hudK = up->desc().width / tex->desc().width;
                     tex = up;

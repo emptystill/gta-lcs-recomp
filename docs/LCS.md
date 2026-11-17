@@ -293,29 +293,41 @@ outlines sharp, no texels of the next atlas cell along the quads' edges.
 
 ### HUD texture pack (2026-11-17)
 
-The user gave a high-resolution HUD made for PPSSPP ("GTA LCS HD+ Interface v2.1", x256: the PSP version ULES00151).
-Graphics > **HD HUD textures** (`display.hud_pack`, off; `LCS_HUD_PACK`) draws the HUD from its images after
-`python tools/hud_pack.py install <the pack's folder>` (into `<data>/hud_pack`; `status`, `remove`).
+The user gave a high-resolution interface made for PPSSPP ("GTA LCS HD+ Interface v2.1", x256: the PSP version
+ULES00151) and asked for all of it, the weapon icons black and white (its "Original Icons"). Graphics > **HD HUD
+textures** (`display.hud_pack`, off; `LCS_HUD_PACK`) draws from its images after `python tools/hud_pack.py install
+<the pack's folder>` (into `<data>/hud_pack`; `status`, `remove`; `--icons pack` the coloured icons, `--no-maps`).
 
 - **Why by content.** The pack names its images through PPSSPP's table of the PSP's texture hashes, unrelated to this
   game. And this game's texture keys are not the picture alone: the health bar's two pictures came with 64 keys in one
-  session. So each HUD texture is matched by content, the first time the HUD draws it (`gs_hw.cpp` `hudpack::`): against
-  the pack's probes of its own size (each image box-averaged by 2, 4 and 8, colour weighted by alpha), the difference
-  the mean of the alpha difference and the colour difference weighted by the larger alpha; the best under 85 wins
-  (true pairs measured 17..81, the best wrong one 97). On a helper thread, as Sharp HUD's xBR, which still does what
-  the pack has nothing for (the radar's map tiles, the N).
-- **What `install` takes.** The folders Text, HUD (its Radar and weapons), Radio, Buttons; the weapon icons are
-  recognised through the pack's "Original Icons" (the PS2's look) and drawn from its HUD/weapons (`--icons original`:
-  the originals). `--maps` adds the radar's map tiles: the pack redraws them in the PSP's style (black roads, white
-  edges, the airport's planes), and their match is uncertain (one in three under a wrong tile in the first test) -
-  off by default. Images over 1024 (loading screens, menus) are left out: not the HUD layer's.
-- **Found with** `PS2X_HUD_DUMP=<dir>` (each texture the HUD layer draws from, once, raw) over play with every weapon:
+  session. So each texture is matched by content the first time it is drawn (`gs_hw.cpp` `hudpack::`), on a helper
+  thread, against the pack's probes of its own size (each image box-averaged by 2, 4 and 8).
+- **Alpha.** The PS2's full opacity is 128 (the GS doubles it), the pack's 255: `install` converts the images to the
+  PS2's scale. Unconverted, every match was off by it and blending would take them as twice opaque.
+- **The rule** (21 pairs checked by eye, 2026-11-17): the colour difference over the texels either picture shows (a
+  mostly empty texture - a radar tile of sea - averaged over all its texels took the rocket launcher's sight) under 110,
+  and `alike`: the alpha's and the brightness's correlation each at least 0.65 where it can be measured. The right
+  pairs scored 0.72..0.99, the wrong ones at most 0.61 on the side that tells them apart - a particle's glow taken for
+  a radar icon, the moon for a radio logo, an X for the N, a loading screen for the memory card's, two dark menu
+  backgrounds (difference 7.6, the drawing's correlation -0.26: an exception for near-identical colours let it in and
+  was taken out). Colour difference alone had ranked wrong pairs above right fonts.
+- **Map tiles by structure.** The pack redraws the radar in the PSP's style (black roads with white edges, planes at
+  the airport); the colours differ, the roads and coasts do not: the brightness's correlation at 32x32 where both have
+  land, 0.80..0.94 for the right tile against at most 0.57 for the next over the 26 dumped radar tiles; a tile needs
+  0.7 and 0.2 over the next. Tiles of open sea (no land) are not in the pack: they stay as they were.
+- **Where.** The HUD layer's draws, and with the pack any other 2D draw: not the native world's, no depth test. Without
+  that condition (`PS2X_HUD_PACK_ANY=1`, diagnosis) the pause menu's titles (Pricedown) and a few of its pieces matched
+  too, but 459 textures were read back and compared in one session - the 3D models' among them - for nothing visible:
+  the pause menu's text is drawn sharp already and its map is not the radar's tiles.
+- **What does not apply.** The pack's loading screens, menu backgrounds and its PSP-only pictures (PSP_Left ...) are
+  the PSP version's art, which the PS2's screens are not: nothing of the PS2's matches them, so they stay the PS2's.
+- **Found with** `PS2X_HUD_DUMP=<dir>` (each texture the HUD / 2D draws read, once, raw) over play with every weapon:
   132 textures - 26 radar tiles 128x128, the HUD's numbers 128x64, the fonts 256x256, the bars 64x16, the icons 64x64,
-  the radar's blip and N 16x16.
+  the radar's blip and N 16x16. `PS2X_HUD_PACK_LIMIT` overrides the difference's bound (calibration).
 
-Checked (2560x1440, the user's graphics settings): matched to the right image - the numbers (Text/HUD_Numbers), the
-three fonts (Main_Text, Street_Text), health and armour with their backgrounds, the bars' outline, the AK and pistol
-icons, the radar's ring and centre; the radar's tiles and N went to xBR. Screenshots off / on.
+Checked (2560x1440, the user's graphics settings): the numbers (Text/HUD_Numbers), the fonts (Main_Text, Street_Text),
+health and armour with their outline, the AK's and fists' icons (Original Icons), the radar's ring, centre and N, a
+radar tile (Map_G3, by structure); every wrong candidate of the calibration run rejected.
 
 ## Mouse camera (2026-11-15)
 
