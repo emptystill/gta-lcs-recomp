@@ -1,6 +1,6 @@
 // The trainer on Liberty City Stories (docs/LCS.md "Trainer"): lcs_trainer.cpp implements game/vcs_trainer.h's
-// interface for the F5 menu - so far the weapons: any weapon, the cheats' three sets, remove all, unlimited ammo, no
-// reload. The rest of the menu's pages are hidden (src/ui/trainer_menu.cpp, kLcs).
+// interface for the F5 menu - player, weapons, vehicles, teleports, world (no missions, no free camera:
+// src/ui/trainer_menu.cpp, kLcs). Weapons through the cheats' guest calls, the rest as scripts on the game's VM.
 #pragma once
 
 #include <cstdint>

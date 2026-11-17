@@ -39,3 +39,12 @@ City's; an LCS look is a design job of its own.
 `SetupHeap` made the runtime's `guestMalloc` heap the game's own heap region, and the runtime's `sceGsResetGraph` stub
 wrote its GIF packet over LCS's live data (docs/LCS.md). The runtime's heap is now a fixed area LCS never uses
 (0x40000..0x78000, `src/game/lcs_overrides.cpp`; `PS2X_RUNTIME_HEAP` in the runtime). `LCS_RUNTIME_HEAP=0` undoes it.
+
+## 2026-11-16: the LCS trainer through the game's script VM
+
+The weapons went in as the cheats' own guest calls, chained from the frame boundary. For the rest (proofs, vehicles of
+every kind, warps, the clock, the weather) the game's script commands do what is needed the way its missions do, so the
+trainer runs short scripts on LCS's VM as VCS's trainer does on VCS's. LCS's VM had to be found for it (its code
+differs from VCS's; GTA3's layout and numbering, docs/LCS.md "The script VM"); each command the trainer uses was read
+in its handler rather than taken from a list. Weapons stay on the chained calls: they work and give a set in one frame.
+Missions and the free camera are not on LCS's trainer yet.

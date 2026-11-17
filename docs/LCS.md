@@ -609,12 +609,26 @@ Checked:
 
 ## Trainer (2026-11-16)
 
-The trainer key (F5, Back + RB) opens VCS's trainer menu (`src/ui/trainer_menu.cpp`, titled LCS TRAINER, `kLcs`: the
-Weapons page only so far). `src/game/lcs_trainer.cpp` implements `game/vcs_trainer.h`'s interface for it;
-`vcs_trainer.cpp` is left out of the build (CMakeLists.txt), since it works through VCS's script VM addresses and
-commands. What it has: give any weapon (put in his hand on foot), the cheats' three weapon sets, remove all weapons,
-unlimited ammo, no reload. The other actions answer "Not available in Liberty City Stories yet". Control channel:
-`trainer weapon T | loadout N | noweapons | ammo 0|1 | noreload 0|1 | state`.
+The trainer key (F5, Back + RB) opens VCS's trainer menu (`src/ui/trainer_menu.cpp`, titled LCS TRAINER, `kLcs`).
+`src/game/lcs_trainer.cpp` implements `game/vcs_trainer.h`'s interface for it; `vcs_trainer.cpp` is left out of the
+build (CMakeLists.txt), since its script VM addresses and command numbers are VCS's. Pages:
+
+- **Player**: god mode, heal, never wanted, set wanted level, add money, infinite sprint, police / everyone ignore you.
+- **Weapons**: any weapon (put in his hand on foot), the cheats' three sets, unlimited ammo, no reload, fast reload,
+  remove all.
+- **Vehicles**: spawn any car, bike or boat (75; in it with Get in spawned vehicles), vehicle invincible, repair, flip
+  upright, boost, random paint.
+- **Teleport**: the 24 districts, save / return to a position. **Camera**: Hide HUD only. **World**: time of day,
+  freeze time, weather, game speed.
+- Not on LCS: missions, the free camera (VCS's modules).
+
+Two ways in, both from the frame boundary and only while the game's clock runs: the weapons (and the repair's engine
+and tyres) are the cheats' own guest calls, chained (below); everything else is a short script on the game's script VM
+("The script VM" below), as VCS's trainer does. Control channel (tests): `trainer state | toggle <god|wanted|ammo|
+reload|sprint|fastreload|police|ignore|vehicle|warp|freeze|hidehud> 0|1 | list vehicles|weapons|landmarks|weathers |
+notices | heal | money N | setwanted N | weapon T | loadout N | noweapons | spawn MODEL | repair | flip | boost | paint
+| teleport N | savepos | returnpos | time H | weather W | speed PERCENT | scm <hex>` (`ammo` / `noreload 0|1` still
+work).
 
 **How the game gives weapons.** This was found with a write watch (`watch` on the player's weapon slots, ped+0x594,
 with `VCS_WATCH_STACK=1`) while entering the weapons cheat. The writers were CWeapon::Init 0x2A2650, called from
@@ -691,6 +705,120 @@ menu it answers "Only while you play".
 - **The menu.** F5 → Weapons → Give weapon gives the selected weapon.
 - **Pause and car.** Nothing is given in the pause menu. In a car the weapon is given but not put in his hand.
 - **The mouse aim afterwards.** It still enters, fires through the circle and releases.
+
+### The script VM (2026-11-16)
+
+Found from the script Init 0x109A88 (`tools/xmatch.py` from VCS's 0x2551D0: the only VM function that matched), its
+callers, and the handler blocks decompiled (`tools/eedecomp.py`). The VM is GTA3's, not VCS's:
+
+| What | Where |
+|---|---|
+| ScriptSpace (MAIN.SCM); an IP is an offset from it | `*(0x3CF0F4)` (gp - 0x7DFC) |
+| Active / idle `CRunningScript` lists (+0 next, +4 prev, insert at the head) | 0x3D9C00 / 0x3D9C04 (remove 0x10A1B8, add 0x10A1F0: VCS's code) |
+| Script id counter | 0x3CF100 |
+| Pool | 0x64B110..0x65BF10, 0x21C bytes each |
+| StartNewScript(ip) | 0x10A210: idle -> id, Init, IP, active list, +0x20C = 1 |
+| CTheScripts::Process / one script / one command | 0x10A288 / 0x10A678 / 0x10A7A8 |
+| CollectParameters(script, &ip, n, out 0x3DF320) | 0x1094C8 |
+| Variable address | 0x1098D8 |
+| A mission is running (u8) | 0x3D9C29 (cleared by TERMINATE_THIS_SCRIPT on the mission's script) |
+
+`CRunningScript` (from Init): +0 next, +4 prev, +8 id, +0x10 name (8 chars, `"id%02i"`), +0x18 IP, +0x1C 16-word gosub
+stack, +0x5C (u16) its depth, +0x60 0x6A-word locals, +0x200 / +0x204 the timers (variables 0x0A / 0x0B), +0x208 the
+local frame base, +0x20C active, +0x20D the condition result, +0x20E launched as a mission, +0x210 wake time, +0x214
+(u16) the IF's count, +0x216 NOT, +0x217 death / arrest check (Init sets 1; SET_DEATHARREST_STATE 0x116), +0x219 the
+mission script.
+
+**Bytecode.** Opcode u16, bit 15 the NOT. Arguments: a type byte - 0 end, 1 / 2 zero, 3 / 4 / 5 a float of one / two
+/ three high bytes, 6 int32, 7 int8, 8 int16, 9 float32 - or a variable: 0x0C + n the local n (0x0C..0x6B), 0x6C..0xCB
+a local array, 0xCC..0xE5 a global ((b - 0xCC) * 256 + the next byte), 0xE6.. a global array. VCS's assembler works as
+it is.
+
+**Commands.** ProcessOneCommand dispatches by hundreds to 17 functions (0..99 a jump table at 0x3A6320; 100..199
+0x10DA48; 200..304 0x10FF30; ... 1600..1699 0x273080). The numbers are GTA3's up to ~0xC6 (0x4E TERMINATE, 0xA5
+CREATE_CAR, 0xC0 SET_TIME_OF_DAY), then shifted by +5 (IF is 0xDB, ADD_SCORE 0x10E) and by +4 later on. Each one the
+trainer uses was read in its handler:
+
+| Opcode | Command | The handler |
+|---|---|---|
+| 0x004E | TERMINATE_THIS_SCRIPT | active -> idle, +0x20C = 0 |
+| 0x00A1 | SET_CHAR_COORDINATES (char, x, y, z) | z <= -100: the ground; the vehicle if he drives |
+| 0x00A5 | CREATE_CAR (model, x, y, z, out) | CAutomobile 0x780 (0x1221D0), CBike 0x650 (0x154A88), CBoat 0x590 (0x17CED0) |
+| 0x00AB | SET_CAR_COORDINATES | |
+| 0x00C0 | SET_TIME_OF_DAY (h, m) | 0x1F87E0 |
+| 0x010E | ADD_SCORE (player, n) | Players[i] +0xBC |
+| 0x0112 / 0x0115 | ALTER_WANTED_LEVEL (player, n) / CLEAR_WANTED_LEVEL | 0x34D770 -> CWanted::SetWantedLevel 0x2F4C48 |
+| 0x0162 | SET_TIME_SCALE | 0x3D9CE4 |
+| 0x017A | SET_CAR_HEADING (car, degrees) | 0x2EB388: SetRotateZ 0x26BBC8 (the whole matrix, up = z), position kept |
+| 0x01BB / 0x01BC | FORCE_WEATHER_NOW / RELEASE_WEATHER | 0x325728 / 0x325748 |
+| 0x01C8 | MARK_CAR_AS_NO_LONGER_NEEDED | |
+| 0x01FC / 0x03C4 | SET_POLICE_IGNORE_PLAYER / SET_EVERYONE_IGNORE_PLAYER | ped +0x808 bits 48 / 49 |
+| 0x0229 | SET_CAR_HEALTH | +0x268 |
+| 0x022E | CHANGE_CAR_COLOUR | +0x1F0 / +0x1F1 |
+| 0x024C / 0x024E | REQUEST_MODEL / MARK_MODEL_AS_NO_LONGER_NEEDED | |
+| 0x02B0 / 0x02B1 | SET_CHAR_PROOFS / SET_CAR_PROOFS (5 flags) | +0x40 bits 58, 59, 50, 60, 61 |
+| 0x02F0 | RESTORE_CAMERA_JUMPCUT | 0x292CD8 (TheCamera, 0) |
+| 0x0335 / 0x0336 | SET_PLAYER_NEVER_GETS_TIRED / SET_PLAYER_FAST_RELOAD | Players[i] +0x16C / +0x170 |
+| 0x0367 | WARP_CHAR_FROM_CAR_TO_COORD | |
+| 0x036F | WARP_CHAR_INTO_CAR (char, car) | 0x1F0078 |
+| 0x03D0 | LOAD_SCENE (x, y, z) | |
+| 0x03F2 | SET_UPSIDEDOWN_CAR_NOT_DAMAGED | +0x678 bit 48 |
+| 0x04BF | SET_CAR_FORWARD_SPEED | move speed +0x70 (n / 60) |
+
+**Handles.** The player commands take the player's index (0); the char and car commands a pool handle, index << 8 |
+the pool's flags byte (CPool::GetAt 0x112068 / 0x111FF8). The trainer computes them on the host: peds `*(0x3D5AE8)`
+{entries, flags} 0xCD0 each (the player is index 0, handle 1), vehicles `*(0x3D5AEC)` 0x780 each.
+
+**The trainer's scripts** are VCS's method (docs/vcs-reference/game-internals.md 11d): an idle script, Init as the
+game's (zeroed; the death / arrest check off), the code in its own locals 16.. (+0xA0, 360 bytes; locals 0..15 free
+for outputs), the IP pointing there (an offset below ScriptSpace: 32-bit wrap-around), at the head of the active list.
+The game runs it in its next frame; it ends with TERMINATE_THIS_SCRIPT. One at a time, so an action sees what the one
+before did. A script still waiting when the clock stops (a pause) is taken back out; a model is requested and polled
+(the streaming info `*(0x3D0CC8)`, 0x14 each, +0xC 1 = loaded) before the script that uses it.
+
+### What else the trainer needed (2026-11-16)
+
+- **The cheats** (FUN_0016C838.., decompiled as a block): health (0x16D0D8: health = the player's most, Players[i]
+  +0x178 byte; a car's health 1000, then its damage manager +0x350: engine 0x32FCB8 (dm, 0), wheels 0x32FC50 (dm, i,
+  0)), armour (0x16DBF0: +0x4BC = the +0x179 byte), $250,000 (0x16DB40: Players[i] +0xBC), wanted up / down (0x16DC90 /
+  0x16DD40: CWanted at ped +0x7F0, its level at +0x810), the weathers (0x16DDD0..: 0x325728 with 0, 4, 1, 2, 3), game
+  speed up / down (0x16D9D8 / 0x16DA88: the time scale 0x3D9CE4, 0.25..4), a vehicle by model (0x16D228(model), at the
+  nearest car path node: the Rhino 0xA2 0x16D4E8, the Trashmaster 0x8B 0x16D508). Each cheat also shows its text, adds
+  1000 to 0x3D9CE0 and sets gp - 0x6600 (counters, presumably): the trainer does not call them.
+- **The clock**: hours 0x3D9B74, minutes 0x3D9B80 (GET_TIME_OF_DAY's).
+- **Vehicle models** (CModelInfo::ms_modelInfoPtrs `*(0x3D8720)`, count 0x3D9BA0): +0x10 type (6 = vehicle), +0x2E the
+  game name (a text key: SPIDER, LANDSTK), +0x38 the class (0 car, 1 boat, 2 train, 3 helicopter, 4 plane, 5 bike, 6
+  the ferry; the checks 0x31F948 / 0x31FA68). Vehicles are 130..216; 211..216 (RC planes, helicopters) have no text and
+  are left out: 75 to spawn.
+- **The text** (`CText` at `*(0x3D89B8)`: +0 entries {u32 text, char key[8]} sorted, +4 u16 count; CText::Get 0x332E68
+  -> 0x332058, binary search 0x332100) is in the language the player chose (the user's: Spanish), and so are the names.
+  Accented letters are Latin-1 less 0x40 (0xB3 o acute, 0xBA u acute, 0xB1 n tilde, 0x81 A acute); 0xC0..0xFF are the
+  font's own symbols.
+- **The zones** (CTheZones `*(0x3D7750)`: +8 the districts (u16 count +0x14), +0xC the info zones (+0x16), +0x1C the map
+  zones (+0x68); 0x38 bytes each: the text key, then the box min / max). Find by label 0x2D37A0.
+- **The path nodes** (`*(*(0x3D0314))`, 0x14 each: x / y / z int16 * 1/8 at +4; ThePaths +0x14 the count 5519, +0x18 the
+  car nodes 2196, first). The teleports are each district's car node nearest its centre, inside it and out of tunnels,
+  at the node's height + 1 m: the box centres had put him on a Torrington roof, in the sea at Portland Beach and Rockford
+  and in mid-air at Saint Mark's.
+- **The wanted level's cap**: SetWantedLevel caps at CWanted::MaximumWantedLevel 0x3D829C (the chaos at 0x3D82A0). In
+  the first mission (Home Sweet Home) even the level written straight into CWanted reads 0 a frame later: something
+  clears it every frame. The trainer says so ("This mission keeps the wanted level down") instead of a level that is not
+  there.
+
+**Checked** (scratch tests from a new game, each action read back in memory; screenshots at 1280x720):
+
+- **Player.** Money +10,000. Heal from 30 to 100 / 100. God mode: the five proof bits set, health written to 10 back at
+  100, off clears them. Never wanted refuses a level. Sprint, fast reload, police / everyone ignore: their fields set and
+  cleared.
+- **World.** 22:00 set; frozen for 5 s at 22:00; rain (screenshot); game speed 50 % and back.
+- **Vehicles.** The Banshee spawned with him in it; repair from 300 to 1000; paint (new colours); boost (moving); flip
+  after a real roll-over (up 0.93 -> 1.0); vehicle invincible (proofs, health held); from the car onto a PCJ-600, from
+  the bike onto a Faggio, then a Kuruma, each with him in it; a Predator on foot.
+- **The first car-to-bike change failed**: the old car, still at boost speed and driverless, ran into the new bike and
+  knocked him off. The old vehicle is stopped now before the change.
+- **Teleports**: all 24 on a street (contact sheet), save / return.
+- **The menu**: its pages, the vehicle list with the game's names (accents right), Hide HUD.
+- **Weapons as before**: set 2 slot for slot, the M4 in hand, no reload holding the clip at 30.
 
 ## Foot camera and walls (2026-11-16)
 
@@ -778,3 +906,5 @@ comes near it, so no line test sees it. The camera can still show it close up th
   patches; 60 / 144 checked against 30. Uncapped ~130 fps.
 - 2026-11-16: the trainer (F5): weapons - any weapon, the cheats' sets, remove, unlimited ammo, no reload
   ("Trainer").
+- 2026-11-16: the trainer's other pages (player, vehicles, teleports, world) through the game's script VM, found
+  for it ("The script VM").

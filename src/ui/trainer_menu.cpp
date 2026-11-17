@@ -71,7 +71,7 @@ namespace ui
             int top = 0; // first row shown
         };
 
-        constexpr bool kLcs = true; // Liberty City Stories: only the pages game/lcs_trainer.cpp has (the weapons)
+        constexpr bool kLcs = true; // Liberty City Stories: what game/lcs_trainer.cpp has (no missions, no free camera)
         bool g_open = false;
         bool g_releaseWait = false;
         bool g_chordWasDown = false;
@@ -210,16 +210,22 @@ namespace ui
             switch (page)
             {
             case Main:
-                // Liberty City Stories: the weapons so far (game/lcs_trainer.h); VCS's other pages come back as LCS gets them
-                rows.push_back(pageRow("Weapons", Weapons, "Any weapon, the cheats' weapon sets, unlimited ammo."));
-                if (kLcs)
-                    break;
                 rows.push_back(pageRow("Player", Player, "God mode, health, wanted level, money."));
-                rows.push_back(pageRow("Vehicles", Vehicles, "Spawn any vehicle; repair, flip and boost the one you drive."));
-                rows.push_back(pageRow("Teleport", Teleport, "Every district of Vice City, and a position of your own."));
-                rows.push_back(pageRow("Camera", Camera, "Free camera: fly anywhere. Hide the HUD."));
+                rows.push_back(pageRow("Weapons", Weapons, kLcs ? "Any weapon, the cheats' weapon sets, unlimited ammo."
+                                                                : "Any weapon, loadouts, unlimited ammo."));
+                rows.push_back(pageRow("Vehicles", Vehicles,
+                                       kLcs ? "Spawn any car, bike or boat; repair, flip and boost the one you drive."
+                                            : "Spawn any vehicle; repair, flip and boost the one you drive."));
+                rows.push_back(pageRow("Teleport", Teleport,
+                                       kLcs ? "Every district of Liberty City, and a position of your own."
+                                            : "Every district of Vice City, and a position of your own."));
+                if (kLcs) // (no free camera on LCS yet)
+                    rows.push_back(pageRow("Camera", Camera, "Hide the HUD."));
+                else
+                    rows.push_back(pageRow("Camera", Camera, "Free camera: fly anywhere. Hide the HUD."));
                 rows.push_back(pageRow("World", World, "Time of day, weather, game speed."));
-                rows.push_back(pageRow("Missions", Missions, "Start any story mission or side job."));
+                if (!kLcs)
+                    rows.push_back(pageRow("Missions", Missions, "Start any story mission or side job."));
                 break;
             case Player:
                 rows.push_back(toggleRow("God mode", tr::GodMode,
@@ -256,8 +262,7 @@ namespace ui
                                                 "Equalizer, Spaz, SMG, assault rifle, laser sniper, minigun."));
                 rows.push_back(toggleRow("Unlimited ammo", tr::UnlimitedAmmo, "Every weapon you carry stays full."));
                 rows.push_back(toggleRow("No reload", tr::NoReload, "The clip never runs out: fire without reloading."));
-                if (!kLcs)
-                    rows.push_back(toggleRow("Fast reload", tr::FastReload, "The game's own quick reload."));
+                rows.push_back(toggleRow("Fast reload", tr::FastReload, "The game's own quick reload."));
                 rows.push_back(actionRow("Remove all weapons", tr::removeWeapons, "Empty hands."));
                 break;
             }
@@ -269,7 +274,8 @@ namespace ui
             case Vehicles:
             {
                 const char *needCar = "Get in a vehicle first.";
-                rows.push_back(pageRow("Spawn vehicle", VehicleList, "Every car, bike, boat and aircraft in the game."));
+                rows.push_back(pageRow("Spawn vehicle", VehicleList, kLcs ? "Every car, bike and boat in the game."
+                                                                          : "Every car, bike, boat and aircraft in the game."));
                 rows.push_back(toggleRow("Get in spawned vehicles", tr::WarpIntoSpawned,
                                          "On: you are put behind the wheel. Off: it appears ahead of you."));
                 rows.push_back(toggleRow("Vehicle invincible", tr::VehicleInvincible,
@@ -320,6 +326,11 @@ namespace ui
                 break;
             case Camera:
             {
+                if (kLcs)
+                {
+                    rows.push_back(toggleRow("Hide HUD", tr::HideHud, "No radar, money, weapon or stars: for clean pictures."));
+                    break;
+                }
                 rows.push_back(toggleRow("Free camera", tr::FreeCamera,
                                          "Fly: W / A / S / D, E up, Q down, the mouse looks, Shift faster, Ctrl slower, "
                                          "Z / X zoom. Gamepad: sticks, RT / LT, A / B, D-pad. The player waits. Hotkey: "
@@ -539,7 +550,7 @@ namespace ui
         const bool camChord = padDown(platform::GAMEPAD_BACK) && padDown(platform::GAMEPAD_LEFT_SHOULDER);
         const bool camChordPressed = camChord && !g_camChordWasDown;
         g_camChordWasDown = camChord;
-        if (!settingsMenuOpen() && (pressedKey(settings::value("controls.freecam_key")) || camChordPressed))
+        if (!kLcs && !settingsMenuOpen() && (pressedKey(settings::value("controls.freecam_key")) || camChordPressed))
             tr::setToggle(tr::FreeCamera, !tr::toggle(tr::FreeCamera));
         if (settingsMenuOpen()) // one menu at a time
         {
