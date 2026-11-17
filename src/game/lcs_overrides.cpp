@@ -516,7 +516,14 @@ namespace
             input.pedVehicle = 0x534u;
             input.pedState = 0x538u;
             input.pedStateDriving = 0;
-            input.vehicleRadio = 0;
+            // the vehicle's radio station: +0x2A0, 0..9 the stations, 10 off (VCS +0x2BA, 0..8 and 9); found by L1
+            // presses in a spawned taxi: 4, 5 ... 10, 0, 1 (2026-11-17)
+            input.vehicleRadio = 0x2A0u;
+            // L2 / R2 held in a vehicle look left / right, as in GTA III / Vice City (checked: Z / X held - L2 / R2's
+            // default keys - with the mouse camera off gave the side views and the drive-by fired from them; L1 is the
+            // radio)
+            input.lookAsideButtons = 0x0100u | 0x0200u;
+            input.radioPositions = 11u;
             input.theCamera = 0;           // 0x43BBF0 (VCS 0x6F44D0; xglobal); its CCam layout not checked yet
             input.scopeZoom = input.camStickLocked = input.camTable = input.camIndoors = input.camWallSkip = 0;
             input.pad0 = 0;                // 0x408C60 (VCS 0x5147A8; xglobal); DisablePlayerControls' offset unchecked

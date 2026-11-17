@@ -749,6 +749,25 @@ camera) .. 70. A wheel notch up multiplies the target by 0.8, a notch down by 1.
 `vcs_input.cpp`'s wheel code. In those modes the wheel no longer changes weapon, as the switch refuses there anyway.
 Checked: 5 notches up took 70 to 23, the limit stopped it at 15, 3 down gave 29, and the sniper stayed in hand.
 
+**The wheel bound to the weapon cycle, the radio, the drive-by view (2026-11-17).** The user binds the wheel to L2 / R2
+(up previous weapon, down next) and Z / X to L1 / R1, Q / E as L2 / R2's second keys. Their report: in a vehicle the
+wheel shook the camera, no side camera for drive-bys, the scope zoomed with Space only.
+
+- **Why.** A bound wheel turned the built-in wheel off (the radio, the scope zoom), and its L2 / R2 press for one frame
+  in a vehicle is look left / right - a frame aside, then back. Now a wheel bound to L2 / R2 is that on foot only; in a
+  vehicle and in a zooming scope (the last frame's camera mode) it does what the unbound wheel does.
+- **The radio.** The vehicle's station: **+0x2A0**, u8, 0..9 the stations, 10 off (11 positions; VCS +0x2BA with 10):
+  found by L1 presses in a spawned taxi, 4, 5 ... 10, 0, 1. `input.vehicleRadio`, `radioPositions` - VCS's code: a
+  notch down is L1 (next), a notch up puts the station two back and presses L1. Checked: 3 down 1 -> 4, 1 up -> 3.
+- **The side views.** L2 / R2 held in a vehicle look left / right (both: behind), and the drive-by fires from them,
+  as in GTA III / Vice City - checked with the mouse camera off. With it on, the mouse's car camera rewrote the heading
+  and the camera's result every frame, so the side view never showed. `GameLayout::lookAsideButtons` (LCS: L2 | R2):
+  held from a key or the gamepad (not a mouse button), the mouse camera leaves the car camera to the game, and takes it
+  from the game again when they are let go. Checked with the user's keys: Q / E held gave the side views, shots fired
+  (ammo 50 -> 44), the view went back behind the car after.
+- (A trap met on the way: tests take the settings from a copy of the user's lcs.ini; an older copy still had Z / X as
+  L2 / R2, which made L1 / R1 look like the side buttons for a while.)
+
 **The detonator (2026-11-16).** Enhancements > Combat: **Switch weapons with the detonator**
 (`enhance.detonator_switch`, off; `LCS_DETONATOR_SWITCH`), in `src/game/lcs_weapons.cpp`.
 

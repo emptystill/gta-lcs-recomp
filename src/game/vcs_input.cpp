@@ -331,6 +331,8 @@ namespace vcs::input
             bool footTurn = false;     // the mouse is turning the on-foot camera (walls: the stick's path, below)
             uint32_t footTurned = 0;   // ... last at this game time, ms
         } g_mouse;
+        // the last frame's camera was a zooming scope (the wheel code): a wheel bound to L2 / R2 zooms there instead
+        bool g_scopeLast = false;
 
         // The direct mouse camera's own heading and pitch (GameLayout::direct*): game thread (the pad reads and
         // directCameraResult)
@@ -394,6 +396,7 @@ namespace vcs::input
             const bool freeCamera = freecam::flying();
 
             bool padR1 = false, keyR1 = false, keyCircle = false; // the target / fire buttons, by device (free aim)
+            uint16_t lookButtons = 0; // held on the gamepad or by a key (not a mouse button, not a Driving key)
             float padRx = 0.0f, padRy = 0.0f;
             bool padUsed = false, keysUsed = false; // the player's device this read (lastDevice)
             if (padConnected(physical) && !freeCamera)
@@ -407,6 +410,7 @@ namespace vcs::input
                     if (kControls[i].target == Target::Button && padSource(m.pad[i], m.trigger))
                     {
                         buttons |= kControls[i].mask;
+                        lookButtons |= kControls[i].mask;
                         padR1 = padR1 || kControls[i].mask == kR1;
                     }
                 lx = padAxis(AXIS_LEFT_X);
@@ -445,13 +449,24 @@ namespace vcs::input
                 const Control &c = kControls[i];
                 if (c.driving && !game.driving)
                     continue;
-                auto active = [&](int key) { return bound(key, alt) && !(game.driving && !c.driving && drivingKey(key)); };
+                // The wheel bound to L2 / R2 (the weapon cycle, the user's way, 2026-11-17) is that on foot only: in a
+                // vehicle L2 / R2 look left / right, so each notch looked aside for a frame - the camera shook - and in
+                // a scope they do nothing; there the wheel does what it does unbound (the radio, the zoom; below).
+                const bool wheelKeyOff = (c.mask == kL2 || c.mask == kR2) && (game.driving || g_scopeLast);
+                auto active = [&](int key) {
+                    if (wheelKeyOff && (key == KEY_WHEEL_UP || key == KEY_WHEEL_DOWN))
+                        return false;
+                    return bound(key, alt) && !(game.driving && !c.driving && drivingKey(key));
+                };
                 if (!active(m.keys[i][0]) && !active(m.keys[i][1]))
                     continue;
                 keysUsed = true;
                 if (c.target == Target::Button)
                 {
                     buttons |= c.mask;
+                    auto keyOnly = [&](int key) { return active(key) && (key < KEY_MOUSE_LEFT || key > KEY_WHEEL_DOWN); };
+                    if (!c.driving && (keyOnly(m.keys[i][0]) || keyOnly(m.keys[i][1])))
+                        lookButtons |= c.mask;
                     keyR1 = keyR1 || (c.mask == kR1 && !c.driving);
                     keyCircle = keyCircle || c.mask == kCircle;
                 }
@@ -584,7 +599,12 @@ namespace vcs::input
                 if (on && dcam)
                 {
                     const uint32_t dmode = rd32(dcam + L.directMode) & 0xFFFFu;
-                    if (dmode == L.directFootMode || dmode == L.directCarMode)
+                    // Look left / right held in a vehicle (and behind, both): the side view a drive-by fires from, left
+                    // to the game - the mouse's camera took it back every frame (the user, 2026-11-17). Liberty City
+                    // Stories: L2 / R2 held, from a key or the gamepad (the wheel bound to them changes the radio in a
+                    // vehicle, above). Taken from the game again when they are let go.
+                    const bool lookAside = game.driving && dmode == L.directCarMode && (lookButtons & L.lookAsideButtons) != 0;
+                    if ((dmode == L.directFootMode || dmode == L.directCarMode) && !lookAside)
                     {
                         direct = directNow = true;
                         auto pitchOf = [&](float a) { return a > 3.14159265f ? a - 6.2831855f : a; }; // 2 pi - x: negative
@@ -818,7 +838,16 @@ namespace vcs::input
                 bool wheelBound = false;
                 for (size_t i = 0; i < kControlCount; ++i)
                     for (int k : m.keys[i])
-                        wheelBound = wheelBound || k == KEY_WHEEL_UP || k == KEY_WHEEL_DOWN;
+                        if (k == KEY_WHEEL_UP || k == KEY_WHEEL_DOWN)
+                        {
+                            // (bound to the weapon cycle: off in a vehicle and in a scope, as above)
+                            const bool cycle = kControls[i].mask == kL2 || kControls[i].mask == kR2;
+                            wheelBound = wheelBound || !cycle || !(game.driving || g_scopeLast);
+                        }
+                {
+                    const uint32_t dm = dcam ? rd32(dcam + L.directMode) & 0xFFFFu : 0u;
+                    g_scopeLast = (L.scopeZoom && L.extras && zoomMode(mode)) || (!L.extras && dcam && (dm == 7u || dm == 46u));
+                }
                 // Steps back on the radio waiting for the game (below): it counts the L1 presses and adds them to the
                 // vehicle's station 30 frames after the last one. Past that, a station still where it was put means the
                 // presses were not taken (an announcement is on, the vehicle has no radio): it goes back to what it

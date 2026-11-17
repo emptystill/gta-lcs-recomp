@@ -48,6 +48,9 @@ namespace vcs::input
         unsigned directBeta = 0, directBetaTarget = 0, directAlpha = 0, directAlphaNeg = 0;
         // the pitch's speed (the game eases its pitch with it toward its own target): zeroed with the pitch written
         unsigned directAlphaSpeed = 0;
+        // the pad buttons that, held in a vehicle, turn the game's camera to the side (and behind, both): the drive-by
+        // view, left to the game instead of the mouse camera. 0 = none (VCS: the mouse camera never took them over).
+        uint16_t lookAsideButtons = 0;
         // ... and the camera's result vectors inside the CCam (directCameraResult): Front, Source (and the copy kept
         // before looking behind), Up. 0: the result is left to the game (only the angles are written).
         unsigned directFront = 0, directSource = 0, directSource2 = 0, directUp = 0;
