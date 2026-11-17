@@ -89,9 +89,23 @@ struct GSHwGlyphHit
 {
     float u[8], v[8], dx[8];
     bool shadow;
+    float dy[8] = {}; // [gta-recomp] a y offset in pixels too (a glyph made smaller than its box, centred)
 };
 using GSHwGlyphFn = bool (*)(const float *xy, uint32_t count, GSHwGlyphHit &hit);
 void gsHwSetGlyphClassifier(GSHwGlyphFn fn);
+// [gta-recomp] A texture's tag by its content: called as each texture (up to 256 x 256) is made from the GS's memory, with its
+// decoded pixels (RGBA8, alpha 0..128); the tag (0: none) goes with the texture to the glyph classifier below. The
+// thread that processes GS packets; nullptr = off (no tags).
+using GSHwTextureTagFn = int (*)(uint32_t w, uint32_t h, const uint32_t *pixels);
+void gsHwSetTextureTagger(GSHwTextureTagFn fn);
+// [gta-recomp] Button prompt glyphs known by their texture (Liberty City Stories: the font's button cells, the pause menu's
+// btn_*_PSP pictures): a textured 2D primitive (PATH2, up to 8 vertices) is offered with its texture's tag, key and size,
+// each vertex's position (pixels, XYOFFSET removed) and texture coordinates (0..1) and its colour's brightness (0..255,
+// the drop shadow is dark); the classifier fills `hit` as above (atlas coordinates, x offsets) to draw it from the glyph
+// atlas. Called on the thread that processes GS packets (gsHwTextureForRaster's); nullptr = off.
+using GSHwTexGlyphFn = bool (*)(int tag, uint64_t texKey, uint32_t tw, uint32_t th, const float *xy, const float *uv,
+                                const uint8_t *bright, uint32_t count, GSHwGlyphHit &hit);
+void gsHwSetTextureGlyphClassifier(GSHwTexGlyphFn fn);
 // [gta-recomp] The glyph atlas (RGBA8, alpha in the PS2's 0..128 scale, w and h powers of two), taken by the next glyph
 // draw. Call it on the thread that processes GS packets (through ps2_render_worker::runOnGsStage), so the frames
 // recorded after it - whose classifier answers name its cells - draw from it.

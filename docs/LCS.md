@@ -1073,6 +1073,45 @@ The user saw the foot camera inside walls / a column.
 collision. The probes found nothing within 2 m but the far wall, and the game's own camera shows the same blur when it
 comes near it, so no line test sees it. The camera can still show it close up there.
 
+## Button prompts (2026-11-17)
+
+The user: the menu's and the help text's buttons are the PS2's, and blurry. Enhancements > **Button prompts** (VCS's
+setting, `enhance.prompts`, Original by default): the keys / mouse buttons bound, or a gamepad's buttons
+(`src/game/lcs_prompts.cpp`, the atlas from `vcs_prompts` / `vcs_glyph_art`).
+
+- **How LCS draws its buttons.** The expander of `~k~` (**0x2F8F58**, called by **0x2F91A0** = VCS FUN_003aff20 by
+  xmatch; VCS's FUN_003afd78 itself is not in LCS) copies `C<configuration><ACTION>` (configuration: CPad 0 +0x7E) and
+  turns ~T~ ~S~ ~X~ ~O~ into the characters 0xE0..0xE3, and ~L~ ~N~ ~R~ into colour codes. The font atlas (`font1`,
+  256 x 256, a 16 x 16 grid of 16-texel cells from ' ') holds the buttons in its **last row: △ □ ✕ ○ ◀ ▼ ▶** (columns
+  0..6). The pause menu's help bar draws textures `btn_cross_PSP`, `btn_triangle_PSP`, `btn_square_PSP`, `btn_L_PSP`,
+  `btn_R_PSP`, `btn_up/down/left/right_PSP` (16 x 16; RwTextures of the frontend's dictionary, only while the menu is
+  up: name at +0x10, raster at +0, 0x54 apart; the name table at 0x3C9DD8).
+- **Known by content.** LCS names no texture upload by raster (VCS's world renderer does), so the renderer tags textures
+  by a hash of their decoded pixels (`gsHwSetTextureTagger`: FNV-1a 64 over w, h and the RGBA words) - the font had 4
+  texture keys in one session, one hash. The hashes came from `PS2X_HUD_DUMP` dumps of this disc (SLUS-21423).
+  `gsHwSetTextureGlyphClassifier` gets each textured 2D primitive with its tag and texture coordinates: a font quad
+  whose centre is in the last row's cells 0..6, or a tagged picture, is drawn from the glyph atlas.
+- **Context.** The menu while the frontend's btn textures are in memory (a helper thread scans for their names), a
+  vehicle while the player is in one (Cross is the accelerate key, Square the brake, R1 the handbrake), else on foot.
+- **Sizes.** A keycap keeps its shape at the glyph's height: in text it grows into the spaces beside it (up to 3 x), on
+  the help bar up to 1.6 x away from its words (left half to the left, right half to the right), smaller past that
+  (`GSHwGlyphHit::dy`, added for it). First try grew every picture left: "Objetivo - Sí [SPACE]" covered "Sí".
+- Checked (1080p, keyboard set): "Pulsa [W] para acelerar" in the car, the help bar's [Esc] Atrás, [Enter]
+  Seleccionar, arrow keys, [Space], [Z] and the mouse for Zoom on the map page.
+
+## The pause menu with the mouse (2026-11-17)
+
+`src/game/lcs_frontend.cpp`, in VCS's menu module's place (`vcs::frontend::setDelegate`; vcs_input calls it). The
+state, found by RAM dumps across pages and before / during / after the menu:
+
+- **0x634610**: the page (1 Map, 2 Brief, 3 Game, 4 Stats; 5 Controls, 6 Audio, 7 Display; it keeps its value after
+  the menu closes). **0x634BC4**: 0 on the tab bar, 1 inside a page. **0x3D9CB4**: 1 while the menu is up.
+- Enter = Cross; Escape = Triangle in a page, Start on the tab bar (both Start and Triangle close the menu there).
+- The mouse (the cursor over the menu's 4:3 area, as VCS's): a tab hovered gets the focus, clicked - focused already -
+  is entered (D-pad steps toward it, one pulse of 60 ms with 60 ms gaps); a click below the tab bar is Cross; the right
+  button goes back; the wheel moves a page's selection, zooms the map (R1 / L1). The tabs' boxes are measured on the
+  Spanish game. `menustate`, `menumouse X Y [left|right|wheelup|wheeldown]` for tests; `LCS_MENU_MOUSE=0` keys only.
+
 ## Pending (the user's checklist, 2026-11-17)
 
 In the order agreed with the user (most likely to break play first). VCS has each of these; on LCS none is done.
@@ -1080,9 +1119,11 @@ In the order agreed with the user (most likely to break play first). VCS has eac
 - [ ] **Above 30 fps**: what counts frames instead of time - particles and effects (`vcs_particle_timing`,
   `vcs_effects_timing`), mission bars and timers (`vcs_script_timing`), physics / music timing, the scripted cutscenes
   stuck on "Loading..." at 60 fps (`vcs_script_fixes`). Expected to break missions as the user goes on.
-- [ ] **The pause menu with the mouse and keyboard** (`vcs_frontend`: hover, clicks, sliders, the map dragged).
-- [ ] **Button prompts by device** (`vcs_prompts`, `vcs_glyph_art`): the help text shows the bound key / the pad's
-  buttons instead of the PS2's.
+- [x] **The pause menu with the mouse and keyboard** (2026-11-17, `lcs_frontend`): Enter / Escape, tabs by click,
+  the wheel and the buttons in pages, the map's zoom. Still to do: hovering a page's options, sliders by dragging,
+  the map dragged.
+- [x] **Button prompts by device** (2026-11-17, `lcs_prompts`): the font's glyphs and the help bar's pictures. Still
+  to do: words in the help text ("joystick analógico izquierdo") are the game's.
 - [ ] **Sound**: still the emulated IOP, never checked by ear; VCS's native sound driver and the music / effects levels
   as settings (`vcs_sound`, `vcs_volume`).
 - [ ] **World options**: traffic / pedestrian density, draw distance as settings (`vcs_world_detail`).

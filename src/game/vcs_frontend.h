@@ -38,4 +38,14 @@ namespace vcs::frontend
     // Game thread, inside a 2D draw: the menu item being drawn (its draw entered at a higher stack pointer than `sp`, the
     // caller's), 0 outside one or with the menu's mouse off (VCS_MENU_MOUSE=0). The button prompts' help-bar buttons.
     uint32_t drawingItem(uint32_t sp);
+
+    // Another game's menu (Liberty City Stories: game/lcs_frontend.h) in its place: the functions above then call these.
+    struct Delegate
+    {
+        bool (*open)();
+        void (*onHostFrame)();
+        uint16_t (*padButtons)(uint16_t user, bool sticks, bool blocked);
+        bool (*ownsKey)(int key);
+    };
+    void setDelegate(const Delegate *d);
 }

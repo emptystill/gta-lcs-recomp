@@ -40,6 +40,8 @@ namespace
     std::atomic<GSHwAnchorFn> g_hudClassifier{nullptr}; // [gta-recomp] gsHwSetHudClassifier
     std::atomic<bool> g_hudLayer{false};                // [gta-recomp] gsHwSetHudLayer
     std::atomic<GSHwGlyphFn> g_glyphClassifier{nullptr}; // [gta-recomp] gsHwSetGlyphClassifier
+    std::atomic<GSHwTexGlyphFn> g_texGlyphClassifier{nullptr}; // [gta-recomp] gsHwSetTextureGlyphClassifier
+    std::atomic<GSHwTextureTagFn> g_textureTagger{nullptr};    // [gta-recomp] gsHwSetTextureTagger
     // [gta-recomp] gsHwSetGlyphAtlas: the atlas the GS stage was handed last (that thread only) and its number
     struct GlyphAtlas
     {
@@ -248,6 +250,8 @@ void gsHwSetHudSqueeze(float factor) { g_hudSqueeze.store(factor, std::memory_or
 void gsHwSetHudClassifier(GSHwAnchorFn fn) { g_hudClassifier.store(fn, std::memory_order_relaxed); }
 void gsHwSetHudLayer(bool on) { g_hudLayer.store(on, std::memory_order_relaxed); }
 void gsHwSetGlyphClassifier(GSHwGlyphFn fn) { g_glyphClassifier.store(fn, std::memory_order_relaxed); }
+void gsHwSetTextureGlyphClassifier(GSHwTexGlyphFn fn) { g_texGlyphClassifier.store(fn, std::memory_order_relaxed); }
+void gsHwSetTextureTagger(GSHwTextureTagFn fn) { g_textureTagger.store(fn, std::memory_order_relaxed); }
 void gsHwSetGlyphAtlas(uint32_t width, uint32_t height, std::shared_ptr<const std::vector<uint32_t>> pixels)
 {
     g_glyphAtlas.w = width;
@@ -3023,7 +3027,8 @@ namespace
             // menu draws its text and frames depth-tested at the far plane (a PS2 frontend pack's images, 2026-11-17)
             const bool flat2d = !hudDraw && !native && !layer && (anyFlat || m_exec2d || !s.zte || s.ztst == 1u) &&
                                 g_hudPackOn.load(std::memory_order_relaxed);
-            if ((hudDraw || flat2d) && s.tme && !s.texIsRt && !plainTexture && tex && s.tw && s.th && hudDump(s.texKey, *tex))
+            if ((hudDraw || flat2d) && s.tme && !s.texIsRt && !plainTexture && tex && s.tw && s.th && s.texKey != kGlyphAtlasKey &&
+                hudDump(s.texKey, *tex)) // (the glyph atlas is drawn as it is: its own glyphs)
             {
                 rhi::Texture *up = hudUpscaled(s.texKey, *tex, hudDraw);
                 // [gta-recomp] a frame without 3D waits for its match (up to a second; tens of ms once the pack is
@@ -3692,6 +3697,7 @@ namespace
                 out[i].t = hit.v[i];
                 out[i].q = 1.0f;
                 out[i].x += hit.dx[i];
+                out[i].y += hit.dy[i];
                 const uint8_t c = hit.shadow ? 0u : 128u;
                 out[i].r = out[i].g = out[i].b = c;
             }
@@ -3721,6 +3727,34 @@ namespace
                     }
                     GSHwGlyphHit hit{};
                     if (glyph(xy, n, hit))
+                        glyphDraw(s, out, n, hit);
+                }
+            // [gta-recomp] ... or known by its texture (gsHwSetTextureGlyphClassifier)
+            if (s.tme && !s.texIsRt && s.texKey != kGlyphAtlasKey && n <= 8u && s.tw && s.th && gsDrawSourcePath(source) == 2u)
+                if (const GSHwTexGlyphFn glyph = g_texGlyphClassifier.load(std::memory_order_relaxed); glyph && g_glyphAtlas.pixels)
+                {
+                    float xy[2 * 8], uv[2 * 8];
+                    uint8_t bright[8];
+                    for (uint32_t i = 0; i < n; ++i)
+                    {
+                        xy[2 * i] = out[i].x;
+                        xy[2 * i + 1] = out[i].y;
+                        if (s.fst)
+                        {
+                            uv[2 * i] = out[i].s / static_cast<float>(s.tw);
+                            uv[2 * i + 1] = out[i].t / static_cast<float>(s.th);
+                        }
+                        else
+                        {
+                            const float q = out[i].q != 0.0f ? out[i].q : 1.0f;
+                            uv[2 * i] = out[i].s / q;
+                            uv[2 * i + 1] = out[i].t / q;
+                        }
+                        bright[i] = std::max({out[i].r, out[i].g, out[i].b});
+                    }
+                    GSHwGlyphHit hit{};
+                    const auto tag = m_texTags.find(s.texKey);
+                    if (glyph(tag == m_texTags.end() ? 0 : tag->second, s.texKey, s.tw, s.th, xy, uv, bright, n, hit))
                         glyphDraw(s, out, n, hit);
                 }
             if (s.texIsRt && rtFullScale())
@@ -5668,6 +5702,15 @@ namespace
                                  d.textureHeight, m_pendingUploads.empty() ? "nothing queued" : "not one queued upload's");
 
             }
+            // [gta-recomp] its tag by content (gsHwSetTextureTagger), for the glyph classifier
+            if (const GSHwTextureTagFn tagger = g_textureTagger.load(std::memory_order_relaxed);
+                tagger && tc.w <= 256u && tc.h <= 256u && tc.pixels.size() == size_t(tc.w) * tc.h)
+            {
+                if (const int tag = tagger(tc.w, tc.h, tc.pixels.data()))
+                    m_texTags[key] = tag;
+                else
+                    m_texTags.erase(key);
+            }
             // [gta-recomp] anisotropic filtering samples a mip chain: built here, on the GS stage, not on the main thread's
             // GPU queue (PS2X_HW_CPU_MIPS=0: a render-target texture and GenerateMips each, as before)
             static const bool cpuMips = [] {
@@ -6088,6 +6131,7 @@ namespace
         std::unordered_map<uint32_t, UploadInfo> m_uploadAt;
         uint64_t m_skippedUploads = 0;
         std::unordered_map<uint64_t, uint64_t> m_texLru;  // key -> last frame used
+        std::unordered_map<uint64_t, int> m_texTags;      // [gta-recomp] gsHwSetTextureTagger: a texture key's tag (GS stage)
         std::unordered_map<uint64_t, uint64_t> m_meshLru; // [gta-recomp] native draws' meshes: key -> last frame used
         std::unordered_map<uint32_t, RtInfo> m_rts;       // fbp -> extent (game thread's view)
         struct TexBindInput // [gta-recomp] bindTexture cache (see there)

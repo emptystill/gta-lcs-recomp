@@ -938,10 +938,18 @@ namespace vcs::frontend
         }
     }
 
-    bool open() { return menuUp(); }
+    namespace
+    {
+        const Delegate *g_delegate = nullptr;
+    }
+    void setDelegate(const Delegate *d) { g_delegate = d; }
+
+    bool open() { return g_delegate ? g_delegate->open() : menuUp(); }
 
     void onHostFrame()
     {
+        if (g_delegate)
+            return g_delegate->onHostFrame();
         int w = 0, h = 0;
         windowSize(w, h);
         g_windowW.store(w, std::memory_order_relaxed);
@@ -977,6 +985,8 @@ namespace vcs::frontend
 
     uint16_t padButtons(uint16_t user, bool sticks, bool blocked)
     {
+        if (g_delegate)
+            return g_delegate->padButtons(user, sticks, blocked);
         if (!g_rdram)
             return 0;
         const uint32_t frame = rd32(kFrameCounter);
@@ -990,6 +1000,8 @@ namespace vcs::frontend
 
     bool ownsKey(int key)
     {
+        if (g_delegate)
+            return g_delegate->ownsKey(key);
         for (size_t i = 0; i < kMenuKeyCount; ++i)
             if (kMenuKeys[i] == key)
                 return g.owned[i] || (g.open && (g_mouseOn || !mouseKey(key)));

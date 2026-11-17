@@ -32,6 +32,7 @@
 #include "game/lcs_weapons.h"
 #include "game/vcs_input.h"
 #include "game/vcs_prompts.h"
+#include "game/lcs_prompts.h"
 #include "game/vcs_volume.h"
 #include "game/vcs_world_detail.h"
 #include "platform/platform.h"
@@ -1010,6 +1011,7 @@ int main(int argc, char *argv[])
                                         vcs::input::onHostFrame(ui::settingsMenuOpen() || ui::trainerMenuBlocksInput());
                                         vcs::volume::onHostFrame();
                                         vcs::prompts::onHostFrame();
+                                        lcs::prompts::onHostFrame();
                                         drawFrameRateCounter();
                                         if (!ui::settingsMenuOpen() && !ui::trainerMenuBlocksInput())
                                             lcs::mouseaim::drawCrosshair(); // the mouse aim's circle (game/lcs_mouseaim.h)

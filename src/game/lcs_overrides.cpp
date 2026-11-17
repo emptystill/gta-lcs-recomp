@@ -5,6 +5,8 @@
 #include "debug/rig.h"
 #include "game/lcs_camwall.h"
 #include "game/lcs_mouseaim.h"
+#include "game/lcs_frontend.h"
+#include "game/lcs_prompts.h"
 #include "game/lcs_trainer.h"
 #include "game/lcs_weapons.h"
 #include "game/vcs_display.h"
@@ -252,6 +254,7 @@ namespace
     PS2_GUEST_CC void frameKick(uint8_t *rdram, R5900Context *ctx, PS2Runtime *runtime)
     {
         vcs::onFrameKick();
+        lcs::prompts::onFrameKick(rdram); // the button prompts' textures and context to the renderer (game/lcs_prompts.h)
         g_origFrameKick(rdram, ctx, runtime);
     }
 
@@ -651,6 +654,8 @@ namespace
                 runtime.replaceFunction(kFrameKick, &frameKick);
         }
         lcs::weapons::install(runtime); // the detonator's weapon switch (game/lcs_weapons.h)
+        lcs::prompts::install(runtime); // button prompts by device (game/lcs_prompts.h)
+        lcs::frontend::install(runtime); // the pause menu with Enter / Escape and the mouse (game/lcs_frontend.h)
         g_origLimiter = runtime.lookupFunction(kLimiter);
         if (g_origLimiter)
             runtime.replaceFunction(kLimiter, &frameBoundary);

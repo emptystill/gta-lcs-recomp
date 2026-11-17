@@ -71,21 +71,6 @@ namespace vcs::prompts
         // a glyph `w` units wide is w x 4/3 by 23 x 1.647 pixels of the 640x448 picture: a square glyph is 28.4 wide
         constexpr float kUnitsPerAspect = kGlyphHeight * (448.0f / 272.0f) / (640.0f / 480.0f);
 
-        enum Ctl : int
-        {
-            Cross, Circle, Triangle, Square, L1, R1, L2, R2, L3, R3, Select, Start,
-            DUp, DDown, DLeft, DRight, DPad, DPadUD, DPadLR,
-            LS, LSUp, LSDown, LSLeft, LSRight, LSUD, LSLR,
-            RS, RSUp, RSDown, RSLeft, RSRight, RSUD, RSLR,
-            kCtlCount
-        };
-        enum Ctx : int
-        {
-            Foot,
-            Vehicle,
-            Menu,
-            kCtxCount
-        };
         constexpr const char *kCtlNames[kCtlCount] = {
             "X", "O", "T", "S", "L1", "R1", "L2", "R2", "L3", "R3", "SELECT", "START",
             "DU", "DD", "DL", "DR", "DPAD", "DPADUD", "DPADLR",
@@ -96,15 +81,6 @@ namespace vcs::prompts
                                                   "l3", "r3", "select", "start", "dpad_up", "dpad_down", "dpad_left", "dpad_right"};
         constexpr const char *kPadDefault[DPad] = {"south", "east", "north", "west", "lb", "rb", "lt", "rt",
                                                    "ls", "rs", "back", "start", "dpad_u", "dpad_d", "dpad_l", "dpad_r"};
-
-        enum Set : int
-        {
-            Original = 0,
-            Automatic = 1,
-            PlayStation = 2,
-            Xbox = 3,
-            Keyboard = 4,
-        };
 
         uint8_t *g_rdram = nullptr;
         bool g_installed = false;
@@ -284,18 +260,8 @@ namespace vcs::prompts
         }
 
         // ---- the atlas ----------------------------------------------------------------------------------------------
-        struct Cell
-        {
-            float u0 = 0, v0 = 0, u1 = 0, v1 = 0; // 0..1
-            float aspect = 1.0f;                  // width / height in pixels
-        };
-        struct Atlas
-        {
-            uint32_t w = 0, h = 0;
-            std::shared_ptr<const std::vector<uint32_t>> pixels; // alpha in the PS2's 0..128
-            std::unordered_map<std::string, Cell> cells;
-            std::string signature;
-        };
+        using Cell = GlyphCell;
+        using Atlas = GlyphAtlas;
 
         std::shared_ptr<Atlas> buildAtlas(const std::vector<std::string> &specs, int cellH, const std::string &signature)
         {
@@ -930,6 +896,15 @@ namespace vcs::prompts
             const float picture = std::min<float>(static_cast<float>(h), w * 0.75f);
             return std::clamp(static_cast<int>(std::lround(picture * kGlyphHeight / 272.0f)), 24, 128);
         }
+    }
+
+    int shownSet() { return g_setting.load(std::memory_order_relaxed) == Original ? Original : effectiveSet(); }
+    std::string glyphSpec(int set, int ctx, int ctl) { return specFor(set, ctx, ctl); }
+    std::vector<std::string> allGlyphSpecs() { return allSpecs(); }
+    int glyphCellHeight() { return cellHeight(); }
+    std::shared_ptr<GlyphAtlas> buildGlyphAtlas(const std::vector<std::string> &specs, int cellH, const std::string &signature)
+    {
+        return buildAtlas(specs, cellH, signature);
     }
 
     void registerSettings()

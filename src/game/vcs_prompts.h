@@ -5,6 +5,10 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 class PS2Runtime;
 
@@ -21,4 +25,50 @@ namespace vcs::prompts
     // Game thread, at the frame kick: the glyph set for the device, the font's glyph table, this frame's glyphs to the
     // renderer.
     void onFrameKick(uint8_t *rdram);
+
+    // ---- shared with Liberty City Stories' prompts (game/lcs_prompts.h) ----------------------------------------------
+    // The controls a glyph stands for, the contexts that choose a key for some of them, the glyph sets.
+    enum Ctl : int
+    {
+        Cross, Circle, Triangle, Square, L1, R1, L2, R2, L3, R3, Select, Start,
+        DUp, DDown, DLeft, DRight, DPad, DPadUD, DPadLR,
+        LS, LSUp, LSDown, LSLeft, LSRight, LSUD, LSLR,
+        RS, RSUp, RSDown, RSLeft, RSRight, RSUD, RSLR,
+        kCtlCount
+    };
+    enum Ctx : int
+    {
+        Foot,
+        Vehicle,
+        Menu,
+        kCtxCount
+    };
+    enum Set : int
+    {
+        Original = 0,
+        Automatic = 1,
+        PlayStation = 2,
+        Xbox = 3,
+        Keyboard = 4,
+    };
+    // The set shown now (Enhancements > Button prompts, Automatic resolved by the device used last).
+    int shownSet();
+    // A control's glyph (game/vcs_glyph_art.h spec) in a set and context.
+    std::string glyphSpec(int set, int ctx, int ctl);
+    // Every glyph of every set and context (sorted, unique) and the glyphs' height in pixels for the window.
+    std::vector<std::string> allGlyphSpecs();
+    int glyphCellHeight();
+    struct GlyphCell
+    {
+        float u0 = 0, v0 = 0, u1 = 0, v1 = 0; // 0..1 in the atlas
+        float aspect = 1.0f;                  // width / height
+    };
+    struct GlyphAtlas
+    {
+        uint32_t w = 0, h = 0;
+        std::shared_ptr<const std::vector<uint32_t>> pixels; // alpha in the PS2's 0..128
+        std::unordered_map<std::string, GlyphCell> cells;
+        std::string signature;
+    };
+    std::shared_ptr<GlyphAtlas> buildGlyphAtlas(const std::vector<std::string> &specs, int cellH, const std::string &signature);
 }
