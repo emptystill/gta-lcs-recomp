@@ -696,6 +696,22 @@ namespace
         s.onChange = [](int v) { gsHwSetTrailsBlur(v != 0); };
         settings::add(s);
 
+        // Sharp HUD (the user's ask, 2026-11-17): the HUD's tiny textures (a PSP game's) are blurred over several screen
+        // pixels at a high resolution. The native HUD layer draws from copies made 4x larger by xBR (gs_hw.cpp
+        // gsHwSetHudUpscale): sharp edges, smooth diagonals. docs/LCS.md "Sharp HUD".
+        s = {};
+        s.key = "display.hud_sharp";
+        s.page = "Graphics";
+        s.section = "Image quality";
+        s.label = "Sharp HUD";
+        s.help = "The clock, money, ammo, weapon icon and radar are tiny pictures that blur when stretched over a large "
+                 "screen. On redraws them four times larger with sharp edges and smooth curves. Off is the original.";
+        s.type = Type::Toggle;
+        s.defaultValue = 0;
+        s.env = "LCS_HUD_SHARP";
+        s.onChange = [](int v) { gsHwSetHudUpscale(v ? 4 : 1); };
+        settings::add(s);
+
         // The reflection on car paint (docs/vcs-reference/game-internals.md 6g): the PS2 samples the frame once per spot, so a panel
         // flickers as the camera moves - the same at every resolution, but plainer to see when the rest of the picture is
         // sharp. Always Auto: the original at 1x, Smooth above it - no setting (the user's choice, DECISIONS.md

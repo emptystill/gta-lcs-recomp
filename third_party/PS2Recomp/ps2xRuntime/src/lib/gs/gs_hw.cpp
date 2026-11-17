@@ -23,6 +23,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <deque>
+#include <future> // [gta-recomp] Sharp HUD's helper
 #include <thread>
 #include <mutex>
 #include <map>
@@ -53,6 +54,7 @@ namespace
     std::atomic<float> g_aspectWidening{1.0f};          // [gta-recomp] gsHwSetAspectWidening
     std::atomic<bool> g_reducedPostFx{false};           // [gta-recomp] gsHwSetReducedPostFx
     std::atomic<bool> g_trailsBlur{true};                // [gta-recomp] gsHwSetTrailsBlur
+    std::atomic<int> g_hudUpscale{1};                    // [gta-recomp] gsHwSetHudUpscale
     std::atomic<uint32_t> g_frameW{0}, g_frameH{0};     // [gta-recomp] gsHwSetFrameSize
     struct TargetRole                                   // [gta-recomp] gsHwSetTargetRole
     {
@@ -159,6 +161,7 @@ void gsHwSetFrameSize(uint32_t width, uint32_t height)
 void gsHwSetAspectWidening(float widening) { g_aspectWidening.store(widening, std::memory_order_relaxed); }
 void gsHwSetReducedPostFx(bool on) { g_reducedPostFx.store(on, std::memory_order_relaxed); }
 void gsHwSetTrailsBlur(bool on) { g_trailsBlur.store(on, std::memory_order_relaxed); }
+void gsHwSetHudUpscale(int k) { g_hudUpscale.store(k == 2 || k == 4 ? k : 1, std::memory_order_relaxed); }
 
 // [gta-recomp] gsHwShownInputNs (gs_hw.h)
 static int64_t steadyNs()
@@ -715,6 +718,76 @@ namespace
     // [gta-recomp] Execution on the renderer's RHI device (main thread). Render targets keep PS2 rows top-down
     // (texture row = PS2 row); the vertex shader flips Y for D3D's NDC.
     // ------------------------------------------------------------------------------------------------------
+    // [gta-recomp] Sharp HUD (gsHwSetHudUpscale): xBR (Hyllian's level-1 rule) 2x, applied twice for 4x. Each texel E
+    // becomes 2x2; a corner of it whose direction shows an edge through it (the weighted colour distances along the
+    // corner's diagonal clearly lower than across) takes the mean of E and the nearer of its two neighbours - diagonals
+    // and curves come out smooth - and every other new texel is E itself, so edges stay sharp. (Texture upscaling's
+    // hybrid of 2026-11-15, reverted, filled those with bilinear: no sharper than the original filtered.) The HUD's
+    // atlases are clamped at the texture's border, not wrapped.
+    namespace hudxbr
+    {
+        inline int ch(uint32_t c, int s) { return static_cast<int>((c >> s) & 0xFFu); }
+
+        // xBR's colour distance: luma over chroma; alpha too (the fonts' and icons' cut-out edges)
+        inline int dist(uint32_t a, uint32_t b)
+        {
+            const int dr = ch(a, 0) - ch(b, 0), dg = ch(a, 8) - ch(b, 8), db = ch(a, 16) - ch(b, 16), da = ch(a, 24) - ch(b, 24);
+            const int y = std::abs(dr * 299 + dg * 587 + db * 114) / 1000;
+            const int u = std::abs(dr * -169 + dg * -331 + db * 500) / 1000;
+            const int v = std::abs(dr * 500 + dg * -419 + db * -81) / 1000;
+            return 48 * y + 7 * u + 6 * v + 32 * std::abs(da);
+        }
+
+        inline uint32_t mix(uint32_t a, uint32_t b)
+        {
+            uint32_t out = 0;
+            for (int s = 0; s < 32; s += 8)
+                out |= static_cast<uint32_t>((ch(a, s) + ch(b, s) + 1) / 2) << s;
+            return out;
+        }
+
+        void step2x(const std::vector<uint32_t> &src, uint32_t w, uint32_t h, std::vector<uint32_t> &dst)
+        {
+            dst.assign(size_t(w) * h * 4u, 0u);
+            auto at = [&](int x, int y) {
+                return src[size_t(std::clamp(y, 0, static_cast<int>(h) - 1)) * w + size_t(std::clamp(x, 0, static_cast<int>(w) - 1))];
+            };
+            for (int y = 0; y < static_cast<int>(h); ++y)
+                for (int x = 0; x < static_cast<int>(w); ++x)
+                {
+                    const uint32_t E = at(x, y);
+                    for (int q = 0; q < 4; ++q)
+                    {
+                        // the corner toward (sx, sy); the neighbours named as in xBR for the bottom-right one
+                        const int sx = (q & 1) ? 1 : -1, sy = (q & 2) ? 1 : -1;
+                        auto n = [&](int ox, int oy) { return at(x + ox * sx, y + oy * sy); };
+                        const uint32_t F = n(1, 0), H = n(0, 1), I = n(1, 1), D = n(-1, 0), B = n(0, -1);
+                        const uint32_t C = n(1, -1), G = n(-1, 1), F4 = n(2, 0), I4 = n(2, 1), H5 = n(0, 2), I5 = n(1, 2);
+                        uint32_t out = E;
+                        const int e = dist(E, C) + dist(E, G) + dist(I, F4) + dist(I, H5) + 4 * dist(H, F);
+                        const int i = dist(H, D) + dist(H, I5) + dist(F, I4) + dist(F, B) + 4 * dist(E, I);
+                        if (e < i && dist(E, F) > 0 && dist(E, H) > 0)
+                            out = mix(E, dist(E, F) <= dist(E, H) ? F : H);
+                        const size_t ox = size_t(2 * x + ((q & 1) ? 1 : 0)), oy = size_t(2 * y + ((q & 2) ? 1 : 0));
+                        dst[oy * (size_t(w) * 2u) + ox] = out;
+                    }
+                }
+        }
+
+        // k = 2 or 4; w, h updated
+        void apply(std::vector<uint32_t> &pixels, uint32_t &w, uint32_t &h, uint32_t k)
+        {
+            std::vector<uint32_t> tmp;
+            for (uint32_t f = 1; f < k; f *= 2)
+            {
+                step2x(pixels, w, h, tmp);
+                pixels.swap(tmp);
+                w *= 2u;
+                h *= 2u;
+            }
+        }
+    }
+
     struct DrawConstants // render/shaders/gs_draw.hlsl, cbuffer Draw
     {
         float targetRtFix[4];
@@ -995,6 +1068,8 @@ namespace
                 {
                     const auto deleteStart = ps2x::hostNow(); // [gta-recomp] tex_create_us: releases too
                     m_textures.erase(f.texDeletes[c.index]);
+                    m_hudUp.erase(f.texDeletes[c.index]); // [gta-recomp] its Sharp HUD copy goes with it
+                    m_hudUpJobs.erase(f.texDeletes[c.index]);
                     ps2perf::add(ps2perf::Counter::TexCreateUs, static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
                                                                     ps2x::hostNow() - deleteStart).count()));
                     break;
@@ -1586,6 +1661,8 @@ namespace
             const int linear = c.linearIipFgeAte[0];
             if (linear == 3)
                 return 5;                   // Gather
+            if (linear == 5)
+                return 0;                   // [gta-recomp] Sharp HUD (sampleUpscaled): the full shader has it
             if (!specialise || linear == 4) // PS2X_HW_GATHER=verify needs the full shader
                 return 0;
             if (c.tmeTfxTccFst[0] != 1)
@@ -1717,6 +1794,7 @@ namespace
             rhi::Texture *texture = nullptr;    // read instead of the draw's texture, as a plain texture
             rhi::Texture *rtTexture = nullptr;  // read instead of render target s.rtFbp, as it (same scale): blurHistoryPick
             rhi::Buffer *vertices = nullptr;    // null: the HUD layer's
+            bool hud = false;                   // [gta-recomp] a HUD layer draw (Sharp HUD: gsHwSetHudUpscale)
         };
 
         // A HUD draw into its layer. Textured quads (two triangles over one rectangle of a clamped texture) sample only
@@ -2360,6 +2438,76 @@ namespace
         }
 
         // the layer over m_display, which shows the buffer from PS2 pixel (displayX, displayY)
+        // [gta-recomp] Sharp HUD: the larger copy of a game texture the HUD draws from. The first time: read back from
+        // the GPU (a small texture), then hudxbr::apply on a helper thread - the radar's map tiles come as he moves, ~5 ms
+        // each and 25 ms for a 256x256 at 4x, a hitch each when made on this thread (measured 2026-11-17); until it is
+        // done the HUD draws from the original. Null when off, not ready, or not possible.
+        rhi::Texture *hudUpscaled(uint64_t key, rhi::Texture &src)
+        {
+            const uint32_t k = static_cast<uint32_t>(g_hudUpscale.load(std::memory_order_relaxed));
+            if (k != m_hudUpK)
+            {
+                m_hudUp.clear();
+                m_hudUpJobs.clear(); // (waits for running jobs: a setting change, rare)
+                m_hudUpK = k;
+            }
+            if (k <= 1u)
+                return nullptr;
+            auto it = m_hudUp.find(key);
+            if (it != m_hudUp.end())
+                return it->second.get();
+            auto job = m_hudUpJobs.find(key);
+            if (job != m_hudUpJobs.end())
+            {
+                if (job->second.pixels.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+                    return nullptr;
+                HudUpJob j = std::move(job->second);
+                m_hudUpJobs.erase(job);
+                const std::vector<uint32_t> pixels = j.pixels.get();
+                std::unique_ptr<rhi::Texture> &made = m_hudUp[key];
+                if (pixels.size() != size_t(j.w) * j.h)
+                    return nullptr;
+                rhi::TextureDesc d;
+                d.width = j.w;
+                d.height = j.h;
+                d.usage = rhi::UsageSampled;
+                d.mipLevels = 1;
+                d.name = "gs hud upscaled";
+                made = m_dev.createTexture(d, pixels.data(), j.w * 4u);
+                static const bool log = std::getenv("PS2X_HUD_UPSCALE_LOG") != nullptr;
+                if (log)
+                    std::fprintf(stderr, "[gs-hw] sharp HUD: texture %llx %ux%u -> %ux%u, ready after %.2f ms\n",
+                                 static_cast<unsigned long long>(key), j.srcW, j.srcH, j.w, j.h,
+                                 std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - j.start).count());
+                return made.get();
+            }
+            const uint32_t w = src.desc().width, h = src.desc().height;
+            if (!w || !h || w > 512u || h > 512u || src.desc().format != rhi::Format::RGBA8)
+            {
+                m_hudUp[key] = nullptr; // never: drawn from the original
+                return nullptr;
+            }
+            std::vector<uint32_t> pixels(size_t(w) * h);
+            endPass();
+            if (!m_dev.readTexture(src, 0, 0, w, h, pixels.data(), w * 4u))
+            {
+                m_hudUp[key] = nullptr;
+                return nullptr;
+            }
+            HudUpJob &j = m_hudUpJobs[key];
+            j.srcW = w;
+            j.srcH = h;
+            j.w = w * k;
+            j.h = h * k;
+            j.start = std::chrono::steady_clock::now();
+            j.pixels = std::async(std::launch::async, [pixels = std::move(pixels), w, h, k]() mutable {
+                uint32_t ow = w, oh = h;
+                hudxbr::apply(pixels, ow, oh, k);
+                return std::move(pixels);
+            });
+            return nullptr;
+        }
+
         void drawHudLayer(const HudLayer &layer, uint32_t displayX, uint32_t displayY)
         {
             const size_t bytes = layer.vertices.size() * sizeof(HwVertex);
@@ -2397,6 +2545,7 @@ namespace
             LayerTarget t;
             t.color = m_display.get();
             t.depth = m_hudDepth.get();
+            t.hud = true;
             t.scaleX = static_cast<float>(w) / static_cast<float>(std::max(m_displayW, 1u));
             t.scaleY = static_cast<float>(h) / static_cast<float>(std::max(m_displayH, 1u));
             t.originX = static_cast<int>(displayX);
@@ -2526,6 +2675,15 @@ namespace
                     tex = it != m_textures.end() ? it->second.get() : nullptr;
                 }
             }
+            // [gta-recomp] Sharp HUD: a HUD layer draw from a game texture reads its larger copy (gs_draw.hlsl
+            // sampleUpscaled: bilinear at the copy's own texels, the wrap / clamp scaled to it)
+            uint32_t hudK = 1;
+            if (layer && layer->hud && s.tme && !s.texIsRt && !plainTexture && tex && s.tw && s.th)
+                if (rhi::Texture *up = hudUpscaled(s.texKey, *tex))
+                {
+                    hudK = up->desc().width / tex->desc().width;
+                    tex = up;
+                }
 
             bindPass(colorTarget, depthTarget);
             {
@@ -2566,7 +2724,12 @@ namespace
             // repeat / clamp wrapping is sampled by the hardware - trilinear over a mip chain, anisotropic - instead of
             // the GS's own bilinear; region wraps, render targets and nearest filtering keep the exact GS path
             rhi::Sampler *hwSampler = nullptr;
-            if (m_anisotropy && s.tme && s.linear && !s.texIsRt && !plainTexture && tex && s.wms <= 1u && s.wmt <= 1u &&
+            if (hudK > 1u)
+            {
+                c.linearIipFgeAte[0] = 5;
+                c.filterDest[2] = static_cast<float>(hudK);
+            }
+            else if (m_anisotropy && s.tme && s.linear && !s.texIsRt && !plainTexture && tex && s.wms <= 1u && s.wmt <= 1u &&
                 tex->desc().mipLevels != 1u)
             {
                 hwSampler = m_anisoSampler[s.wms == 0u ? 1 : 0][s.wmt == 0u ? 1 : 0].get();
@@ -2581,7 +2744,7 @@ namespace
                 const char *e = std::getenv("PS2X_HW_GATHER");
                 return (e && e[0] == '0') ? 0 : (e && e[0] == 'v') ? 4 : 3;
             }();
-            if (gather && !hwSampler && s.tme && s.linear && !s.texIsRt && !plainTexture && tex && s.wms <= 1u && s.wmt <= 1u &&
+            if (gather && hudK == 1u && !hwSampler && s.tme && s.linear && !s.texIsRt && !plainTexture && tex && s.wms <= 1u && s.wmt <= 1u &&
                 tex->desc().mipLevels == 1u && tex->desc().width == s.tw && tex->desc().height == s.th && s.tw &&
                 !(s.tw & (s.tw - 1u)) && s.th && !(s.th & (s.th - 1u)))
             {
@@ -2728,6 +2891,17 @@ namespace
         std::unordered_map<uint32_t, DroppedSize> m_droppedSize; // [gta-recomp] dropRt / rtFor
         std::unordered_map<uint32_t, Depth> m_depth;
         std::unordered_map<uint64_t, std::unique_ptr<rhi::Texture>> m_textures;
+        // [gta-recomp] Sharp HUD (gsHwSetHudUpscale): the larger copies of the textures the HUD layer drew from, by the
+        // texture's key (null: could not be made); made at m_hudUpK times, all dropped when the setting changes
+        std::unordered_map<uint64_t, std::unique_ptr<rhi::Texture>> m_hudUp;
+        struct HudUpJob // a copy being made on a helper thread
+        {
+            std::future<std::vector<uint32_t>> pixels;
+            uint32_t w = 0, h = 0, srcW = 0, srcH = 0;
+            std::chrono::steady_clock::time_point start;
+        };
+        std::unordered_map<uint64_t, HudUpJob> m_hudUpJobs;
+        uint32_t m_hudUpK = 1;
         std::unique_ptr<rhi::Texture> m_display, m_feedback;
         std::unordered_map<uint32_t, HudLayer> m_hud; // [gta-recomp] native HUD layer per frame buffer
         // [gta-recomp] Per frame buffer, the shape (wide or 4:3) of the frame that last drew into it; a plain copy carries

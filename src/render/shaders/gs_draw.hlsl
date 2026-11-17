@@ -316,6 +316,41 @@ float4 sampleRtFiltered(float2 uv)
     return weights > 0.0 ? sum * (255.0 / weights) : fetchTexel(int2(floor(uv)));
 }
 
+// Sharp HUD (gs_hw.cpp gsHwSetHudUpscale; linearIipFgeAte.x == 5): the texture bound is the game texture made k times
+// larger (filterDest.z) by xBR. Bilinear at the copy's own texels, its wrap / clamp the game texture's scaled: REGION_CLAMP
+// keeps a font or icon cell's own texels (the atlas's neighbours stay out, as appendHudDraw wants), REGION_REPEAT works
+// on the original texel and keeps the position inside it.
+int wrapUp(int c, int size, int mode, int mn, int mx, int k)
+{
+    const int full = size * k;
+    [branch] if (mode == 0)
+        return ((c % full) + full) % full;
+    if (mode == 1)
+        return clamp(c, 0, full - 1);
+    if (mode == 2)
+        return clamp(c, mn * k, mx * k + k - 1);
+    const int t = c >= 0 ? c / k : -((-c + k - 1) / k);
+    return ((t & mn) | mx) * k + (c - t * k);
+}
+
+float4 fetchUp(int2 t, int k)
+{
+    t.x = wrapUp(t.x, texSizeWrap.x, texSizeWrap.z, region.x, region.y, k);
+    t.y = wrapUp(t.y, texSizeWrap.y, texSizeWrap.w, region.z, region.w, k);
+    return tex.Load(int3(t, 0)) * 255.0;
+}
+
+float4 sampleUpscaled(float2 uv)
+{
+    const int k = max(int(filterDest.z), 1);
+    const float2 p = uv * float(k) - 0.5;
+    const int2 i = int2(floor(p));
+    const float2 f = p - floor(p);
+    const float4 c00 = fetchUp(i, k), c10 = fetchUp(i + int2(1, 0), k);
+    const float4 c01 = fetchUp(i + int2(0, 1), k), c11 = fetchUp(i + int2(1, 1), k);
+    return lerp(lerp(c00, c10, f.x), lerp(c01, c11, f.x), f.y);
+}
+
 float4 sampleTex(float2 uv)
 {
 #if SAMPLE_MODE == 2
@@ -337,6 +372,10 @@ float4 sampleTex(float2 uv)
     else if (atstArefAfailRt.w == 3)
     {
         r = sampleRtFiltered(uv); // only the full shader (SAMPLE_MODE 0) has it: drawSampleMode picks that one
+    }
+    else if (linearIipFgeAte.x == 5)
+    {
+        r = sampleUpscaled(uv); // Sharp HUD (before the >= 3 Gather test)
     }
     else if (linearIipFgeAte.x == 2)
     {
