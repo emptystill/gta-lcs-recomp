@@ -929,6 +929,22 @@ The user saw the foot camera inside walls / a column.
 collision. The probes found nothing within 2 m but the far wall, and the game's own camera shows the same blur when it
 comes near it, so no line test sees it. The camera can still show it close up there.
 
+## Pending (the user's checklist, 2026-11-17)
+
+In the order agreed with the user (most likely to break play first). VCS has each of these; on LCS none is done.
+
+- [ ] **Above 30 fps**: what counts frames instead of time - particles and effects (`vcs_particle_timing`,
+  `vcs_effects_timing`), mission bars and timers (`vcs_script_timing`), physics / music timing, the scripted cutscenes
+  stuck on "Loading..." at 60 fps (`vcs_script_fixes`). Expected to break missions as the user goes on.
+- [ ] **The pause menu with the mouse and keyboard** (`vcs_frontend`: hover, clicks, sliders, the map dragged).
+- [ ] **Button prompts by device** (`vcs_prompts`, `vcs_glyph_art`): the help text shows the bound key / the pad's
+  buttons instead of the PS2's.
+- [ ] **Sound**: still the emulated IOP, never checked by ear; VCS's native sound driver and the music / effects levels
+  as settings (`vcs_sound`, `vcs_volume`).
+- [ ] **World options**: traffic / pedestrian density, draw distance as settings (`vcs_world_detail`).
+- [ ] **The trainer**: missions (story and side jobs), the free camera.
+- [ ] **Saves**: save / load in different places, checked.
+
 ## Tools for LCS debugging
 
 - `tools/xglobal.py --vcs-lcs 0xADDR...`: a VCS global's LCS address, from the code around its uses (votes).
