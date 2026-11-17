@@ -38,6 +38,14 @@ namespace lcs::mouseaim
         constexpr uint32_t kWeaponFlags = 0x6Cu, kFlagArmAim = 0x80u;
         constexpr uint32_t kSetPointGunAt = 0x001BA618u; // CPed::SetPointGunAt(ped, entity); entity 0: the pose alone
         constexpr uint32_t kClearPointGunAt = 0x001BAA70u; // CPed::ClearPointGunAt(ped): out of it, the anim faded
+        // CPed::ClearLookFlag(ped) (0x1D4930): bIsLooking (bit 36 of +0x190, GTA III's order) off, bIsRestoringLook on -
+        // the head and torso turned back from what he looked at
+        constexpr uint32_t kClearLookFlag = 0x001D4930u;
+        constexpr uint64_t kFlagLooking = 0x1000000000ull;
+        // CPedIK at ped +0x310: the torso's yaw / pitch it holds (+0x31C / +0x320), stepped toward the aim within its
+        // limits by PointGunInDirection (0x270730, from 0x1D4F58), whose result is bCanPointGunAtTarget (bit 41)
+        constexpr uint32_t kPedTorsoYaw = 0x31Cu, kPedTorsoPitch = 0x320u;
+        constexpr uint64_t kFlagCanPointGun = 0x20000000000ull;
         constexpr uint32_t kTheCamera = 0x0043BBF0u;     // its matrix: +0x10 forward, +0x30 position
         constexpr uint32_t kActiveCam = 0x10Cu, kCam0 = 0x220u, kCamStride = 0x2B0u, kCamMode = 0x40u;
         constexpr uint32_t kModeFollowPed = 4u;
@@ -365,7 +373,25 @@ namespace lcs::mouseaim
                 }
                 wr32(ped + kPedAimTimer, 0u);
                 const uint64_t flags = rd64(ped + kPedFlags);
+                // Out of a vehicle the torso stays turned (0.87 / 0.37 rad), and from there the IK fails every frame:
+                // the gun pointed off to the side until a shot, whose attack straightens the torso (the user's report,
+                // 2026-11-17). Straightened here too whenever it fails.
+                if (!(flags & kFlagCanPointGun))
+                {
+                    wrf(ped + kPedTorsoYaw, 0.0f);
+                    wrf(ped + kPedTorsoPitch, 0.0f);
+                }
                 wr64(ped + kPedFlags, (flags & ~kFlagRestoring) | kFlagAiming);
+                // He looks at something (getting out of a vehicle he turns his head and torso to it; the game looks
+                // about on its own): the look's twist stayed on top of the aim, the gun pointing off to the side until
+                // a shot cleared it (the user's report, 2026-11-17). The game's SetPointGunAt only sets a look of its
+                // own with a target, and this aim has none: the look is ended as the game ends one.
+                if (flags & kFlagLooking)
+                {
+                    SET_GPR_U32(ctx, 4, ped);
+                    ctx->pc = kClearLookFlag;
+                    return true;
+                }
             }
             return false;
         }
@@ -373,10 +399,19 @@ namespace lcs::mouseaim
         if (want && ped && onFoot(ped) && gunInHand(ped) && followCamera())
         {
             const uint32_t state = rd32(ped + kPedState);
+            if ((state == kStateIdle || state == kStateAttack) && (rd64(ped + kPedFlags) & kFlagLooking))
+            {
+                // a look first ends (see above); into the aim the next frame
+                SET_GPR_U32(ctx, 4, ped);
+                ctx->pc = kClearLookFlag;
+                return true;
+            }
             if (state == kStateIdle || state == kStateAttack)
             {
                 g_state = State::Aiming;
                 g_aiming.store(true, std::memory_order_relaxed);
+                wrf(ped + kPedTorsoYaw, 0.0f); // the aim starts from a straight torso (see above)
+                wrf(ped + kPedTorsoPitch, 0.0f);
                 g_retryClock = clock;
                 std::fprintf(stderr, "[mouseaim] aim on: SetPointGunAt(%08x, 0)\n", ped);
                 SET_GPR_U32(ctx, 4, ped);

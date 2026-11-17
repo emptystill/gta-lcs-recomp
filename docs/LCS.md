@@ -558,6 +558,19 @@ which the game keeps after he gets out (his last vehicle; FindPlayerVehicle 0x10
 getting out with F the mouse aim never started and the game's own lock-on aim (state 0x16) took the button. Now the flag
 alone. Checked: out of a car with F, his last car still at +0x534, the aim active (before: inactive).
 
+**The gun off to the side after getting out (2026-11-17, the user's next report: an odd pose until the first shot).**
+With the AK-47, aiming after getting out of a car pointed the gun to his left; a shot put it right. The anims (0xC9 at
+full blend, its end), his heading, the aim angle and the camera all matched the case before the car. The difference
+was **CPedIK at ped +0x310**: its torso yaw / pitch (+0x31C / +0x320) stayed at 0.873 / 0.372 rad after the car, and
+from there **PointGunInDirection (0x270730**, called by 0x1D4F58 with the aim angle +0x6E4 and pitch +0xC78) failed
+every frame - its result is bCanPointGunAtTarget, bit 41 of +0x190, which was off; the IK's flags (+0x33C, bit 0
+"pointed") off too. The attack straightens the torso, hence the shot. The aim now zeroes the torso when it starts and
+whenever bit 41 is off. Also: a look left on (bIsLooking, bit 36 - +0x190 follows GTA III's flag order: 35 pointing
+the gun, 36 looking, 37 keep trying to look, 38 restoring the look, 39 aiming, 40 restoring the gun, 41 can point the
+gun) is ended with the game's **ClearLookFlag 0x1D4930** (ClearAimFlag is 0x1D4ED8): SetPointGunAt sets a look of its
+own only with a target. Checked: out of a car, aiming before any shot, the torso 0, bit 41 on, the gun at his shoulder
+where the circle is (screenshots).
+
 **Shotgun pellets (2026-11-16, the user's report: "the impact does not go where I aim").** `LCS_SHOT_LOG=1`
 logged every line test of the player's shots. The shotguns' pellets (return 0x2A93E4) are always level: the end is
 at the gun's height whatever the pitch. The game spreads them in yaw only, about his heading. The shotgun (19) has 3
