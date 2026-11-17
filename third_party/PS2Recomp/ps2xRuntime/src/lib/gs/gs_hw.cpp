@@ -1015,6 +1015,11 @@ namespace
                     continue;
                 if (e.map)
                 {
+                    // the radar's tiles are 128 x 128 (the pause map is one 512 x 512 picture): a smaller texture is
+                    // not a tile - the Liberty City Free Radio logo (64 x 64, on the Sound page) was taken for one by
+                    // its structure and drawn as a strip of map (the user, 2026-11-17)
+                    if (w != 128u || h != 128u)
+                        continue;
                     Structure theirs{};
                     if (!haveStructure || !structure(e.probe, e.pw, e.ph, theirs))
                         continue;
