@@ -33,6 +33,7 @@
 #include "game/vcs_input.h"
 #include "game/vcs_prompts.h"
 #include "game/lcs_prompts.h"
+#include "ui/i18n.h"
 #include "game/vcs_volume.h"
 #include "game/vcs_world_detail.h"
 #include "platform/platform.h"
@@ -344,7 +345,7 @@ namespace
     // Balanced (until 2026-11-14 "Widescreen, light" at 1x; the user asked for the name and 2x).
     const Preset kBalanced[] = {{"display.aspect", 0}, {"display.hud", 2},    {"display.scale", 2},  {"display.msaa", 1},
                                 {"display.aniso", 4},  {"display.timing", 1}, {"display.fps", 60}, {"display.vsync", kVsyncDefault}};
-    const char *const kPresetKeys[] = {"display.aspect", "display.hud", "display.cutscene_bars", "display.scale", "display.msaa",
+    const char *const kPresetKeys[] = {"display.aspect", "display.hud", "display.scale", "display.msaa",
                                        "display.aniso",  "display.timing", "display.fps", "display.vsync"};
 
     template <size_t N> void applyPreset(const char *name, const Preset (&values)[N])
@@ -478,22 +479,6 @@ namespace
         s.onChange = [](int) { applyAspect(); };
         settings::add(s);
 
-        s = {};
-        s.key = "display.cutscene_bars";
-        s.page = "Display";
-        s.section = "Screen";
-        s.label = "Cutscene black bars";
-        s.help = "The black bars above and below cutscenes, as on the PS2. Off shows the whole picture in widescreen "
-                 "(the PS2's own widescreen mode had none).";
-        s.type = Type::Toggle;
-        s.defaultValue = 1;
-        s.env = "VCS_CUTSCENE_BARS";
-        s.onChange = [](int) { applyCutsceneBars(); };
-        s.locked = [] { return cutsceneBarsLocked(); };
-        s.lockedValue = 1;
-        s.lockedNote = "Always on at 4:3, as on the PS2: choose a widescreen aspect ratio to change it.";
-        settings::add(s);
-
         // Menus and loading screens wide (the user's ask, 2026-11-17: "zoom and crop" for the pictures): frames without
         // 3D stay wide, the menu keeps its 4:3 shape in the middle, a full-screen picture covers the screen
         // (gs_hw.cpp gsHwSetFill2d). docs/LCS.md "Menus and loading screens in widescreen".
@@ -530,7 +515,7 @@ namespace
 
         auto applyVolume = [](int) {
             auto gain = [](int percent) { return (percent / 100.0f) * (percent / 100.0f); }; // even steps to the ear
-            ps2AudioSetVolume(gain(settings::value("audio.volume")), gain(settings::value("audio.movie_volume")));
+            ps2AudioSetVolume(gain(settings::value("audio.volume")), gain(100) /* (movies are skipped on LCS: no movie volume) */);
         };
         s = {};
         s.key = "audio.volume";
@@ -546,21 +531,6 @@ namespace
         s.onChange = applyVolume;
         settings::add(s);
 
-        vcs::volume::registerSettings(); // music / sound effects: the game's own levels (game/vcs_volume.h)
-
-        s = {};
-        s.key = "audio.movie_volume";
-        s.page = "Audio";
-        s.section = "Volume";
-        s.label = "Movie volume";
-        s.help = "The intro movie and the other full-motion videos, relative to the master volume.";
-        s.type = Type::Integer;
-        s.min = 0;
-        s.max = 100;
-        s.format = "%d%%";
-        s.defaultValue = 100;
-        s.onChange = applyVolume;
-        settings::add(s);
 
         s = {};
         s.key = "audio.output";
@@ -641,18 +611,7 @@ namespace
         s.defaultValue = 0;
         settings::add(s);
 
-        s = {};
-        s.key = "display.skip_intro";
-        s.page = "Game";
-        s.section = "Start-up";
-        s.label = "Skip intro movies";
-        s.help = "The Rockstar logos and the intro movie at start-up. Off plays them as on the PS2 (Start or Cross skips the "
-                 "intro, not the logos); on goes straight to the game.";
-        s.type = Type::Toggle;
-        s.defaultValue = 0;
-        s.env = "VCS_SKIP_MOVIES";
-        s.onChange = [](int v) { vcs::setSkipIntroMovies(v != 0); };
-        settings::add(s);
+        ui::i18n::registerSetting(); // Game > Language: the menus' language (ui/i18n.h)
 
         s = {};
         s.key = "game.background";
@@ -802,10 +761,7 @@ namespace
 
         vcs::input::registerSettings(); // the Keyboard & mouse and Gamepad pages (game/vcs_input.h)
         vcs::prompts::registerSettings(); // the Enhancements page: button prompts by device (game/vcs_prompts.h)
-        vcs::world::registerSettings();   // Enhancements > World: density, draw distance (game/vcs_world_detail.h)
-        vcs::driveby::registerSettings(); // Enhancements > Combat: drive-by fire rate (game/vcs_driveby.h)
         lcs::weapons::registerSettings(); // Enhancements > Combat: switching weapons with the detonator (game/lcs_weapons.h)
-        vcs::registerEffectsSettings();   // Enhancements > Effects: Reduce Post Processing Effects (game/vcs_effects_timing.h)
 
         s = {};
         s.key = "graphics.perf_overlay";
@@ -943,6 +899,7 @@ int main(int argc, char *argv[])
             if (const char *v = std::getenv(off); !v || !*v)
                 setEnv(off, "0");
         registerSettings();
+        ui::i18n::dumpMissing(); // LCS_I18N_DUMP (a translation pass)
         settings::load(exeDirectory() / "lcs.ini");
         // a test run never changes the player's settings: hidden, or shown (VCS_KEEP_SETTINGS=1 from
         // toolchain.test_window when VCS_TEST_VISIBLE=1)

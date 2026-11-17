@@ -48,3 +48,22 @@ trainer runs short scripts on LCS's VM as VCS's trainer does on VCS's. LCS's VM 
 differs from VCS's; GTA3's layout and numbering, docs/LCS.md "The script VM"); each command the trainer uses was read
 in its handler rather than taken from a list. Weapons stay on the chained calls: they work and give a set in one frame.
 Missions and the free camera are not on LCS's trainer yet.
+
+## 2026-11-17: the menus are Liberty City Stories' own
+
+The user does not want anything of the VCS port in what the player sees. The settings menu (F2) and the trainer (F5):
+
+- **Look**: Liberty City Stories' pause menu - its red titles, the tab bar's orange, the options' pale blue on a
+  night-blue dark (`src/ui/theme.cpp`); titles in a heavy face (Impact), text in a condensed one (Bahnschrift), both
+  from the system (Windows; DejaVu / Arial on Linux / macOS), no font shipped. The trainer's Vice City sunset header
+  became the game's red with the orange rule.
+- **Language**: English or Spanish, chosen in Game > Language / Idioma (Spanish by default: the user's game is Spanish).
+  Every text goes through `ui::i18n::tr` (`src/ui/i18n.cpp`, the table `src/ui/i18n_es.inc`, English as the key);
+  `LCS_I18N_DUMP=<file>` lists the settings' texts the table lacks. The trainer's notices are translated where they
+  are shown; the control channel's answers stay English for the tools.
+- **Settings that do nothing on LCS are gone**: music / effects volume (VCS's levels; back with LCS's sound), movie
+  volume and Skip intro movies (LCS's movies are always skipped), Cutscene black bars, World (traffic, peds, draw
+  distance), the NPC drive-by fire rate, Reduce Post Processing Effects (VCS's effect timing), the free camera's key and
+  the gamepad's free aim. Each comes back when its LCS version exists.
+- Environment overrides show as `LCS_*` (`settings::add`); the `VCS_*` names still work for the test tools.
+

@@ -24,6 +24,7 @@ namespace platform
 #include <atomic>
 #include <chrono>
 #include <cstdio>
+#include <initializer_list>
 #include <cstdlib>
 #include <cstring>
 #include <mutex>
@@ -419,6 +420,33 @@ namespace platform
         ImGui::CreateContext();
         ImGui::GetIO().IniFilename = nullptr;
         ImGui::StyleColorsDark();
+        // [lcs] the menus' fonts, from the system (none is shipped): a condensed sans for the text (accents included -
+        // the menus are in Spanish too) and a heavy one for titles (ui/theme.h takes Fonts[1]). Dear ImGui's own font
+        // stays when none is there.
+        {
+            ImFontAtlas *atlas = ImGui::GetIO().Fonts;
+            auto first = [](std::initializer_list<const char *> paths) -> const char * {
+                for (const char *p : paths)
+                    if (FILE *f = std::fopen(p, "rb"))
+                    {
+                        std::fclose(f);
+                        return p;
+                    }
+                return nullptr;
+            };
+            const char *body = first({"C:/Windows/Fonts/bahnschrift.ttf", "C:/Windows/Fonts/segoeui.ttf",
+                                      "/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed.ttf",
+                                      "/usr/share/fonts/TTF/DejaVuSansCondensed.ttf", "/System/Library/Fonts/Supplemental/Arial Narrow.ttf",
+                                      "/System/Library/Fonts/Supplemental/Arial.ttf"});
+            const char *title = first({"C:/Windows/Fonts/impact.ttf", "/System/Library/Fonts/Supplemental/Impact.ttf",
+                                       "/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed-Bold.ttf",
+                                       "/usr/share/fonts/TTF/DejaVuSansCondensed-Bold.ttf"});
+            if (body && atlas->AddFontFromFileTTF(body, 15.0f))
+            {
+                if (title)
+                    atlas->AddFontFromFileTTF(title, 15.0f);
+            }
+        }
         g_imgui = ImGui_ImplSDL3_InitForOther(g_window);
         if (!g_imgui)
             std::fprintf(stderr, "[platform] Dear ImGui input backend failed\n");

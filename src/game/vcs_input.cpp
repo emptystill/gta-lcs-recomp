@@ -1204,18 +1204,6 @@ namespace vcs::input
         settings::add(s);
 
         s = {};
-        s.key = "controls.freecam_key";
-        s.page = kKeys;
-        s.section = "Menus";
-        s.label = "Free camera";
-        s.help = "Turns the trainer's free camera on and off: fly with W / A / S / D, E and Q, the mouse; Shift faster, "
-                 "Ctrl slower. On a gamepad: press Back + LB together.";
-        s.type = Type::Key;
-        s.group = "keys";
-        s.defaultValue = KEY_F6;
-        settings::add(s);
-
-        s = {};
         s.key = "controls.screenshot_key";
         s.page = kKeys;
         s.section = "Menus";
@@ -1297,18 +1285,6 @@ namespace vcs::input
             s.onChange = onChange;
             settings::add(s);
         }
-
-        s = {};
-        s.key = "pad.free_aim";
-        s.page = kPad;
-        s.section = "Sticks and triggers";
-        s.label = "Free aim";
-        s.help = "With a gun, R1's button (RB unless changed above; give R1 the LT to aim with the trigger) aims where "
-                 "the right stick points, with the game's aiming circle, instead of locking on. No aim assist.";
-        s.type = Type::Toggle;
-        s.defaultValue = 0;
-        s.onChange = onChange;
-        settings::add(s);
 
         s = {};
         s.key = "pad.vibration";

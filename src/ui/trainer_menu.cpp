@@ -9,7 +9,9 @@
 #include "platform/platform.h"
 #include "runtime/ps2_control.h"
 #include "settings/settings.h"
+#include "ui/i18n.h"
 #include "ui/settings_menu.h"
+#include "ui/theme.h"
 
 #include "imgui.h"
 
@@ -25,6 +27,8 @@ namespace ui
     namespace
     {
         namespace tr = vcs::trainer;
+        // the menus' language (ui/i18n.h)
+        const std::string &L(const std::string &english) { return i18n::tr(english); }
 
         enum Page
         {
@@ -71,11 +75,9 @@ namespace ui
             int top = 0; // first row shown
         };
 
-        constexpr bool kLcs = true; // Liberty City Stories: what game/lcs_trainer.cpp has (no missions, no free camera)
         bool g_open = false;
         bool g_releaseWait = false;
         bool g_chordWasDown = false;
-        bool g_camChordWasDown = false; // Back + LB: the free camera
         bool g_hideShotNotices = false; // this frame only: hideScreenshotNotices
         std::vector<Level> g_stack{{Main}};
         bool g_padWas[platform::GAMEPAD_BUTTON_COUNT] = {};
@@ -211,21 +213,11 @@ namespace ui
             {
             case Main:
                 rows.push_back(pageRow("Player", Player, "God mode, health, wanted level, money."));
-                rows.push_back(pageRow("Weapons", Weapons, kLcs ? "Any weapon, the cheats' weapon sets, unlimited ammo."
-                                                                : "Any weapon, loadouts, unlimited ammo."));
-                rows.push_back(pageRow("Vehicles", Vehicles,
-                                       kLcs ? "Spawn any car, bike or boat; repair, flip and boost the one you drive."
-                                            : "Spawn any vehicle; repair, flip and boost the one you drive."));
-                rows.push_back(pageRow("Teleport", Teleport,
-                                       kLcs ? "Every district of Liberty City, and a position of your own."
-                                            : "Every district of Vice City, and a position of your own."));
-                if (kLcs) // (no free camera on LCS yet)
-                    rows.push_back(pageRow("Camera", Camera, "Hide the HUD."));
-                else
-                    rows.push_back(pageRow("Camera", Camera, "Free camera: fly anywhere. Hide the HUD."));
+                rows.push_back(pageRow("Weapons", Weapons, "Any weapon, the cheats' weapon sets, unlimited ammo."));
+                rows.push_back(pageRow("Vehicles", Vehicles, "Spawn any car, bike or boat; repair, flip and boost the one you drive."));
+                rows.push_back(pageRow("Teleport", Teleport, "Every district of Liberty City, and a position of your own."));
+                rows.push_back(pageRow("Camera", Camera, "Hide the HUD.")); // (no free camera on LCS yet)
                 rows.push_back(pageRow("World", World, "Time of day, weather, game speed."));
-                if (!kLcs)
-                    rows.push_back(pageRow("Missions", Missions, "Start any story mission or side job."));
                 break;
             case Player:
                 rows.push_back(toggleRow("God mode", tr::GodMode,
@@ -253,13 +245,9 @@ namespace ui
                     "Katana, remote grenades, .357, stubby shotgun, MAC-10, M4, laser sniper, rocket launcher.",
                     "Chainsaw, grenades, .357, combat shotgun, SMG, M4, laser sniper, minigun.",
                 };
-                rows.push_back(choiceRow(kLcs ? "Give weapon set" : "Give loadout", loadouts[g_loadout].name,
+                rows.push_back(choiceRow("Give weapon set", loadouts[g_loadout].name,
                                          [n = static_cast<int>(loadouts.size())](int d) { g_loadout = wrap(g_loadout + d, n); },
-                                         [] { tr::giveLoadout(g_loadout); },
-                                         kLcs ? kSets[std::clamp(g_loadout, 0, 2)]
-                                              : "Street: bat, molotovs, pistol, shotgun, micro SMG. Military: machete, grenades, "
-                                                "Equalizer, Spaz, AK, sniper, rocket launcher. Heavy: chainsaw, grenades, "
-                                                "Equalizer, Spaz, SMG, assault rifle, laser sniper, minigun."));
+                                         [] { tr::giveLoadout(g_loadout); }, kSets[std::clamp(g_loadout, 0, 2)]));
                 rows.push_back(toggleRow("Unlimited ammo", tr::UnlimitedAmmo, "Every weapon you carry stays full."));
                 rows.push_back(toggleRow("No reload", tr::NoReload, "The clip never runs out: fire without reloading."));
                 rows.push_back(toggleRow("Fast reload", tr::FastReload, "The game's own quick reload."));
@@ -274,8 +262,7 @@ namespace ui
             case Vehicles:
             {
                 const char *needCar = "Get in a vehicle first.";
-                rows.push_back(pageRow("Spawn vehicle", VehicleList, kLcs ? "Every car, bike and boat in the game."
-                                                                          : "Every car, bike, boat and aircraft in the game."));
+                rows.push_back(pageRow("Spawn vehicle", VehicleList, "Every car, bike and boat in the game."));
                 rows.push_back(toggleRow("Get in spawned vehicles", tr::WarpIntoSpawned,
                                          "On: you are put behind the wheel. Off: it appears ahead of you."));
                 rows.push_back(toggleRow("Vehicle invincible", tr::VehicleInvincible,
@@ -325,35 +312,8 @@ namespace ui
                     rows.push_back(actionRow(e.name, [id = e.id] { tr::teleport(id); }, "Enter: go there (in your vehicle, if you drive one)."));
                 break;
             case Camera:
-            {
-                if (kLcs)
-                {
-                    rows.push_back(toggleRow("Hide HUD", tr::HideHud, "No radar, money, weapon or stars: for clean pictures."));
-                    break;
-                }
-                rows.push_back(toggleRow("Free camera", tr::FreeCamera,
-                                         "Fly: W / A / S / D, E up, Q down, the mouse looks, Shift faster, Ctrl slower, "
-                                         "Z / X zoom. Gamepad: sticks, RT / LT, A / B, D-pad. The player waits. Hotkey: "
-                                         "F6 (Back + LB)."));
-                static const int kSpeeds[] = {5, 10, 20, 40, 80};
-                int at = 0;
-                while (at + 1 < static_cast<int>(std::size(kSpeeds)) && kSpeeds[at] < tr::freeCameraSpeed())
-                    ++at;
-                char speed[16];
-                std::snprintf(speed, sizeof(speed), "%d m/s", kSpeeds[at]);
-                rows.push_back(choiceRow("Free camera speed", speed,
-                                         [at](int d) {
-                                             const int n = static_cast<int>(std::size(kSpeeds));
-                                             tr::setFreeCameraSpeed(kSpeeds[std::clamp(at + d, 0, n - 1)]);
-                                         },
-                                         [] { tr::setFreeCameraSpeed(20); }, "Left / Right: slower or faster. Enter: 20 m/s."));
-                rows.push_back(actionRow("Teleport player here", tr::teleportToCamera,
-                                         tr::toggle(tr::FreeCamera) ? "Puts you on the ground below the camera and ends it."
-                                                                    : "Turn the free camera on first.",
-                                         tr::toggle(tr::FreeCamera)));
                 rows.push_back(toggleRow("Hide HUD", tr::HideHud, "No radar, money, weapon or stars: for clean pictures."));
                 break;
-            }
             case World:
             {
                 char hour[16];
@@ -433,8 +393,8 @@ namespace ui
                 const ImVec2 ts = textSize(size, list[k].text.c_str());
                 const float w = ts.x + pad * 2.0f + 4.0f * s, h = ts.y + pad * 1.5f;
                 const ImVec2 p0(vp->Pos.x + vp->Size.x - 24.0f * s - w, y - h);
-                dl->AddRectFilled(p0, ImVec2(p0.x + w, p0.y + h), rgba(10, 8, 18, 0.82f * a));
-                dl->AddRectFilled(p0, ImVec2(p0.x + 4.0f * s, p0.y + h), rgba(255, 70, 170, a));
+                dl->AddRectFilled(p0, ImVec2(p0.x + w, p0.y + h), rgba(7, 10, 22, 0.86f * a));
+                dl->AddRectFilled(p0, ImVec2(p0.x + 4.0f * s, p0.y + h), rgba(246, 166, 35, a));
                 text(dl, size, ImVec2(p0.x + 4.0f * s + pad, p0.y + pad * 0.75f), rgba(255, 255, 255, a), list[k].text);
                 y -= h + 6.0f * s;
             }
@@ -446,15 +406,25 @@ namespace ui
             const float w = 400.0f * s;
             const float x = vp->Pos.x + 36.0f * s;
             float y = vp->Pos.y + 48.0f * s;
-            const ImU32 pink = rgba(255, 70, 170), violet = rgba(110, 40, 210), cyan = rgba(60, 220, 240);
+            // Liberty City Stories' pause menu: its red titles, orange tabs, pale blue options on the night's dark
+            const ImU32 pink = theme::kRed, cyan = theme::kOrange;
 
-            // header: the Vice City sunset
+            // header: the game's red, the title in the titles' face, the game's name in the tabs' orange
             const float headerH = 66.0f * s;
-            dl->AddRectFilledMultiColor(ImVec2(x, y), ImVec2(x + w, y + headerH), pink, violet, violet, pink);
-            const std::string title = "LCS TRAINER";
+            dl->AddRectFilledMultiColor(ImVec2(x, y), ImVec2(x + w, y + headerH), rgba(150, 14, 22), rgba(178, 18, 26),
+                                        rgba(110, 12, 18), rgba(90, 10, 14));
+            dl->AddRectFilled(ImVec2(x, y + headerH - 3.0f * s), ImVec2(x + w, y + headerH), theme::kOrange);
+            ImFont *titleFace = theme::titleFont() ? theme::titleFont() : ImGui::GetFont();
+            const std::string title = L("TRAINER");
             const float titleSize = 34.0f * s;
-            const ImVec2 ts = textSize(titleSize, title.c_str());
-            text(dl, titleSize, ImVec2(x + (w - ts.x) * 0.5f, y + (headerH - ts.y) * 0.5f), rgba(255, 255, 255), title, true);
+            const ImVec2 ts = titleFace->CalcTextSizeA(titleSize, FLT_MAX, 0.0f, title.c_str());
+            const ImVec2 at(x + (w - ts.x) * 0.5f, y + (headerH - ts.y) * 0.5f - 6.0f * s);
+            dl->AddText(titleFace, titleSize, ImVec2(at.x + 2.0f * s, at.y + 2.0f * s), rgba(0, 0, 0, 0.8f), title.c_str());
+            dl->AddText(titleFace, titleSize, at, rgba(255, 255, 255), title.c_str());
+            const char *game = "LIBERTY CITY STORIES";
+            const float gs = 13.0f * s;
+            const ImVec2 gsz = titleFace->CalcTextSizeA(gs, FLT_MAX, 0.0f, game);
+            dl->AddText(titleFace, gs, ImVec2(x + (w - gsz.x) * 0.5f, y + headerH - gsz.y - 7.0f * s), theme::kOrange, game);
             y += headerH;
 
             // the path and the position in the list
@@ -462,9 +432,9 @@ namespace ui
             dl->AddRectFilled(ImVec2(x, y), ImVec2(x + w, y + subH), rgba(0, 0, 0, 0.9f));
             std::string path;
             for (const Level &l : g_stack)
-                path += (path.empty() ? "" : "  >  ") + std::string(kPageTitles[l.page]);
+                path += (path.empty() ? "" : "  >  ") + L(kPageTitles[l.page]);
             if (g_stack.size() > 2) // the last two are enough
-                path = std::string(kPageTitles[g_stack[g_stack.size() - 2].page]) + "  >  " + kPageTitles[g_stack.back().page];
+                path = L(kPageTitles[g_stack[g_stack.size() - 2].page]) + "  >  " + L(kPageTitles[g_stack.back().page]);
             text(dl, 15.0f * s, ImVec2(x + 12.0f * s, y + (subH - 15.0f * s) * 0.5f), cyan, path);
             char count[32];
             std::snprintf(count, sizeof(count), "%d / %d", rows.empty() ? 0 : level.selected + 1, static_cast<int>(rows.size()));
@@ -475,7 +445,7 @@ namespace ui
             // the rows: as many as fit above the help and the keys (12 at most)
             const float rowH = 32.0f * s, padX = 14.0f * s;
             const float hs = 15.0f * s, wrapW = w - 2.0f * padX, ks = 13.0f * s;
-            const std::string &help = rows.empty() ? std::string() : rows[level.selected].help;
+            const std::string &help = rows.empty() ? std::string() : L(rows[level.selected].help);
             const float helpH = help.empty() ? 0.0f : textSize(hs, help.c_str(), wrapW).y + 20.0f * s;
             const float below = 20.0f * s + helpH + ks + 10.0f * s + 12.0f * s; // arrows, help, keys, margin
             const int visible = std::clamp(static_cast<int>((vp->Pos.y + vp->Size.y - y - below) / rowH), 4, 12);
@@ -489,16 +459,16 @@ namespace ui
                 dl->AddRectFilled(ImVec2(x, y), ImVec2(x + w, y + rowH), sel ? rgba(245, 245, 245, 0.97f) : rgba(8, 6, 14, 0.78f));
                 if (sel)
                     dl->AddRectFilled(ImVec2(x, y), ImVec2(x + 5.0f * s, y + rowH), pink);
-                const ImU32 col = !r.enabled ? (sel ? rgba(120, 120, 120) : rgba(120, 120, 130)) : sel ? rgba(15, 10, 20) : rgba(240, 240, 240);
+                const ImU32 col = !r.enabled ? (sel ? rgba(120, 120, 120) : rgba(120, 120, 130)) : sel ? rgba(15, 10, 20) : theme::kBlue;
                 const float ty = y + (rowH - rowSize) * 0.5f;
-                text(dl, rowSize, ImVec2(x + padX, ty), col, r.label);
+                text(dl, rowSize, ImVec2(x + padX, ty), col, L(r.label));
                 std::string value;
                 ImU32 vcol = col;
                 switch (r.kind)
                 {
-                case Value::On: value = "ON", vcol = rgba(40, 200, 110); break;
-                case Value::Off: value = "OFF", vcol = sel ? rgba(150, 40, 60) : rgba(230, 90, 110); break;
-                case Value::Choice: value = sel ? "<  " + r.value + "  >" : r.value; break;
+                case Value::On: value = L("ON"), vcol = rgba(40, 200, 110); break;
+                case Value::Off: value = L("OFF"), vcol = sel ? rgba(150, 40, 60) : rgba(230, 90, 110); break;
+                case Value::Choice: value = sel ? "<  " + L(r.value) + "  >" : L(r.value); break;
                 case Value::Page: value = ">"; break;
                 case Value::None: break;
                 }
@@ -530,9 +500,11 @@ namespace ui
                 dl->AddText(ImGui::GetFont(), hs, ImVec2(x + padX, y + 8.0f * s), rgba(225, 225, 225), help.c_str(), nullptr, wrapW);
                 y += h;
             }
-            const std::string keys = "Up/Down: select   Left/Right: change   Enter: apply   Backspace: back";
+            const std::string keys = L("Up/Down: select   Left/Right: change   Enter: apply   Backspace: back");
             dl->AddRectFilled(ImVec2(x, y), ImVec2(x + w, y + ks + 10.0f * s), rgba(0, 0, 0, 0.7f));
-            text(dl, ks, ImVec2(x + padX, y + 5.0f * s), rgba(170, 170, 180), keys);
+            // smaller when the language's line is longer than the panel
+            const float kw = textSize(ks, keys.c_str()).x, fit = kw > wrapW ? ks * wrapW / kw : ks;
+            text(dl, fit, ImVec2(x + padX, y + 5.0f * s + (ks - fit) * 0.5f), rgba(170, 170, 180), keys);
         }
     }
 
@@ -546,12 +518,6 @@ namespace ui
         const bool chordPressed = chord && !g_chordWasDown;
         g_chordWasDown = chord;
         const int key = settings::value("controls.trainer_key");
-        // the free camera's own hotkey (any time, the trainer open or not)
-        const bool camChord = padDown(platform::GAMEPAD_BACK) && padDown(platform::GAMEPAD_LEFT_SHOULDER);
-        const bool camChordPressed = camChord && !g_camChordWasDown;
-        g_camChordWasDown = camChord;
-        if (!kLcs && !settingsMenuOpen() && (pressedKey(settings::value("controls.freecam_key")) || camChordPressed))
-            tr::setToggle(tr::FreeCamera, !tr::toggle(tr::FreeCamera));
         if (settingsMenuOpen()) // one menu at a time
         {
             if (g_open)

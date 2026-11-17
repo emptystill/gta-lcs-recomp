@@ -17,6 +17,7 @@ namespace settings
     {
         std::vector<Spec> g_specs;
         std::unordered_map<std::string, size_t> g_index;
+        std::unordered_map<std::string, std::string> g_legacyEnv; // [lcs] key -> its VCS_* environment name
         std::unordered_map<std::string, int> g_values, g_startValues;
         std::mutex g_mutex; // g_values (read from other threads)
         std::filesystem::path g_ini;
@@ -110,6 +111,13 @@ namespace settings
 
     void add(Spec spec)
     {
+        // [lcs] the environment overrides are LCS_* (what the menu shows); the VCS_* name the code was written with
+        // still works, for the test tools that set it (DECISIONS.md 2026-11-17: nothing VCS in what the player sees)
+        if (spec.env.rfind("VCS_", 0) == 0)
+        {
+            g_legacyEnv[spec.key] = spec.env;
+            spec.env = "LCS_" + spec.env.substr(4);
+        }
         g_index[spec.key] = g_specs.size();
         {
             std::lock_guard<std::mutex> lock(g_mutex);
@@ -197,7 +205,11 @@ namespace settings
                 take(s, it->second, iniName.c_str());
             else if (auto old = found.find(s.alias); !s.alias.empty() && old != found.end())
                 take(s, old->second, iniName.c_str());
-            if (const char *e = s.env.empty() ? nullptr : std::getenv(s.env.c_str()); e && *e)
+            const char *e = s.env.empty() ? nullptr : std::getenv(s.env.c_str());
+            if (!(e && *e))
+                if (const auto legacy = g_legacyEnv.find(s.key); legacy != g_legacyEnv.end())
+                    e = std::getenv(legacy->second.c_str());
+            if (e && *e)
             {
                 take(s, e, s.env.c_str());
                 g_overridden.insert(s.key);

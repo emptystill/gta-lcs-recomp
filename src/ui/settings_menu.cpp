@@ -10,6 +10,8 @@
 #include "platform/platform.h"
 #include "runtime/ps2_control.h"
 #include "settings/settings.h"
+#include "ui/i18n.h"
+#include "ui/theme.h"
 
 #include "imgui.h"
 
@@ -40,6 +42,15 @@ namespace ui
         std::string g_navFocused; // the row whose control had keyboard / gamepad focus last frame
 
         using platform::keyName;
+        using i18n::tr;
+        using i18n::trc;
+
+        // a translated sentence with one %s
+        std::string fmt1(const std::string &pattern, const std::string &arg)
+        {
+            const size_t at = pattern.find("%s");
+            return at == std::string::npos ? pattern : pattern.substr(0, at) + arg + pattern.substr(at + 2);
+        }
 
         // Keys the menu keys may not take: the menu's own (Escape, Enter, arrows, Q / E, Backspace, Space), the
         // modifiers and the mouse. Clashes with control bindings are the group's business (settings::Spec::group).
@@ -91,7 +102,7 @@ namespace ui
                     {
                         if (!o.optional || !s.optional) // a menu key never takes a control's key, nor gives its own
                         {
-                            g_refusal = std::string(keyName(key)) + " is already \"" + o.label + "\" (" + o.page + ").";
+                            g_refusal = fmt1(fmt1(fmt1(tr("%s is already \"%s\" (%s)."), keyName(key)), tr(o.label)), tr(o.page));
                             return false;
                         }
                         settings::set(o.key, 0);
@@ -139,16 +150,16 @@ namespace ui
         // What the help area shows for a setting.
         std::string helpText(const settings::Spec &s)
         {
-            std::string text = s.help;
+            std::string text = tr(s.help);
             if (s.apply == settings::Apply::Restart)
-                text += " Applies the next time the game starts.";
+                text += " " + tr("Applies the next time the game starts.");
             if (settings::overridden(s.key))
-                text += " Locked: the environment variable " + s.env + " sets it for this run (tools/run.py sets some for "
-                        "test runs); start the game without it to change it here.";
+                text += " " + fmt1(tr("Locked: the environment variable %s sets it for this run (tools/run.py sets some for "
+                                      "test runs); start the game without it to change it here."), s.env);
             else if (s.locked && s.locked())
-                text += " " + s.lockedNote;
+                text += " " + tr(s.lockedNote);
             if (s.type == settings::Type::Key && s.optional)
-                text += " Click, then press a key or mouse button or turn the wheel (Esc: cancel). Right-click: clear.";
+                text += " " + tr("Click, then press a key or mouse button or turn the wheel (Esc: cancel). Right-click: clear.");
             return text;
         }
 
@@ -168,7 +179,8 @@ namespace ui
             const int v = settings::value(s.key);
             if (g_capturing == s.key)
             {
-                ImGui::Button(s.optional ? "Press a key or button... (Esc)###k" : "Press a key... (Esc: cancel)###k", ImVec2(width, 0));
+                ImGui::Button((tr(s.optional ? "Press a key or button... (Esc)" : "Press a key... (Esc: cancel)") + "###k").c_str(),
+                              ImVec2(width, 0));
                 note();
                 if (!g_captureArmed)
                 {
@@ -222,11 +234,11 @@ namespace ui
             const float top = ImGui::GetCursorScreenPos().y - style.CellPadding.y;
             ImGui::AlignTextToFramePadding();
             if (byEnv) // greyed out with the reason beside it, so a click that does nothing doesn't look like a bug
-                ImGui::TextDisabled("%s (%s)", s.label.c_str(), s.env.c_str());
+                ImGui::TextDisabled("%s (%s)", trc(s.label.c_str()), s.env.c_str());
             else if (bySetting) // the reason is in the help line (lockedNote)
-                ImGui::TextDisabled("%s", s.label.c_str());
-            else
-                ImGui::TextUnformatted(s.label.c_str());
+                ImGui::TextDisabled("%s", trc(s.label.c_str()));
+            else // the game's options' pale blue
+                ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(theme::kBlue), "%s", trc(s.label.c_str()));
             if (restartPending(s))
             {
                 ImGui::SameLine();
@@ -247,7 +259,7 @@ namespace ui
             case settings::Type::Toggle:
             {
                 bool on = v != 0;
-                const bool changed = ImGui::Checkbox(on ? "On###v" : "Off###v", &on);
+                const bool changed = ImGui::Checkbox((tr(on ? "On" : "Off") + "###v").c_str(), &on);
                 noteItem();
                 if (changed)
                     settings::set(s.key, on ? 1 : 0);
@@ -256,13 +268,13 @@ namespace ui
             case settings::Type::Choice:
             {
                 auto current = std::find_if(s.choices.begin(), s.choices.end(), [&](const settings::Choice &c) { return c.value == v; });
-                const bool listOpen = ImGui::BeginCombo("##v", current != s.choices.end() ? current->label.c_str() : "?");
+                const bool listOpen = ImGui::BeginCombo("##v", current != s.choices.end() ? trc(current->label.c_str()) : "?");
                 noteItem();
                 if (listOpen)
                 {
                     for (const settings::Choice &c : s.choices)
                     {
-                        if (ImGui::Selectable(c.label.c_str(), c.value == v))
+                        if (ImGui::Selectable(trc(c.label.c_str()), c.value == v))
                             settings::set(s.key, c.value);
                         if (c.value == v)
                             ImGui::SetItemDefaultFocus();
@@ -302,7 +314,7 @@ namespace ui
             case settings::Type::Action:
             {
                 const bool confirming = g_confirming == s.key && ImGui::GetTime() < g_confirmUntil;
-                const std::string text = confirming ? "Click again to confirm" : s.button.empty() ? s.label : s.button;
+                const std::string text = tr(confirming ? "Click again to confirm" : s.button.empty() ? s.label : s.button);
                 const bool pressed = ImGui::Button((text + "###v").c_str(), ImVec2(-FLT_MIN, 0));
                 noteItem();
                 if (pressed)
@@ -408,6 +420,7 @@ namespace ui
 
         const ImGuiViewport *vp = ImGui::GetMainViewport();
         const float scale = std::max(1.0f, vp->Size.y / 720.0f);
+        theme::push();
         ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * scale * 1.25f);
         ImGui::SetNextWindowPos(ImVec2(vp->Pos.x + vp->Size.x * 0.5f, vp->Pos.y + vp->Size.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
         ImGui::SetNextWindowSize(ImVec2(std::min(vp->Size.x * 0.92f, 720.0f * scale), std::min(vp->Size.y * 0.88f, 540.0f * scale)),
@@ -422,10 +435,24 @@ namespace ui
         }
         const ImGuiWindowFlags flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse |
                                        ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollbar |
-                                       ImGuiWindowFlags_NoScrollWithMouse;
-        if (ImGui::Begin("Settings", nullptr, flags))
+                                       ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoTitleBar;
+        if (ImGui::Begin("###settings", nullptr, flags))
         {
             const ImGuiStyle &style = ImGui::GetStyle();
+            { // the header: the game's name small in the tab bar's orange, the menu's title large (the titles' face)
+                const float base = ImGui::GetFontSize();
+                ImGui::PushFont(theme::titleFont(), base * 1.9f);
+                ImGui::TextUnformatted(trc("SETTINGS"));
+                ImGui::PopFont();
+                ImGui::SameLine();
+                ImGui::PushFont(theme::titleFont(), base * 1.0f);
+                const char *game = "LIBERTY CITY STORIES";
+                const float gw = ImGui::CalcTextSize(game).x;
+                ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x - gw);
+                ImGui::SetCursorPosY(ImGui::GetCursorPosY() + base * 0.6f);
+                ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(theme::kOrange), "%s", game);
+                ImGui::PopFont();
+            }
             // LB / RB (or Q / E with the keyboard) switch pages
             if (n > 1 && g_capturing.empty() && !g_popupWasOpen)
             {
@@ -453,7 +480,7 @@ namespace ui
                 for (int i = 0; i < n; ++i)
                 {
                     const ImGuiTabItemFlags tf = g_selectPage == i ? ImGuiTabItemFlags_SetSelected : 0;
-                    if (ImGui::BeginTabItem(pages[i].c_str(), nullptr, tf))
+                    if (ImGui::BeginTabItem((tr(pages[i]) + "###" + pages[i]).c_str(), nullptr, tf))
                     {
                         g_page = i;
                         ImGui::EndTabItem();
@@ -482,7 +509,7 @@ namespace ui
                     float widest = 0.0f;
                     for (const settings::Spec &s : settings::all())
                         if (s.page == page && !s.hidden)
-                            widest = std::max(widest, ImGui::CalcTextSize(s.label.c_str()).x);
+                            widest = std::max(widest, ImGui::CalcTextSize(trc(s.label.c_str())).x);
                     const float avail = ImGui::GetContentRegionAvail().x;
                     if (avail > 0.0f)
                         labelShare = std::clamp((widest + ImGui::GetStyle().CellPadding.x * 2.0f + ImGui::GetFontSize()) / avail,
@@ -490,8 +517,12 @@ namespace ui
                 }
                 for (const std::string &section : sections(page))
                 {
-                    if (!section.empty())
-                        ImGui::SeparatorText(section.c_str());
+                    if (!section.empty()) // the tab bar's orange, as the game's own headings
+                    {
+                        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(theme::kOrange));
+                        ImGui::SeparatorText(trc(section.c_str()));
+                        ImGui::PopStyleColor();
+                    }
                     if (ImGui::BeginTable(section.c_str(), 2, ImGuiTableFlags_SizingStretchProp))
                     {
                         ImGui::TableSetupColumn("label", ImGuiTableColumnFlags_WidthStretch, labelShare);
@@ -524,7 +555,7 @@ namespace ui
             {
                 ImGui::PushTextWrapPos(0.0f);
                 if (!g_refusal.empty())
-                    ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.3f, 1.0f), "Not changed: %s", g_refusal.c_str());
+                    ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.3f, 1.0f), "%s", fmt1(tr("Not changed: %s"), g_refusal).c_str());
                 else if (helpSpec)
                 {
                     const std::string text = helpText(*helpSpec);
@@ -538,21 +569,21 @@ namespace ui
                     ImGui::PopFont();
                 }
                 else
-                    ImGui::TextDisabled("Point at or select a setting to see what it does.");
+                    ImGui::TextDisabled("%s", trc("Point at or select a setting to see what it does."));
                 ImGui::PopTextWrapPos();
             }
             ImGui::EndChild();
             if (anyRestart)
-                ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.3f, 1.0f), "* changed: applies the next time the game starts");
+                ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.3f, 1.0f), "%s", trc("* changed: applies the next time the game starts"));
             else
                 ImGui::TextUnformatted(" ");
 
-            if (ImGui::Button("Reset page to defaults"))
+            if (ImGui::Button((tr("Reset page to defaults") + "###reset").c_str()))
                 for (const settings::Spec &s : settings::all())
                     if (s.page == page && s.type != settings::Type::Action)
                         settings::set(s.key, s.defaultValue);
-            char hint[96];
-            std::snprintf(hint, sizeof(hint), "%s / Back+Start: close  Q/E, LB/RB: page", keyName(settings::value("controls.menu_key")));
+            char hint[160];
+            std::snprintf(hint, sizeof(hint), "%s", fmt1(tr("%s / Back+Start: close  Q/E, LB/RB: page"), keyName(settings::value("controls.menu_key"))).c_str());
             ImGui::SameLine();
             if (const float room = ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize(hint).x; room > 0.0f)
                 ImGui::SetCursorPosX(ImGui::GetCursorPosX() + room); // right-aligned
@@ -562,6 +593,7 @@ namespace ui
         g_wasFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
         ImGui::End();
         ImGui::PopFont();
+        theme::pop();
         g_popupWasOpen = ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel);
     }
 }

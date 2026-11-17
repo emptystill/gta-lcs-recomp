@@ -21,6 +21,7 @@
 // Values that must hold (health under god mode, ammo, the clip under no reload, the vehicle's health) are written into
 // the player's ped / vehicle every frame while their toggle is on.
 #include "game/lcs_trainer.h"
+#include "ui/i18n.h"
 #include "game/vcs_trainer.h"
 
 #include "ps2_runtime.h"
@@ -398,13 +399,62 @@ namespace
         return inRam(info) && ram[(info + static_cast<uint32_t>(model) * 0x14u + 0xCu) & kRamMask] == 1;
     }
 
-    void post(const std::string &text)
+    // A notice in the menus' language (ui/i18n.h): the whole text, or its English pattern with the name / number in it
+    // put back. The control channel's answers stay English (the test tools read them); the log too.
+    std::string shown(const std::string &text)
     {
+        if (!ui::i18n::spanish())
+            return text;
+        if (const std::string &whole = ui::i18n::tr(text); &whole != &text && whole != text)
+            return whole;
+        auto starts = [&](const char *p) { return text.rfind(p, 0) == 0; };
+        auto ends = [&](const char *p) {
+            const size_t n = std::strlen(p);
+            return text.size() >= n && text.compare(text.size() - n, n, p) == 0;
+        };
+        const auto T = [](const std::string &e) { return ui::i18n::tr(e); };
+        if (const size_t at = text.find(" on at "); at != std::string::npos) // Freeze time on at 12:30
+            return T(text.substr(0, at)) + ": " + T("on (notice)") + " " + T("at (time)") + " " + text.substr(at + 7);
+        if (ends(" on"))
+            return T(text.substr(0, text.size() - 3)) + ": " + T("on (notice)");
+        if (ends(" off"))
+            return T(text.substr(0, text.size() - 4)) + ": " + T("off (notice)");
+        if (starts("$") && ends(" added"))
+            return T("Added") + " " + text.substr(0, text.size() - 6);
+        if (starts("Wanted level "))
+        {
+            std::string rest = text.substr(13);
+            if (const size_t p = rest.find(" (this mission allows at most "); p != std::string::npos)
+                rest = rest.substr(0, p) + " (" + T("this mission allows at most") + " " + rest.substr(p + 30);
+            return T("Wanted level") + " " + rest;
+        }
+        if (starts("Weapon ") && ends(" given"))
+            return T("Weapon") + " " + T(text.substr(7, text.size() - 13)) + " " + T("given (set)");
+        if (ends(" given"))
+            return T(text.substr(0, text.size() - 6)) + " " + T("given (weapon)");
+        if (ends(" spawned"))
+            return text.substr(0, text.size() - 8) + " " + T("spawned");
+        if (starts("Teleported to "))
+            return T("Teleported to") + " " + T(text.substr(14));
+        if (starts("Position saved "))
+            return T("Position saved") + " " + text.substr(15);
+        if (starts("Time "))
+            return T("Time") + " " + text.substr(5);
+        if (starts("Weather: "))
+            return T("Weather") + ": " + T(text.substr(9));
+        if (starts("Game speed "))
+            return T("Game speed") + " " + text.substr(11);
+        return text;
+    }
+
+    void post(const std::string &english)
+    {
+        const std::string text = shown(english);
         std::lock_guard<std::mutex> lock(g_noticesMutex);
         g_notices.push_back({text, tr::now(), false});
         if (g_notices.size() > 16)
             g_notices.erase(g_notices.begin());
-        std::fprintf(stderr, "[trainer] %s\n", text.c_str());
+        std::fprintf(stderr, "[trainer] %s\n", english.c_str());
     }
 
     void queue(std::function<bool(uint8_t *, Scm &, std::string &)> build, ps2control::Reply reply = {},
