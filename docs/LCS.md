@@ -219,6 +219,11 @@ cropped. Display: **Wide menus and loading screens** (`display.fill_2d`, off; `L
   picture without a scissor of its own it takes the same enlargement instead of the squeeze (squeezed it lay over the
   enlarged logo; enlarged about the middle it went below the screen - hence the pivot). The pause menu's draws are
   scissored to x 80..558, so they keep their 4:3 shape over the enlarged backdrop.
+- **Changing page** the pause menu draws its text without that scissor for a few frames; the first rule (any
+  unscissored draw follows) enlarged and stretched it with the backdrop - the user saw the menu "double" at each page
+  change (found in a recording of their play, then 20 screenshots a second while changing page). Now only untextured
+  draws follow, and only until something textured is drawn after the picture (the menu's text and icons; a loading
+  screen draws nothing textured after its picture).
 - Found with the F12 draw list (`PS2X_HW_DUMP_KEY=1`) on the first loading screen and the pause menu's Controls page.
 - Off, as before: a loading screen at 4:3 between bars; LCS's pause menu shows wide with its backdrop squeezed into
   the middle (the menu primitives are not named by a classifier here, so no switch to 4:3).

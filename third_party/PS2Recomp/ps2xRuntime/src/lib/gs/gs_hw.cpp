@@ -478,7 +478,8 @@ namespace
         int8_t wide3d = -1; // [gta-recomp] recorded for a wide picture (frameWide): draws squeezed into the buffer; -1: not asked
         int8_t shown = -1;  // [gta-recomp] its shape, decided when executed (decideShape): 1 wide, 0 4:3
         bool menu = false;  // [gta-recomp] has primitives the classifier names as the game's menu (GSHwAnchorMenu)
-        bool cover = false; // [gta-recomp] gsHwSetFill2d: a full-screen picture was enlarged to cover the frame
+        bool cover = false; // [gta-recomp] gsHwSetFill2d: a full-screen picture was enlarged to cover the frame and
+                            // no other textured 2D drawn since (a loading screen, not a menu over its backdrop)
         uint64_t privRegs[15]{};
         // Display from CPU VRAM when no render target holds the displayed buffer.
         std::vector<uint32_t> cpuDisplay;
@@ -3732,14 +3733,19 @@ namespace
             // What the game draws over that picture without a scissor of its own goes with it: the loading screen's
             // progress bar, placed under the logo painted into the picture (Liberty City Stories: one 512x512 texture
             // drawn at y -77..523; squeezed to the middle, the bar was drawn over the enlarged logo). The menus over a
-            // backdrop keep their 4:3 shape: their draws are scissored to x 80..558 (the pause menu).
+            // backdrop keep their 4:3 shape: their draws are scissored to x 80..558 (the pause menu) - but not while it
+            // changes page (its text was enlarged with the backdrop for a few frames: "shown double", the user,
+            // 2026-11-17). So only untextured draws follow (the bar), and only while nothing textured came after the
+            // picture (the menu's text and icons end it).
             bool followCover = false;
             if (wide && s.fbw == 10u && g_fill2d.load(std::memory_order_relaxed) && !m_frame->had3d)
             {
                 const bool picture = s.tme && !s.texIsRt && x0 <= 1.0f && x1 >= 639.0f && y0 <= 1.0f && y1 >= 447.0f;
                 if (picture)
                     m_frame->cover = true;
-                followCover = !picture && m_frame->cover && far && s.scx0 == 0u && s.scx1 >= 639u &&
+                else if (s.tme && far)
+                    m_frame->cover = false;
+                followCover = !picture && m_frame->cover && !s.tme && far && s.scx0 == 0u && s.scx1 >= 639u &&
                               !(x0 <= 1.0f && x1 >= 639.0f);
                 // enlarged about three quarters down, not the middle: the progress bar (y 392..410) stays on screen
                 // (at 434 of 448 at 16:9; about the middle it went below the picture), the crop mostly at the top
