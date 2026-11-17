@@ -59,6 +59,9 @@ namespace launcher
     {
     public:
         bool init(std::string &error);
+        // [lcs] the language: 0 English, 1 Spanish - lcs.ini's ui.language (the game's menus'), Spanish when unset
+        int language = 1;
+        void setLanguage(int lang); // to core::i18n and lcs.ini
         void update(double now); // polls the processes; call every frame
 
         // the repository (where tools/build.py is) and its build folder

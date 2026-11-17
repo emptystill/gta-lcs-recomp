@@ -193,6 +193,17 @@ namespace screens
             }
             divider(r, y);
 
+            // [lcs] the language: the game's menus' too (lcs.ini ui.language, DECISIONS.md 2026-11-17)
+            section(r, y, "LANGUAGE / IDIOMA");
+            {
+                int selected = app.language;
+                if (ui::segmented("#language", {r.x, y, std::min(r.w, px(340)), px(38)}, {"English##en", "Español##es"}, selected))
+                    app.setLanguage(selected);
+                y += px(48);
+                text(r, y, "The launcher's and the game's menus (F2, F5). The game's own text is the disc's.", theme::kFaint);
+            }
+            divider(r, y);
+
             section(r, y, "THIS LAUNCHER");
             {
                 const Rect line{r.x, y, r.w, px(30)};

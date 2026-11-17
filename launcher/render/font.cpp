@@ -1,5 +1,7 @@
 #include "font.h"
 
+#include "core/i18n.h"
+
 #include "draw.h"
 #include "font_raster.h"
 #include "icons.h"
@@ -245,6 +247,10 @@ namespace render
         if (const char *file = std::getenv("VCS_BRAND_FONT"); brand < 0 && file && *file)
             brand = raster::loadFaceFile(file);
         g_brandFound = brand >= 0;
+        // without Pricedown, a heavy condensed face of the system's (the comic cover's captions, the wordmark)
+        if (brand < 0)
+            brand = raster::loadFace({R{"Impact", 400}, R{"Haettenschweiler", 400}, R{"DIN Condensed", 700},
+                                      R{"Anton", 400}, R{"Oswald", 700}});
         if (ui < 0)
         {
             error = "no usable system font";
@@ -304,7 +310,17 @@ namespace render
                 std::ceil((m.ascent + m.descent + m.lineGap) * scale), std::ceil(m.capHeight * scale)};
     }
 
-    float measure(Font font, float px, std::string_view text)
+    float measureRaw(Font font, float px, std::string_view text);
+    float drawTextRaw(Font font, float px, float x, float baseline, core::Color color, std::string_view text, float blur);
+
+    // [lcs] what is measured and drawn is in the launcher's language (core/i18n.h); the Raw ones take the text as it is
+    float measure(Font font, float px, std::string_view text) { return measureRaw(font, px, core::i18n::tr(text)); }
+    float drawText(Font font, float px, float x, float baseline, core::Color color, std::string_view text, float blur)
+    {
+        return drawTextRaw(font, px, x, baseline, color, core::i18n::tr(text), blur);
+    }
+
+    float measureRaw(Font font, float px, std::string_view text)
     {
         if (!g_ready)
             return 0;
@@ -320,7 +336,7 @@ namespace render
         return x;
     }
 
-    float drawText(Font font, float px, float x, float baseline, core::Color color, std::string_view text, float blur)
+    float drawTextRaw(Font font, float px, float x, float baseline, core::Color color, std::string_view text, float blur)
     {
         if (!g_ready)
             return x;
@@ -367,13 +383,15 @@ namespace render
         glyph({x, y, float(g.w), float(g.h)}, uv, color);
     }
 
-    std::string ellipsize(Font font, float px, std::string_view text, float width)
+    std::string ellipsize(Font font, float px, std::string_view english, float width)
     {
-        if (measure(font, px, text) <= width)
+        const std::string translated = core::i18n::tr(english);
+        const std::string_view text = translated;
+        if (measureRaw(font, px, text) <= width)
             return std::string(text);
         // one pass: keep whole characters while they and the ellipsis fit
         const int size = roundSize(px);
-        const float room = width - measure(font, px, "\xE2\x80\xA6");
+        const float room = width - measureRaw(font, px, "\xE2\x80\xA6");
         float x = 0;
         size_t keep = 0;
         char32_t previous = 0;
@@ -392,8 +410,10 @@ namespace render
         return cut + "\xE2\x80\xA6";
     }
 
-    std::vector<std::string> wrap(Font font, float px, std::string_view text, float width)
+    std::vector<std::string> wrap(Font font, float px, std::string_view english, float width)
     {
+        const std::string translated = core::i18n::tr(english);
+        const std::string_view text = translated;
         std::vector<std::string> lines;
         size_t start = 0;
         while (start <= text.size())
@@ -409,7 +429,7 @@ namespace render
                     end = para.size();
                 std::string word(para.substr(at, end - at));
                 // a word wider than the line (a path) is broken: after a separator where it can, else anywhere
-                while (measure(font, px, word) > width && word.size() > 1)
+                while (measureRaw(font, px, word) > width && word.size() > 1)
                 {
                     if (!line.empty())
                     {
@@ -421,7 +441,7 @@ namespace render
                     {
                         size_t next = i;
                         nextCodepoint(word, next);
-                        if (measure(font, px, std::string_view(word).substr(0, next)) > width)
+                        if (measureRaw(font, px, std::string_view(word).substr(0, next)) > width)
                             break;
                         cut = next;
                         if (word[i] == '\\' || word[i] == '/' || word[i] == '-' || word[i] == '_')
@@ -436,7 +456,7 @@ namespace render
                     word = word.substr(cut);
                 }
                 const std::string candidate = line.empty() ? word : line + " " + word;
-                if (!line.empty() && measure(font, px, candidate) > width)
+                if (!line.empty() && measureRaw(font, px, candidate) > width)
                 {
                     lines.push_back(line);
                     line = word;

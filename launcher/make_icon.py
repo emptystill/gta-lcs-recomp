@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Draws the launcher's icon (launcher.ico): Home's backdrop in a rounded square - Vice City at dusk, a striped hot-pink
-sun going down behind the art deco towers of the beach, a line of light on the horizon and the sun on the sea. Colours
-are the dark palette's (launcher/ui/theme.h). And the game's (src/lcs.ico, lcs.exe's): the same scene by day, in the
-light palette's pinks with an orange sun and no stars, so the two programs don't look alike in Explorer or the taskbar.
+"""Draws the launcher's icon (launcher.ico): Liberty City Stories' comic cover in a rounded square - a made man's black
+fedora on a red disc ringed in the pause menu's orange, over a night-blue ground with halftone dots (launcher/ui/theme.h,
+screens/backdrop.cpp). And the game's (src/lcs.ico, lcs.exe's): the same fedora on the orange alone, so the two
+programs don't look alike in Explorer or the taskbar (DECISIONS.md 2026-11-17: nothing of Vice City's in the look).
 Standard library only.
 
     python launcher/make_icon.py            writes launcher/launcher.ico (16, 20, 24, 32, 40, 48, 64, 256 px),
@@ -37,26 +37,16 @@ WHITE = rgb(0xFFFFFF)
 
 
 class Palette:
-    def __init__(self, night, sky, horizon, sea, pink, pink_hi, skyline, lights, sun_top, far, sea_far, stars,
-                 haze=1.0):
-        self.night, self.sky, self.horizon, self.sea = rgb(night), rgb(sky), rgb(horizon), rgb(sea)
-        self.pink, self.pink_hi, self.skyline, self.lights = rgb(pink), rgb(pink_hi), rgb(skyline), rgb(lights)
-        self.sun_top = sun_top(self)
-        self.far = mix(self.skyline, self.horizon, far)  # the towers in the haze
-        self.sea_far = rgb(sea_far)                      # the sea at the icon's bottom edge
-        self.stars = stars
-        self.haze = haze  # the pink glow around the sun and just above the horizon (0: none)
+    def __init__(self, top, bottom, disc, ring, dots, band, disc_on=True):
+        self.top, self.bottom, self.disc, self.ring = rgb(top), rgb(bottom), rgb(disc), rgb(ring)
+        self.dots, self.band, self.disc_on = rgb(dots), rgb(band), disc_on
 
 
-# The launcher: dusk, theme.h's kDarkPalette
-DUSK = Palette(night=0x0A0A0B, sky=0x140A0F, horizon=0x3A0E24, sea=0x0F080B, pink=0xFF2E8B, pink_hi=0xFF62A8,
-               skyline=0x0B0709, lights=0xFFB8D6, sun_top=lambda p: mix(p.pink_hi, WHITE, 0.22),  # backdrop.cpp's sun
-               far=0.55, sea_far=0x0A0A0B, stars=True)
-# The game (lcs.exe): the same scene by day, from kLightPalette's pinks - a plain white sky (the user's choice), rose
-# towers, a sea that keeps enough colour at the bottom edge to stand apart from a white desktop or Explorer window
-DAY = Palette(night=0xFFFFFF, sky=0xFFFFFF, horizon=0xFFFFFF, sea=0xFFB3CF, pink=0xEC1A62, pink_hi=0xFF4C84,
-              skyline=0xD9618F, lights=0xFFF1F6, sun_top=lambda p: mix(rgb(0xFFB547), p.pink_hi, 0.35),
-              far=0.4, sea_far=0xF58AB2, stars=False, haze=0.0)
+INK = rgb(0x07080D)
+# The launcher: night blue, a red disc ringed in orange
+DUSK = Palette(top=0x1E2F63, bottom=0x05070F, disc=0xB8141E, ring=0xF6A623, dots=0x2D5C9E, band=0x7A0C13)
+# The game (lcs.exe): the orange square itself, no disc
+DAY = Palette(top=0xFFC65E, bottom=0xE8901A, disc=0xB8141E, ring=0xF6A623, dots=0xFFE3A6, band=0xB8141E, disc_on=False)
 
 
 def hash01(n):
@@ -70,149 +60,71 @@ def hash01(n):
     return (n & 0xFFFFFF) / 16777216
 
 
+def in_poly(poly, x, y):
+    inside = False
+    j = len(poly) - 1
+    for i in range(len(poly)):
+        xi, yi = poly[i]
+        xj, yj = poly[j]
+        if (yi > y) != (yj > y) and x < (xj - xi) * (y - yi) / (yj - yi) + xi:
+            inside = not inside
+        j = i
+    return inside
+
+
 class Scene:
-    """The icon's shapes for one size, in [0, 1) units; edges on whole pixels when the icon is small."""
+    """The icon's shapes for one size, in [0, 1) units."""
 
     def __init__(self, size, pal=DUSK):
         self.size = size
         self.p = pal
-        small = size <= 64
-        q = (lambda v: round(v * size) / size) if small else (lambda v: v)
         self.radius = 0.19  # the rounded square's corners
-        self.horizon = q(0.70)
-        self.sun = (0.5, self.horizon - 0.15, 0.33)
-        # the sun's stripes: gaps that widen toward the horizon (backdrop.cpp's yAt and gap)
-        cx, cy, r = self.sun
-        start, span = cy - r * 0.25, self.horizon - (cy - r * 0.25)
-        self.gaps = []
-        if small:  # whole rows of pixels, counted up from the horizon's line: one-pixel slices of sun between them
-            rows = {16: [2, 4], 20: [2, 4], 24: [2, 4, 6], 32: [2, 3, 5, 7], 40: [2, 3, 5, 8],
-                    48: [2, 3, 5, 6, 9], 64: [2, 3, 4, 6, 7, 10, 14]}[size]
-            self.gaps = [(self.horizon - (k + 1) / size, self.horizon - k / size) for k in rows]
-        else:
-            bands = 5
-            for k in range(bands):
-                u0, u1 = k / bands, (k + 1) / bands
-                gap = 0.2 + 0.5 * (u0 + u1) * 0.5
-                y_at = lambda u: start + span * u * (1.35 - 0.35 * u)
-                self.gaps.append((y_at(u0 + (u1 - u0) * (1 - gap)), y_at(u1)))
-        # the towers in front, each (left, right, height, style): 0 flat, 1 stepped, 2 parapet, 3 crown and spire. The
-        # tall one stands against the sun's left side, the low middle leaves its stripes clear
-        h = self.horizon
-        towers = [(0.07, 0.19, 0.15, 1), (0.185, 0.305, 0.31, 3), (0.30, 0.395, 0.12, 2),
-                  (0.615, 0.725, 0.21, 1), (0.72, 0.835, 0.13, 2), (0.83, 0.94, 0.085, 0)]
-        if size <= 20:  # too small for a skyline: the sun and the sea
-            towers = []
-        self.towers = []
-        for left, right, height, style in towers:
-            body = (q(left), q(h - height), q(right), h + 0.01)
-            w, top = body[2] - body[0], body[1]
-            parts = [body]
-            if style == 1:
-                parts += [(q(left + w * 0.14), q(top - height * 0.08), q(right - w * 0.14), top + 0.001),
-                          (q(left + w * 0.30), q(top - height * 0.15), q(right - w * 0.30), top + 0.001)]
-            elif style == 2:
-                parts += [(q(left + w * 0.08), q(top - height * 0.04), q(right - w * 0.08), top + 0.001),
-                          (q(left + w * 0.36), q(top - height * 0.10), q(right - w * 0.36), top + 0.001)]
-            elif style == 3:
-                spire = max(0.012, 1 / size)
-                mid = (left + right) / 2
-                parts += [(q(left + w * 0.18), q(top - height * 0.07), q(right - w * 0.18), top + 0.001),
-                          (q(mid - spire / 2), q(top - height * 0.30), q(mid - spire / 2) + spire, top + 0.001)]
-            self.towers.append((body, parts))
-        # the far row in the haze: low, irregular, all along the horizon
-        self.far = []
-        x, i = 0.0, 0
-        while x < 1 and size > 20:
-            bw = 0.035 + 0.04 * hash01(i * 13 + 1)
-            bh = (0.02 + 0.05 * hash01(i * 13 + 2)) * (0.3 + 0.7 * min(1.0, abs(x + bw / 2 - 0.5) / 0.22))
-            self.far.append((x, h - bh, x + bw + 0.002, h + 0.01))
-            x += bw
-            i += 1
-        # lit windows (large sizes): a grid on each tower, about a third on
-        self.windows = []
-        if size >= 128:
-            ww, wh, gx, gy = 0.011, 0.015, 0.026, 0.034
-            for b, ((x0, y0, x1, y1), _) in enumerate(self.towers):
-                cols = int((x1 - x0 - 0.02) / gx)
-                rows = int((h - y0 - 0.03) / gy)
-                left = x0 + (x1 - x0 - (cols - 1) * gx - ww) / 2
-                for row in range(rows):
-                    for col in range(cols):
-                        if hash01(b * 977 + row * 31 + col + 11) < 0.42:
-                            wx, wy = left + col * gx, y0 + 0.03 + row * gy
-                            a = 0.55 + 0.45 * hash01(b * 977 + row * 31 + col + 5003)
-                            self.windows.append((wx, wy, wx + ww, wy + wh, a))
-        # stars (large sizes): high in the sky, away from the sun
-        self.stars = []
-        if size >= 128 and pal.stars:
-            for i in range(28):
-                sx, sy = 0.06 + 0.88 * hash01(i * 3), 0.05 + 0.32 * hash01(i * 3 + 1) ** 1.4
-                if math.hypot(sx - cx, sy - cy) < r + 0.06:
-                    continue
-                self.stars.append((sx, sy, 0.003 + 0.0035 * hash01(i * 11), 0.3 + 0.5 * hash01(i * 3 + 2)))
-        # the sun on the sea: short lines, narrowing and fading with depth
-        lines = 2 if size <= 20 else 3 if size <= 32 else 5 if small else 6
-        self.reflection = []
-        for i in range(lines):
-            if small:
-                y, th, a = q(h + (0.045 + 0.07 * i) * (0.30 / (h * 0.43))), max(0.018, 1 / size), 1 - 0.14 * i
-                width = q(r * (1.5 - 0.22 * i) / 2) * 2
-            else:  # closer together near the horizon, thinner and fainter going out
-                y, th, a = h + 0.035 + 0.03 * i + 0.006 * i * i, 0.012 - 0.0008 * i, 0.85 - 0.11 * i
-                width = r * (1.55 - 0.17 * i)
-            self.reflection.append((y, th, width, a))
-
-
-def inside(rect, x, y):
-    return rect[0] <= x < rect[2] and rect[1] <= y < rect[3]
+        self.disc = (0.5, 0.5, 0.40)
+        self.ring = 0.045 if size > 32 else 0.07
+        self.edge = max(0.014, 1.2 / size)  # the ring's black outline
+        # the fedora: a crown pinched at the top (its dent), a band, a wide brim
+        y = 0.04 if pal.disc_on else 0.0
+        self.crown = [(0.30, 0.62 + y), (0.345, 0.36 + y), (0.44, 0.31 + y), (0.50, 0.345 + y), (0.56, 0.31 + y),
+                      (0.655, 0.36 + y), (0.70, 0.62 + y)]
+        self.band = (0.55 + y, 0.615 + y)
+        self.brim = (0.5, 0.64 + y, 0.37 if not pal.disc_on else 0.33, 0.06)  # centre, half-width, half-height
+        self.dots = size >= 64
 
 
 def pixel(S, x, y):
-    """RGBA of the icon at (x, y) in [0, 1), as floats; supersampled by the caller."""
+    """RGB of the icon at (x, y) in [0, 1), as floats (None outside the rounded square); supersampled by the caller."""
     r = S.radius
     cx, cy = min(max(x, r), 1 - r), min(max(y, r), 1 - r)
     if (x - cx) ** 2 + (y - cy) ** 2 > r * r:
         return None
-    h = S.horizon
-    sx, sy, sr = S.sun
-    d = math.hypot(x - sx, y - sy)
     P = S.p
-    NIGHT, SKY, HORIZON, SEA, PINK, PINK_HI = P.night, P.sky, P.horizon, P.sea, P.pink, P.pink_hi
-    SKYLINE, LIGHTS, SUN_TOP, FAR = P.skyline, P.lights, P.sun_top, P.far
-    if y < h:
-        # the sky: dark up high, the horizon's glow below, a pink haze around the sun
-        t = y / h
-        colour = mix(mix(SKY, NIGHT, t * 0.5), HORIZON, max(0.0, (t - 0.35) / 0.65) ** 1.4)
-        glow = 0.22 * P.haze * math.exp(-(d - sr) / (0.07 if S.size >= 128 else 0.04)) if d >= sr else 0
-        colour = mix(colour, PINK, glow)
-        for (px, py, pr, a) in S.stars:
-            if (x - px) ** 2 + (y - py) ** 2 < pr * pr:
-                colour = mix(colour, WHITE, a)
-        if d < sr and not any(g0 <= y < g1 for g0, g1 in S.gaps):
-            colour = mix(SUN_TOP, PINK, (y - (sy - sr)) / (h - (sy - sr)))
-        for rect in S.far:
-            if inside(rect, x, y):
-                colour = FAR
-        for body, parts in S.towers:
-            if any(inside(p, x, y) for p in parts):
-                colour = SKYLINE
-        for (x0, y0, x1, y1, a) in S.windows:
-            if x0 <= x < x1 and y0 <= y < y1:
-                colour = mix(SKYLINE, LIGHTS, a)
-        # the horizon's line of light, and its glow just above
-        line = max(0.012, 1.0 / S.size)
-        if y >= h - line:
-            colour = mix(colour, PINK, 0.85)
-        elif y > h - 0.05:
-            colour = mix(colour, PINK, 0.25 * P.haze * (1 - (h - y) / 0.05) ** 2)
-    else:
-        t = (y - h) / (1 - h)
-        colour = mix(SEA, P.sea_far, t)
-        colour = mix(colour, PINK, 0.12 * math.exp(-abs(x - sx) / 0.12) * (1 - t))  # the sun's column on the water
-        for (ly, th, width, a) in S.reflection:
-            if ly <= y < ly + th and abs(x - sx) < width / 2:
-                colour = mix(colour, mix(PINK_HI, PINK, 1 - a), a)
+    colour = mix(P.top, P.bottom, y)
+    # halftone: dots on a slanted grid, larger toward the top right
+    if S.dots:
+        cell = 0.05
+        row = math.floor(y / cell)
+        gx = x / cell - (0.5 if row % 2 else 0.0)
+        dx, dy = (gx - math.floor(gx) - 0.5) * cell, (y / cell - row - 0.5) * cell
+        dr = cell * 0.42 * max(0.0, 1.0 - math.hypot(x - 0.95, y - 0.05) / 1.1)
+        if dx * dx + dy * dy < dr * dr:
+            colour = mix(colour, P.dots, 0.55)
+    if P.disc_on:
+        dcx, dcy, dr = S.disc
+        d = math.hypot(x - dcx, y - dcy)
+        if d < dr + S.edge:
+            colour = INK
+        if d < dr:
+            colour = P.ring
+        if d < dr - S.ring:
+            colour = INK
+        if d < dr - S.ring - S.edge * 0.6:
+            colour = P.disc
+    # the fedora
+    bx, by, bw, bh = S.brim
+    if ((x - bx) / bw) ** 2 + ((y - by) / bh) ** 2 < 1 or in_poly(S.crown, x, y):
+        colour = INK
+        if S.band[0] <= y < S.band[1] and in_poly(S.crown, x, y) and abs(x - 0.5) < 0.19:
+            colour = P.band
     return colour
 
 

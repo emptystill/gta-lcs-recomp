@@ -1,5 +1,7 @@
 #include "tasks.h"
 
+#include "core/i18n.h"
+
 #include "os.h"
 #include "system.h"
 
@@ -362,6 +364,15 @@ namespace launcher
                 sourceVersion = "development";
         }
         loadSettings();
+        // [lcs] the language the game's menus are in (lcs.ini ui.language; Spanish when unset, as the game's default)
+        {
+            std::ifstream in(build / "lcs.ini");
+            std::string line;
+            while (std::getline(in, line))
+                if (line.rfind("ui.language=", 0) == 0)
+                    language = trim(line.substr(12)) == "0" ? 0 : 1;
+            core::i18n::setSpanish(language == 1);
+        }
 
         // the disc lcs.exe would use
         std::string iniIso;
@@ -747,6 +758,28 @@ namespace launcher
             if (disc.ok)
                 return;
         }
+    }
+
+    void App::setLanguage(int lang)
+    {
+        language = lang == 0 ? 0 : 1;
+        core::i18n::setSpanish(language == 1);
+        // lcs.exe keeps the lines it doesn't own and reads ui.language as its own setting
+        const fs::path ini = build / "lcs.ini";
+        std::vector<std::string> lines;
+        {
+            std::ifstream in(ini);
+            std::string line;
+            while (std::getline(in, line))
+                if (line.rfind("ui.language=", 0) != 0)
+                    lines.push_back(line.empty() || line.back() != '\r' ? line : line.substr(0, line.size() - 1));
+        }
+        lines.push_back("ui.language=" + std::to_string(language));
+        std::error_code ec;
+        fs::create_directories(build, ec);
+        std::ofstream out(ini, std::ios::trunc | std::ios::binary);
+        for (const auto &l : lines)
+            out << l << "\n";
     }
 
     bool App::writeIsoToIni(const fs::path &path)

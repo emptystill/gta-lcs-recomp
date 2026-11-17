@@ -1,14 +1,15 @@
-// Behind everything: the sky and its glows, and on Home Vice City at dusk - a striped sun going down behind the towers
-// of the beach, over a sea that moves (the app icon's motif, launcher/make_icon.py), all drawn with the renderer's own
-// primitives. Alive while Home shows and the game isn't running: the sun's stripes slide toward the horizon, clouds
-// come, drift and go, far-off jets draw trails that spread and fade, windows go on and off, the sea's lines roll in
-// and the sun's reflection shimmers - at 30 frames a second (15 when the window isn't focused), slow enough to cost
-// almost nothing; standing still with reduce motion on. Every other screen draws once and sleeps. (A later option: art
-// from the player's own disc in this slot - docs/LAUNCHER.md.)
+// Behind everything: a night-blue sky and, on Home, a comic book's cover in Liberty City Stories' manner - three slanted
+// panels with thick black borders and flat colours on a halftone ground: a made man in a fedora with a cigarette (red),
+// Liberty City's skyline and its suspension bridge at dusk (orange), a 1970s sedan at speed (the game's pale blue), and
+// a caption box. Everything is drawn with the renderer's own primitives - no picture of the game's. Alive while Home
+// shows and the game isn't running: the smoke curls up, windows go on and off, searchlights sweep, the speed lines run,
+// the halftone breathes - at 30 frames a second (15 when the window isn't focused); standing still with reduce motion
+// on. Every other screen draws the sky once and sleeps. (DECISIONS.md 2026-11-17: the launcher's look is LCS's.)
 #include "shell.h"
 
 #include "platform/platform.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 
@@ -31,372 +32,307 @@ namespace screens
             return float(n & 0xFFFFFF) / 16777216.0f;
         }
 
-        float smooth(float a, float b, float x)
-        {
-            const float t = core::clamp01((x - a) / (b - a));
-            return t * t * (3 - 2 * t);
-        }
-
         struct Scene
         {
             float w = 0, h = 0, s = 0; // size, and the smaller side (what the scene scales with)
-            float horizon = 0;
             float t = 0;               // the ambient clock, seconds
-            bool mirror = false;       // drawing the reflection: y flips about the horizon
-            float y(float v) const { return mirror ? 2 * horizon - v : v; }
         };
 
-        // a rectangle standing on the scene (mirrored in the sea when reflecting)
-        void block(const Scene &S, Rect r, Color c, Corners radius = {})
+        // the comic's own colours (both palettes: the panels are printed, they don't follow the theme)
+        constexpr Color kInk = core::rgb(0x07080D);
+        constexpr Color kPanelRed = core::rgb(0xB8141E);
+        constexpr Color kPanelRedDark = core::rgb(0x7A0C13);
+        constexpr Color kPanelOrange = core::rgb(0xF4A12A);
+        constexpr Color kPanelOrangeHi = core::rgb(0xFFD27A);
+        constexpr Color kPanelBlue = core::rgb(0x2D5C9E);
+        constexpr Color kPanelBlueHi = core::rgb(0x7EB2E6);
+        constexpr Color kPaper = core::rgb(0xFFF3C4);
+        constexpr Color kWhite = core::rgb(0xF4F1EA);
+
+        struct Pt
         {
-            if (S.mirror)
-            {
-                r.y = 2 * S.horizon - r.y - r.h;
-                radius = Corners(radius.bl, radius.br, radius.tr, radius.tl);
-            }
-            rect(r, c, radius);
+            float x, y;
+        };
+        struct Panel
+        {
+            Pt p[4]; // clockwise from the top left, in the scene's fractions
+        };
+        // the three panels, in fractions of the window; gutters between them
+        constexpr Panel kPanels[] = {
+            {{{0.505f, 0.135f}, {0.705f, 0.115f}, {0.668f, 0.800f}, {0.505f, 0.800f}}}, // the made man
+            {{{0.725f, 0.112f}, {0.975f, 0.135f}, {0.975f, 0.445f}, {0.708f, 0.475f}}}, // the skyline
+            {{{0.704f, 0.505f}, {0.975f, 0.475f}, {0.975f, 0.800f}, {0.686f, 0.800f}}}, // the sedan
+        };
+
+        Pt at(const Scene &S, Pt f) { return {f.x * S.w, f.y * S.h}; }
+
+        void fillQuad(Pt a, Pt b, Pt c, Pt d, Color col)
+        {
+            const float q[8] = {a.x, a.y, b.x, b.y, c.x, c.y, d.x, d.y};
+            quad(q, col);
         }
 
-        // the towers of the beach: art deco - setbacks, parapets, a spire
-        struct Tower
+        // a panel: its drop shadow, the black border (the quad grown about its centre), the flat fill
+        void panel(const Scene &S, const Panel &P, Color fill, Rect &box)
         {
-            float x;      // left edge, a fraction of the width
-            float width;  // fractions of the scene's size
-            float height;
-            int style;    // 0 flat, 1 stepped, 2 a parapet, 3 spire
-        };
-        constexpr Tower kTowers[] = {
-            {0.425f, 0.050f, 0.095f, 1}, {0.468f, 0.036f, 0.158f, 3}, {0.500f, 0.058f, 0.118f, 2},
-            {0.551f, 0.040f, 0.072f, 0}, {0.583f, 0.048f, 0.092f, 1}, {0.900f, 0.046f, 0.084f, 2},
-            {0.938f, 0.052f, 0.128f, 1}, {0.982f, 0.044f, 0.070f, 0},
-        };
-
-        void tower(const Scene &S, const Tower &T, Color c, Rect &body)
-        {
-            const float bw = T.width * S.s, bh = T.height * S.s;
-            body = {T.x * S.w, S.horizon - bh, bw, bh + px(1)};
-            switch (T.style)
+            Pt p[4];
+            float cx = 0, cy = 0;
+            for (int i = 0; i < 4; ++i)
             {
-            case 1: // two setbacks
-                block(S, body, c);
-                block(S, {body.x + bw * 0.14f, body.y - bh * 0.08f, bw * 0.72f, bh * 0.08f + px(1)}, c);
-                block(S, {body.x + bw * 0.30f, body.y - bh * 0.15f, bw * 0.40f, bh * 0.07f + px(1)}, c);
-                break;
-            case 2: // a parapet, narrower, and a slab on it
-                block(S, body, c);
-                block(S, {body.x + bw * 0.08f, body.y - bh * 0.035f, bw * 0.84f, bh * 0.035f + px(1)}, c);
-                block(S, {body.x + bw * 0.38f, body.y - bh * 0.09f, bw * 0.24f, bh * 0.055f + px(1)}, c);
-                break;
-            case 3: // a crown and a spire
-                block(S, body, c);
-                block(S, {body.x + bw * 0.2f, body.y - bh * 0.06f, bw * 0.6f, bh * 0.06f + px(1)}, c);
-                block(S, {body.x + bw * 0.5f - px(1), body.y - bh * 0.30f, px(2), bh * 0.25f}, c);
-                break;
-            default:
-                block(S, body, c);
+                p[i] = at(S, P.p[i]);
+                cx += p[i].x * 0.25f;
+                cy += p[i].y * 0.25f;
             }
+            float x0 = 1e9f, y0 = 1e9f, x1 = -1e9f, y1 = -1e9f;
+            for (const Pt &q : p)
+            {
+                x0 = std::min(x0, q.x);
+                y0 = std::min(y0, q.y);
+                x1 = std::max(x1, q.x);
+                y1 = std::max(y1, q.y);
+            }
+            shadow({x0 + px(6), y0 + px(10), x1 - x0, y1 - y0}, withAlpha(kInk, 0.55f), px(14), px(4));
+            // what is drawn in it stays in the largest upright rectangle inside it (the renderer clips to rectangles):
+            // the slant leaves a strip of flat colour along an edge, as a printed panel's margin
+            const float ix0 = std::max(p[0].x, p[3].x), ix1 = std::min(p[1].x, p[2].x);
+            const float iy0 = std::max(p[0].y, p[1].y), iy1 = std::min(p[2].y, p[3].y);
+            box = {ix0, iy0, ix1 - ix0, iy1 - iy0};
+            const float b = px(4.5f);
+            auto grow = [&](Pt q) {
+                const float dx = q.x - cx, dy = q.y - cy, len = std::max(1.0f, std::sqrt(dx * dx + dy * dy));
+                return Pt{q.x + dx / len * b * 1.4f, q.y + dy / len * b * 1.4f};
+            };
+            fillQuad(grow(p[0]), grow(p[1]), grow(p[2]), grow(p[3]), kInk);
+            fillQuad(p[0], p[1], p[2], p[3], fill);
+        }
+
+        // halftone: dots on a slanted grid, larger toward `light` (a comic's printed shading); `breathe` swells them
+        void halftone(Rect area, float cell, Color col, Pt light, float reach, float breathe, float maxR)
+        {
+            pushClip(area);
+            for (float y = area.y - cell; y < area.y + area.h + cell; y += cell)
+            {
+                const int row = int((y - area.y) / cell);
+                for (float x = area.x - cell + (row & 1) * cell * 0.5f; x < area.x + area.w + cell; x += cell)
+                {
+                    const float d = std::sqrt((x - light.x) * (x - light.x) + (y - light.y) * (y - light.y)) / reach;
+                    const float r = maxR * std::clamp(1.0f - d, 0.0f, 1.0f) * (0.85f + 0.15f * breathe);
+                    if (r > px(0.6f))
+                        circle(x, y, r, col);
+                }
+            }
+            popClip();
+        }
+
+        // ---- panel 1: a made man - fedora, broad shoulders, a cigarette and its smoke ---------------------------------
+        void madeMan(const Scene &S, Rect box)
+        {
+            pushClip({box.x + px(2), box.y + px(2), box.w - px(4), box.h - px(4)});
+            halftone(box, px(9), withAlpha(kPanelRedDark, 0.9f), {box.x + box.w * 0.15f, box.y + box.h * 0.95f}, box.h * 0.9f,
+                     0.5f + 0.5f * std::sin(S.t * 0.6f), px(4));
+            const float W = box.w, H = box.h, cx = box.x + W * 0.47f, top = box.y;
+            const Color shape = kInk;
+            // sized by the panel's width (it is tall and narrow): a head a third of it, shoulders filling it
+            const float headR = W * 0.20f, hx = cx + W * 0.02f, hy = top + H * 0.40f;
+            const float shoulderY = hy + headR * 1.55f, bottom = box.y + box.h + px(4);
+            // shoulders and coat, the lapels' white edges, the shirt and tie
+            fillQuad({cx - W * 0.62f, bottom}, {cx - W * 0.34f, shoulderY}, {cx + W * 0.36f, shoulderY}, {cx + W * 0.66f, bottom}, shape);
+            fillQuad({cx - W * 0.09f, shoulderY}, {cx + W * 0.09f, shoulderY}, {cx + W * 0.04f, shoulderY + H * 0.22f},
+                     {cx - W * 0.04f, shoulderY + H * 0.22f}, kWhite);
+            fillQuad({cx - W * 0.03f, shoulderY + H * 0.01f}, {cx + W * 0.03f, shoulderY + H * 0.01f}, {cx + W * 0.045f, shoulderY + H * 0.20f},
+                     {cx - W * 0.045f, shoulderY + H * 0.20f}, kPanelRedDark);
+            line(cx - W * 0.09f, shoulderY, cx - W * 0.20f, shoulderY + H * 0.30f, px(3), kWhite);
+            line(cx + W * 0.09f, shoulderY, cx + W * 0.20f, shoulderY + H * 0.30f, px(3), kWhite);
+            // neck and head (turned a little to the right: the cigarette out on that side)
+            rect({hx - headR * 0.45f, hy, headR * 0.9f, shoulderY - hy + px(2)}, shape);
+            circle(hx, hy, headR, shape);
+            // the jaw's lit edge
+            arc(hx, hy, headR - px(2), px(2.5f), 0.15f, 1.25f, withAlpha(kPanelOrangeHi, 0.75f));
+            // the fedora: a crown with its dent and band, and the brim
+            const float brimY = hy - headR * 0.45f;
+            fillQuad({hx - headR * 0.90f, brimY}, {hx - headR * 0.72f, brimY - headR * 0.95f}, {hx + headR * 0.78f, brimY - headR * 1.0f},
+                     {hx + headR * 0.95f, brimY}, shape);
+            rect({hx - headR * 0.91f, brimY - headR * 0.32f, headR * 1.86f, headR * 0.22f}, kPanelRedDark);
+            rect({hx - headR * 1.55f, brimY - px(2), headR * 3.1f, headR * 0.22f}, shape, Corners(px(4)));
+            line(hx - headR * 0.1f, brimY - headR * 0.95f, hx + headR * 0.05f, brimY - headR * 0.70f, px(2), kPanelRedDark);
+            // the cigarette and its ember
+            const float mx = hx + headR * 0.75f, my = hy + headR * 0.45f;
+            line(mx, my, mx + headR * 0.85f, my + headR * 0.12f, px(3), kWhite);
+            const float glow = 0.75f + 0.25f * std::sin(S.t * 2.3f);
+            circle(mx + headR * 0.88f, my + headR * 0.12f, px(3.2f), mix(kPanelOrange, kPanelOrangeHi, glow));
+            // the smoke: puffs that rise, drift and fade, one after another
+            for (int i = 0; i < 9; ++i)
+            {
+                const float phase = std::fmod(S.t * 0.22f + i / 9.0f, 1.0f);
+                const float sx = mx + headR * 0.9f + std::sin(phase * 7.0f + i) * headR * 0.35f + phase * headR * 0.6f;
+                const float sy = my - phase * H * 0.42f;
+                const float r = px(3) + phase * headR * 0.55f;
+                circle(sx, sy, r, withAlpha(kWhite, 0.30f * (1.0f - phase) * std::min(1.0f, phase * 6.0f)));
+            }
+            popClip();
+        }
+
+        // ---- panel 2: Liberty City at dusk - towers, lit windows, the suspension bridge, searchlights --------------------
+        void skyline(const Scene &S, Rect box)
+        {
+            pushClip({box.x + px(2), box.y + px(2), box.w - px(4), box.h - px(4)});
+            const float W = box.w, H = box.h, ground = box.y + H * 0.80f;
+            // the low sun behind the city
+            circle(box.x + W * 0.30f, ground - H * 0.05f, H * 0.36f, withAlpha(kPanelOrangeHi, 0.85f));
+            halftone({box.x, box.y, W, H}, px(8), withAlpha(kPanelRedDark, 0.55f), {box.x + W, box.y}, H * 1.2f,
+                     0.5f + 0.5f * std::sin(S.t * 0.5f + 1.0f), px(3.2f));
+            // searchlights from behind the towers
+            for (int i = 0; i < 2; ++i)
+            {
+                const float bx = box.x + W * (0.38f + 0.34f * i), a = -1.57f + 0.45f * std::sin(S.t * (0.35f + 0.12f * i) + i * 2.1f);
+                const float len = H * 1.1f, spread = 0.05f;
+                fillQuad({bx - px(2), ground}, {bx + std::cos(a - spread) * len, ground + std::sin(a - spread) * len},
+                         {bx + std::cos(a + spread) * len, ground + std::sin(a + spread) * len}, {bx + px(2), ground},
+                         withAlpha(kPaper, 0.22f));
+            }
+            // the bridge: two towers, the main cables, hangers, the deck - off to the right, over the water
+            const float t0 = box.x + W * 0.70f, t1 = box.x + W * 0.93f, towerTop = ground - H * 0.46f, deck = ground - H * 0.12f;
+            for (float tx : {t0, t1})
+            {
+                rect({tx - px(3), towerTop, px(6), ground - towerTop}, kInk);
+                rect({tx - px(6), deck - px(10), px(12), px(4)}, kInk);
+            }
+            auto cable = [&](float xa, float ya, float xb, float yb, float sag) {
+                Pt prev{xa, ya};
+                for (int k = 1; k <= 12; ++k)
+                {
+                    const float u = k / 12.0f;
+                    const Pt p{xa + (xb - xa) * u, ya + (yb - ya) * u + sag * 4.0f * u * (1.0f - u)};
+                    line(prev.x, prev.y, p.x, p.y, px(2), kInk);
+                    if (k < 12 && k % 2 == 0)
+                        line(p.x, p.y, p.x, deck, px(1), withAlpha(kInk, 0.8f));
+                    prev = p;
+                }
+            };
+            cable(box.x + W * 0.52f, deck - px(2), t0, towerTop, -H * 0.02f);
+            cable(t0, towerTop, t1, towerTop, H * 0.27f);
+            cable(t1, towerTop, box.x + W * 1.05f, deck, -H * 0.02f);
+            rect({box.x + W * 0.50f, deck, W * 0.55f, px(5)}, kInk);
+            // the towers of Portland and Staunton: setbacks and water tanks, lit windows going on and off
+            struct Tower
+            {
+                float x, w, h;
+                int style;
+            };
+            constexpr Tower kTowers[] = {{0.02f, 0.09f, 0.34f, 1}, {0.10f, 0.07f, 0.52f, 2}, {0.17f, 0.10f, 0.40f, 0},
+                                         {0.27f, 0.06f, 0.62f, 3}, {0.33f, 0.09f, 0.45f, 1}, {0.42f, 0.07f, 0.30f, 2},
+                                         {0.49f, 0.08f, 0.38f, 0}, {0.57f, 0.05f, 0.24f, 0}};
+            uint32_t n = 0;
+            for (const Tower &T : kTowers)
+            {
+                const float bx = box.x + W * T.x, bw = W * T.w, bh = H * T.h, by = ground - bh;
+                rect({bx, by, bw, bh + px(2)}, kInk);
+                if (T.style == 1)
+                    rect({bx + bw * 0.2f, by - bh * 0.08f, bw * 0.6f, bh * 0.08f + px(1)}, kInk);
+                if (T.style == 2) // a water tank on legs
+                {
+                    rect({bx + bw * 0.25f, by - bh * 0.10f, bw * 0.5f, bh * 0.07f}, kInk, Corners(px(2), px(2), 0, 0));
+                    line(bx + bw * 0.3f, by - bh * 0.03f, bx + bw * 0.3f, by, px(1.5f), kInk);
+                    line(bx + bw * 0.7f, by - bh * 0.03f, bx + bw * 0.7f, by, px(1.5f), kInk);
+                }
+                if (T.style == 3) // a crown and a mast
+                {
+                    fillQuad({bx, by}, {bx + bw * 0.5f, by - bh * 0.12f}, {bx + bw * 0.5f, by - bh * 0.12f}, {bx + bw, by}, kInk);
+                    line(bx + bw * 0.5f, by - bh * 0.12f, bx + bw * 0.5f, by - bh * 0.25f, px(1.5f), kInk);
+                }
+                // windows: a grid, each lit or not, a few changing now and then
+                const float ww = std::max(px(2), bw * 0.12f), wh = std::max(px(2), H * 0.018f);
+                for (float wy = by + wh * 2; wy < ground - wh * 2; wy += wh * 2.4f)
+                    for (float wx = bx + ww; wx < bx + bw - ww; wx += ww * 2.0f)
+                    {
+                        ++n;
+                        const float slot = std::floor(S.t / (6.0f + 9.0f * hash(n * 7)));
+                        if (hash(n * 31u + uint32_t(slot) * 977u) < 0.45f)
+                            rect({wx, wy, ww, wh}, kPanelOrangeHi);
+                    }
+            }
+            // the water below, and the city's reflection as broken strokes
+            rect({box.x, ground, W, box.y + H - ground + px(4)}, kInk);
+            for (int i = 0; i < 9; ++i)
+            {
+                const float y = ground + (i + 1) * (box.y + H - ground) / 10.0f;
+                const float shift = std::fmod(S.t * 12.0f * (1 + i % 3) + hash(uint32_t(i) * 13) * W, W);
+                for (int k = 0; k < 3; ++k)
+                {
+                    const float x = box.x + std::fmod(shift + k * W * 0.37f, W);
+                    line(x, y, x + W * (0.05f + 0.06f * hash(uint32_t(i * 3 + k))), y, px(1.5f), withAlpha(kPanelOrange, 0.55f));
+                }
+            }
+            popClip();
+        }
+
+        // ---- panel 3: a 1970s sedan at speed - long hood, the roof's pillar, chrome, speed lines ---------------------------
+        void sedan(const Scene &S, Rect box)
+        {
+            pushClip({box.x + px(2), box.y + px(2), box.w - px(4), box.h - px(4)});
+            const float W = box.w, H = box.h;
+            halftone(box, px(9), withAlpha(kPanelBlueHi, 0.35f), {box.x + W * 0.9f, box.y + H * 0.1f}, H * 1.1f,
+                     0.5f + 0.5f * std::sin(S.t * 0.7f + 2.0f), px(4));
+            // speed lines behind it
+            for (int i = 0; i < 14; ++i)
+            {
+                const float y = box.y + H * (0.18f + 0.62f * hash(uint32_t(i) * 17));
+                const float len = W * (0.18f + 0.25f * hash(uint32_t(i) * 23));
+                const float x = box.x + W - std::fmod(S.t * W * (0.9f + 0.8f * hash(uint32_t(i) * 29)) + hash(uint32_t(i) * 31) * W * 2.0f, W * 1.6f);
+                line(x, y, x + len, y, px(2), withAlpha(kWhite, 0.55f));
+            }
+            // the car, facing left, bobbing a little on its springs
+            const float bob = std::sin(S.t * 9.0f) * px(1.2f);
+            const float cx = box.x + W * 0.48f, base = box.y + H * 0.70f + bob, L = W * 0.78f, bodyH = H * 0.16f;
+            const float x0 = cx - L * 0.5f;
+            // the greenhouse: windscreen and rear window slanted, the pillar between the windows
+            const float roofY = base - bodyH - H * 0.13f;
+            fillQuad({x0 + L * 0.28f, base - bodyH}, {x0 + L * 0.38f, roofY}, {x0 + L * 0.68f, roofY}, {x0 + L * 0.78f, base - bodyH}, kInk);
+            fillQuad({x0 + L * 0.31f, base - bodyH - px(2)}, {x0 + L * 0.395f, roofY + px(4)}, {x0 + L * 0.52f, roofY + px(4)},
+                     {x0 + L * 0.52f, base - bodyH - px(2)}, withAlpha(kPanelBlueHi, 0.85f));
+            fillQuad({x0 + L * 0.545f, base - bodyH - px(2)}, {x0 + L * 0.545f, roofY + px(4)}, {x0 + L * 0.665f, roofY + px(4)},
+                     {x0 + L * 0.75f, base - bodyH - px(2)}, withAlpha(kPanelBlueHi, 0.85f));
+            // the body: long and low, a chrome line, the bumpers
+            rect({x0, base - bodyH, L, bodyH}, kInk, Corners(px(8), px(10), px(4), px(4)));
+            line(x0 + px(6), base - bodyH * 0.55f, x0 + L - px(6), base - bodyH * 0.55f, px(2), withAlpha(kWhite, 0.8f));
+            rect({x0 - px(4), base - bodyH * 0.38f, px(8), bodyH * 0.3f}, kWhite, Corners(px(2)));
+            rect({x0 + L - px(4), base - bodyH * 0.38f, px(8), bodyH * 0.3f}, kWhite, Corners(px(2)));
+            // the headlight, on: a beam ahead of it
+            circle(x0 + px(5), base - bodyH * 0.7f, px(3.5f), kPaper);
+            fillQuad({x0 + px(4), base - bodyH * 0.78f}, {x0 - W * 0.30f, base - bodyH * 1.5f}, {x0 - W * 0.30f, base + bodyH * 0.2f},
+                     {x0 + px(4), base - bodyH * 0.62f}, withAlpha(kPaper, 0.25f));
+            // the wheels, turning: tyres, hubs and a spoke that goes round
+            for (float wx : {x0 + L * 0.20f, x0 + L * 0.80f})
+            {
+                const float r = H * 0.085f, wy = base + px(1) - bob;
+                circle(wx, wy, r, kInk);
+                circle(wx, wy, r * 0.55f, core::rgb(0x9AA3B5));
+                const float a = -S.t * 14.0f;
+                line(wx + std::cos(a) * r * 0.5f, wy + std::sin(a) * r * 0.5f, wx - std::cos(a) * r * 0.5f, wy - std::sin(a) * r * 0.5f,
+                     px(2), kInk);
+            }
+            // the road
+            rect({box.x, base + H * 0.085f, W, px(4)}, kInk);
+            popClip();
+        }
+
+        // the comic's caption box: yellowed paper, a black border, the heavy face
+        void caption(Rect box, const char *text)
+        {
+            const float size = px(15);
+            const float tw = measure(kFontBrand, size, text);
+            const Rect r{box.x + px(10), box.y + px(10), tw + px(16), size * 1.45f};
+            rect({r.x - px(2.5f), r.y - px(2.5f), r.w + px(5), r.h + px(5)}, kInk);
+            rect(r, kPaper);
+            drawText(kFontBrand, size, r.x + px(8), r.y + size * 1.08f, kInk, text);
         }
 
         void sky(const Scene &S, float hero)
         {
             gradient({0, 0, S.w, S.h}, theme::kSky, theme::kNight);
-            // the glow along the horizon, Home only
-            if (hero > 0.01f)
-                gradient({0, S.horizon - S.h * 0.42f, S.w, S.h * 0.42f + px(1)}, withAlpha(theme::kHorizon, 0),
-                         withAlpha(theme::kHorizon, hero));
-            // glows: a pink one up and to the right, a softer one low on the left
-            shadow({S.w * 0.62f, -S.h * 0.25f, S.w * 0.5f, S.h * 0.55f}, withAlpha(theme::kPink, 0.09f + 0.05f * hero), S.s * 0.22f, S.s * 0.2f);
-            shadow({-S.w * 0.2f, S.h * 0.65f, S.w * 0.55f, S.h * 0.5f}, withAlpha(theme::kPinkHi, 0.06f), S.s * 0.25f, S.s * 0.2f);
-        }
-
-        // a few stars in the dark, each twinkling at its own pace
-        void stars(const Scene &S)
-        {
-            const float dark = theme::darkness;
-            if (dark < 0.01f)
-                return;
-            for (uint32_t i = 0; i < 60; ++i)
-            {
-                const float x = hash(i * 3) * S.w, y = std::pow(hash(i * 3 + 1), 1.6f) * S.horizon * 0.62f;
-                const float twinkle = 0.55f + 0.45f * std::sin(S.t * (0.6f + hash(i * 5) * 1.4f) + hash(i * 7) * 6.28f);
-                const float a = (0.25f + 0.55f * hash(i * 3 + 2)) * twinkle * dark;
-                circle(x, y, px(0.55f + 0.7f * hash(i * 11)), withAlpha(theme::kText, a));
-            }
-        }
-
-        // a flight's own random number for one of its traits: the flight and the trait mixed apart first, so neighbouring
-        // flights (and a flight's traits) don't come out alike
-        float trait(int flight, uint32_t which)
-        {
-            return hash(uint32_t(flight) * 0x9E3779B9u ^ (which * 0x85EBCA6Bu + 0x27D4EB2Fu));
-        }
-
-        // how much of a trail to keep where it crosses behind the words on the left or the title bar (they stay easy to
-        // read; a jet coming down from the top seems to come out from under the bar)
-        float behindWords(const Scene &S, float x, float y)
-        {
-            const float inside = (1.0f - smooth(S.w * 0.50f, S.w * 0.58f, x)) * smooth(S.h * 0.17f, S.h * 0.23f, y) *
-                                 (1.0f - smooth(S.h * 0.56f, S.h * 0.63f, y));
-            const float bar = px(theme::kTitleBar);
-            return (1.0f - 0.7f * inside) * (0.15f + 0.85f * smooth(bar * 0.8f, bar * 1.5f, y));
-        }
-
-        // jets crossing high up, far away: a speck drawing a trail that starts thin and bright behind it, then spreads,
-        // drifts and fades. A flight may set off in each 24 s slot, at a random moment in it (some slots stay empty).
-        // Each flies a line of its own: through a random point of the upper sky at up to 24 degrees either way, so it
-        // comes in from the left or right edge or down from the top and leaves by another edge or behind the skyline.
-        // Slots pair up flying opposite ways (in random order); each flight also has its own pace, distance (a far one
-        // is smaller, fainter, slower), how long its trail lasts and how patchy it is - all from its number, so nothing
-        // is stored. Usually one to three trails are in the sky
-        void jets(const Scene &S)
-        {
-            constexpr float kSlot = 24;
-            const float dark = theme::darkness;
-            const int last = int(std::floor(S.t / kSlot));
-            for (int k = last - 6; k <= last; ++k)
-            {
-                if (trait(k, 0) < 0.15f)
-                    continue; // a quiet spell
-                const float start = float(k) * kSlot + trait(k, 1) * 20.0f;
-                const float far = trait(k, 2); // 0 near .. 1 far
-                // its line: a point it passes and an angle; it enters and leaves where that line meets the edges of the
-                // window (a little outside them) or goes down behind the skyline
-                const int pair = k >= 0 ? k / 2 : (k - 1) / 2;
-                const bool rightward = (trait(pair, 5) < 0.5f) != (k - pair * 2 == 1);
-                const float angle = (trait(k, 6) * 2.0f - 1.0f) * 24.0f * 3.14159265f / 180.0f;
-                const float dx = std::cos(angle) * (rightward ? 1.0f : -1.0f), dy = std::sin(angle);
-                const float px0 = S.w * (0.10f + 0.80f * trait(k, 7)), py0 = S.h * (0.08f + 0.24f * trait(k, 12));
-                float lo = -1e9f, hi = 1e9f;
-                auto slab = [&](float from, float d, float a, float b) {
-                    if (std::fabs(d) < 1e-6f)
-                        return;
-                    const float t0 = (a - from) / d, t1 = (b - from) / d;
-                    lo = std::max(lo, std::min(t0, t1));
-                    hi = std::min(hi, std::max(t0, t1));
-                };
-                slab(px0, dx, -0.05f * S.w, 1.05f * S.w);
-                slab(py0, dy, -0.04f * S.h, S.horizon - S.s * 0.05f);
-                const float ax = px0 + dx * lo, ay = py0 + dy * lo, pathLen = hi - lo;
-                const float speed = S.w * 1.1f / ((30.0f + 22.0f * trait(k, 3)) * (0.9f + 0.3f * far)); // pixels a second
-                const float cross = pathLen / speed;                                                     // seconds
-                const float fade = 22.0f + 18.0f * trait(k, 4); // how long its trail lasts
-                const float since = S.t - start;
-                if (since < 0 || since > cross + fade || pathLen <= 0)
-                    continue;
-                const float size = 1.25f - 0.5f * far, strength = (0.85f - 0.35f * dark) * (1.0f - 0.35f * far);
-                const float patchy = 0.6f * trait(k, 8), patchFreq = 8.0f + 14.0f * trait(k, 9), patchPhase = 6.28f * trait(k, 10);
-                const float jet = std::min(since / cross, 1.0f);
-
-                // the trail: soft dots along the line, wider, fainter and lower the longer ago the jet passed
-                float u = 0;
-                while (u < jet)
-                {
-                    const float age = since - u * cross; // seconds since the jet was here
-                    const float life = 1.0f - smooth(fade * 0.3f, fade, age);
-                    const float width = (px(1.4f) + age * px(0.45f)) * size;
-                    const float step = std::max(px(2.5f), width * 0.55f);
-                    if (age > 0.35f && life > 0.01f) // it forms a little behind the jet
-                    {
-                        const float x = ax + dx * pathLen * u, y = ay + dy * pathLen * u + age * px(0.12f);
-                        const float patch = 1.0f - patchy * (0.5f + 0.5f * std::sin(u * patchFreq + patchPhase));
-                        const float a = strength * life * patch * behindWords(S, x, y) * smooth(0.35f, 1.2f, age) *
-                                        std::min(1.0f, step / width * 1.6f);
-                        shadow({x - width * 0.5f, y - width * 0.5f, width, width}, withAlpha(theme::kContrail, a), width * 0.35f, width * 0.5f);
-                    }
-                    u += step / pathLen;
-                }
-                // the jet itself, a speck catching the sun, its strobe blinking at night
-                if (since < cross)
-                {
-                    const float x = ax + dx * pathLen * jet, y = ay + dy * pathLen * jet;
-                    circle(x, y, px(1.1f) * size, withAlpha(theme::kContrail, 0.9f));
-                    if (dark > 0.01f && std::fmod(S.t + trait(k, 11), 1.3f) < 0.08f)
-                    {
-                        shadow({x - px(3), y - px(3), px(6), px(6)}, withAlpha(theme::kText, 0.5f * dark), px(1.5f), px(3));
-                        circle(x, y, px(1.0f) * size, withAlpha(theme::kText, dark));
-                    }
-                }
-            }
-        }
-
-        void sun(const Scene &S, float cx, float cy, float radius)
-        {
-            // its glow over the horizon, two layers
-            shadow({cx - radius * 1.3f, cy - radius * 1.2f, radius * 2.6f, radius * 2.4f}, withAlpha(theme::kPinkHi, 0.16f), radius * 0.6f, radius);
-            shadow({cx - radius * 1.05f, cy - radius * 1.05f, radius * 2.1f, radius * 2.1f}, withAlpha(theme::kPink, 0.22f), radius * 0.18f, radius);
-
-            // the disc, solid above its middle, then in slices sliding down into the horizon; the slices thin and the
-            // gaps between them widen toward it
-            const Rect disc{cx - radius, cy - radius, radius * 2, radius * 2};
-            const Color top = mix(theme::kPinkHi, theme::kOnPink, 0.22f), bottom = theme::kPink;
-            const float from = std::round(cy - radius * 0.05f), span = S.horizon - from;
-            pushClip({0, 0, S.w, S.horizon});
-            pushClip({0, disc.y, S.w, from - disc.y});
-            gradient(disc, top, bottom, radius);
-            popClip();
-            constexpr int kBands = 6;
-            const float slide = S.t * 0.10f - std::floor(S.t * 0.10f);
-            auto yAt = [&](float u) { return from + span * u * (1.35f - 0.35f * u); };
-            for (int k = -1; k < kBands; ++k)
-            {
-                const float u0 = (float(k) + slide) / kBands, u1 = (float(k) + 1 + slide) / kBands;
-                const float gap = 0.10f + 0.55f * core::clamp01((u0 + u1) * 0.5f);
-                const float y0 = yAt(std::max(u0, 0.0f)), y1 = yAt(std::min(u0 + (u1 - u0) * (1 - gap), 1.0f));
-                if (y1 <= y0)
-                    continue;
-                pushClip({0, y0, S.w, y1 - y0});
-                gradient(disc, top, bottom, radius);
-                popClip();
-            }
-            popClip();
-        }
-
-        // streaks across the sun, coming and going: one appears every 10 s or so at a random place around the sun,
-        // fades in, drifts right for 35-55 s and fades out, so three to five are in the sky at any time and the sky never
-        // runs out of them. Each has its own height, length, thickness, pace and maybe a thinner one riding above it
-        // (traits from its number, as the jets'). Dark with a lit edge at night, white by day; faded out over the words
-        void clouds(const Scene &S, float cx, float radius)
-        {
-            constexpr float kSlot = 10, kLongest = 55;
-            const float dark = theme::darkness;
-            const int last = int(std::floor(S.t / kSlot));
-            for (int k = last - int(kLongest / kSlot) - 1; k <= last; ++k)
-            {
-                const float start = float(k) * kSlot + trait(k, 20) * kSlot;
-                const float life = 35.0f + 20.0f * trait(k, 21);
-                const float since = S.t - start;
-                if (since < 0 || since > life)
-                    continue;
-                const float shown = smooth(0.0f, 6.0f, since) * (1.0f - smooth(life - 9.0f, life, since));
-                const float len = S.s * (0.16f + 0.24f * trait(k, 22));
-                const float thick = std::max(S.s * (0.0045f + 0.0035f * trait(k, 23)), px(2.5f));
-                const float y = S.h * (0.36f + 0.25f * trait(k, 24));
-                const float x = cx - radius * 1.5f + radius * 2.3f * trait(k, 25) - len * 0.5f + since * px(3.0f + 5.0f * trait(k, 26));
-                const float a = shown * smooth(S.w * 0.50f, S.w * 0.64f, x + len * 0.5f);
-                if (a <= 0.01f)
-                    continue;
-                // a crisp streak, maybe a thinner one riding above it, in a faint haze
-                shadow({x - len * 0.1f, y - thick, len * 1.2f, thick * 3}, withAlpha(theme::kCloud, 0.25f * a), thick * 1.2f, thick);
-                rect({x, y, len, thick}, withAlpha(theme::kCloud, 0.92f * a), thick * 0.5f);
-                if (trait(k, 27) < 0.6f)
-                {
-                    const float rx = x + len * (0.1f + 0.3f * trait(k, 28)), rw = len * (0.3f + 0.25f * trait(k, 29));
-                    rect({rx, y - thick * 1.7f, rw, thick * 0.7f}, withAlpha(theme::kCloud, 0.85f * a), thick * 0.35f);
-                }
-                if (dark > 0.01f)
-                    rect({x + len * 0.08f, y + thick - px(1), len * 0.84f, px(1)}, withAlpha(theme::kPinkHi, 0.30f * dark * a), px(0.5f));
-            }
-        }
-
-        // a building's windows: each goes on or off now and then, on its own schedule. `scale` shrinks the grid (the far
-        // row), `strength` dims it
-        void windows(const Scene &S, Rect body, uint32_t building, float scale, float strength)
-        {
-            const float ww = px(2) * scale, wh = px(2.6f) * scale, gx = px(5) * scale, gy = px(6.5f) * scale;
-            const float top = px(8) * scale;
-            const int cols = int((body.w - px(6) * scale) / gx), rows = int((body.h - top - px(4) * scale) / gy);
-            if (cols <= 0 || rows <= 0)
-                return;
-            const float x0 = body.x + (body.w - float(cols - 1) * gx - ww) * 0.5f;
-            for (int r = 0; r < rows; ++r)
-                for (int c = 0; c < cols; ++c)
-                {
-                    const uint32_t id = building * 977 + uint32_t(r) * 31 + uint32_t(c);
-                    const float epoch = std::floor(S.t / 50.0f + hash(id * 3) * 50.0f);
-                    if (hash(id * 5 + uint32_t(epoch) * 7919) > 0.3f)
-                        continue;
-                    rect({x0 + float(c) * gx, body.y + top + float(r) * gy, ww, wh},
-                         withAlpha(theme::kLights, strength * (0.45f + 0.4f * theme::darkness) * (0.6f + 0.4f * hash(id * 9))));
-                }
-        }
-
-        // the towers; once on the sky, once mirrored in the sea (lights off, sunk toward the sea's colour by `faded`:
-        // opaque, so where pieces overlap nothing shows darker)
-        void skyline(const Scene &S, bool lights, float faded = 0)
-        {
-            const Color near = mix(theme::kSkyline, theme::kSea, faded);
-            // far towers, lower and paler in the haze, their windows smaller and dimmer
-            const Color far = mix(mix(theme::kSkyline, theme::kHorizon, 0.55f), theme::kSea, faded);
-            float x = S.w * 0.30f;
-            for (uint32_t i = 0; x < S.w; ++i)
-            {
-                const float bw = S.s * (0.022f + 0.03f * hash(i * 13 + 1));
-                const float bh = S.s * (0.016f + 0.045f * hash(i * 13 + 2));
-                const Rect body{x, S.horizon - bh, bw + px(1), bh + px(1)};
-                block(S, body, far);
-                if (lights)
-                    windows(S, body, 5000 + i, 0.7f, 0.55f);
-                x += bw;
-            }
-
-            float tallest = 0;
-            Rect beacon{};
-            for (uint32_t b = 0; b < std::size(kTowers); ++b)
-            {
-                Rect body;
-                tower(S, kTowers[b], near, body);
-                if (body.h > tallest)
-                {
-                    tallest = body.h;
-                    beacon = body;
-                }
-                if (lights)
-                    windows(S, body, b, 1.0f, 1.0f);
-            }
-            // the tallest tower's light, blinking
-            if (lights && std::fmod(S.t, 1.6f) < 0.18f)
-            {
-                const float bx = beacon.cx(), by = beacon.y - beacon.h * 0.30f - px(1);
-                shadow({bx - px(4), by - px(4), px(8), px(8)}, withAlpha(theme::kPinkHi, 0.6f), px(2.5f), px(4));
-                circle(bx, by, px(1.5f), theme::kPinkHi);
-            }
-        }
-
-        void sea(Scene &S, float cx, float radius)
-        {
-            const float top = S.horizon, depth = S.h - top;
-            gradient({0, top, S.w, depth}, theme::kSea, theme::kNight);
-            pushClip({0, top, S.w, depth});
-
-            // the towers upside down, faint, fading out with depth
-            const float reach = depth * 0.45f;
-            S.mirror = true;
-            pushClip({0, top, S.w, reach});
-            skyline(S, false, 0.8f);
-            popClip();
-            S.mirror = false;
-            gradient({0, top, S.w, reach + px(1)}, withAlpha(theme::kSea, 0), mix(theme::kSea, theme::kNight, 0.45f));
-
-            // the sun's light on the water: a soft column and short lines that waver
-            shadow({cx - radius * 0.6f, top, radius * 1.2f, depth * 0.75f}, withAlpha(theme::kPink, 0.10f), radius * 0.3f, radius * 0.5f);
-            for (int i = 0; i < 9; ++i)
-            {
-                const float fi = float(i);
-                const float ly = top + px(7) + fi * px(9) * (1 + fi * 0.35f);
-                if (ly > S.h)
-                    break;
-                const float rw = radius * (1.45f - 0.14f * fi) * (0.82f + 0.18f * std::sin(S.t * 1.1f + fi * 1.7f));
-                const float dx = std::sin(S.t * 0.7f + fi * 2.3f) * px(5);
-                rect({cx - rw * 0.5f + dx, std::round(ly), rw, px(2.5f)},
-                     withAlpha(mix(theme::kPinkHi, theme::kPink, fi / 9.0f), 0.34f - 0.032f * fi), px(1.25f));
-            }
-
-            // lines on the water rolling in: close together at the horizon, spreading as they come
-            constexpr int kLines = 11;
-            const float roll = S.t * 0.05f;
-            for (int i = 0; i < kLines; ++i)
-            {
-                float u = (float(i) + roll * kLines) / kLines;
-                u -= std::floor(u);
-                const float ly = top + depth * u * u;
-                const float a = (0.13f * (1 - u) + 0.03f) * smooth(0.0f, 0.06f, u);
-                rect({0, ly, S.w, std::max(1.0f, px(1))}, withAlpha(theme::kPink, a));
-            }
-            popClip();
-
-            // the horizon, a line of light
-            shadow({0, top - px(2), S.w, px(4)}, withAlpha(theme::kPink, 0.35f), px(3), 0);
-            rect({0, top, S.w, std::max(1.0f, px(1))}, withAlpha(theme::kPink, 0.6f));
+            // a warm glow behind the cover, Home only; a cool one low on the left
+            shadow({S.w * 0.55f, S.h * 0.05f, S.w * 0.5f, S.h * 0.7f}, withAlpha(theme::kPink, 0.05f + 0.07f * hero), S.s * 0.22f, S.s * 0.2f);
+            shadow({-S.w * 0.2f, S.h * 0.65f, S.w * 0.55f, S.h * 0.5f}, withAlpha(theme::kHorizon, 0.35f), S.s * 0.25f, S.s * 0.2f);
         }
     }
 
@@ -406,7 +342,6 @@ namespace screens
         S.w = r.w;
         S.h = r.h;
         S.s = std::min(r.w, r.h);
-        S.horizon = std::round(r.h * 0.70f);
         // the ambient clock: real time (a still frame with reduce motion on)
         S.t = ui::state.motion > 0 ? float(std::fmod(ui::state.wall + shell.options.clock, 3600.0)) : 20.0f;
 
@@ -414,16 +349,20 @@ namespace screens
         if (hero <= 0.01f)
             return;
         const float e = core::easeOutCubic(hero);
-        const float radius = S.s * 0.24f;
-        const float cx = S.w * 0.73f;
-        const float cy = S.horizon - radius * (0.15f + 0.45f * e); // it rises a little as Home appears
         pushOpacity(hero);
-        stars(S);
-        sun(S, cx, cy, radius);
-        jets(S); // in front of the sun; behind the cloud streaks and the towers
-        clouds(S, cx, radius);
-        skyline(S, true);
-        sea(S, cx, radius);
+        pushOffset(0, (1.0f - e) * px(24)); // the cover rises a little as Home appears
+        // the halftone ground behind the panels
+        halftone({S.w * 0.47f, S.h * 0.06f, S.w * 0.53f, S.h * 0.80f}, px(14), withAlpha(theme::kHorizon, 0.55f),
+                 {S.w * 0.78f, S.h * 0.40f}, S.s * 0.75f, 0.5f + 0.5f * std::sin(S.t * 0.4f), px(5.5f));
+        Rect boxes[3];
+        const Color fills[3] = {kPanelRed, kPanelOrange, kPanelBlue};
+        for (int i = 0; i < 3; ++i)
+            panel(S, kPanels[i], fills[i], boxes[i]);
+        madeMan(S, boxes[0]);
+        skyline(S, boxes[1]);
+        sedan(S, boxes[2]);
+        caption(boxes[0], "LIBERTY CITY, 1998");
+        popOffset();
         popOpacity();
 
         // the next frame of the scene; never while the game runs (it wants the GPU) or with reduce motion on

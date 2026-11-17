@@ -98,25 +98,23 @@ motion is (2026-11-01, the user's "rethink everything"; before, a sidebar of pag
 
 - **Setup** (`launcher/screens/setup.cpp`), until the game can be played: a rail of the four steps (Folder, Disc,
   Build tools, Game: their titles in Pricedown when installed, each with a line under it) whose line fills in teal as
-  they are done, and one step at a time below it in a large card - a pink label, a title, a line of explanation, the
-  step, its state as a badge in the card's top right corner, and a footer whose primary (hot pink) button is the
+  they are done, and one step at a time below it in a large card - an orange label, a title, a line of explanation, the
+  step, its state as a badge in the card's top right corner, and a footer whose primary (orange) button is the
   step's next thing. A step that turns good plays its check (a stroke that draws itself), holds 0.9 s, and the next
-  slides in from the side it comes from. Behind the step shown sits a solid pink box, as in Vice City's menus: each
+  slides in from the side it comes from. Behind the step shown sits a solid orange box, as on LCS's menu tab bar: each
   step's is a quadrilateral of its own (its corners set off the step's text, each differently), and going to another
   step carries the box there while its corners blend from the old shape into the new one (`render::quad`, a filled
   convex quadrilateral). Any step can be looked at from the
   rail. The Folder step only stops Setup when doctor has a warning for it and nothing is built yet.
-- **Home** (`home.cpp`): the name over Vice City at dusk (`backdrop.cpp`, drawn by the renderer: the icon's striped sun
-  behind the beach's art deco towers, a hazier row behind them with smaller, dimmer windows, the sea with their
-  reflection; stars at night). It moves, gently: the sun's stripes slide into the horizon, cloud streaks come and go
-  across the sun (one every 10 s or so fades in somewhere around it, drifts and fades out: three to five at a time), far-off jets cross high up, at irregular times, each on a line of its own (through a random point of the upper
-  sky at up to 24 degrees, in from the left, the right or the top; dimmed behind the words and the title bar) and with its
-  own pace and distance drawing trails that spread, drift and fade over half a
-  minute, windows go on and off and the tallest tower's light blinks, lines roll in on the water and the sun's reflection
-  wavers - drawn at 30 frames a second (15 unfocused), only while Home shows, never while the game runs, and still with
-  reduce motion on. In front of it,
+- **Home** (`home.cpp`): the name beside a comic-book cover in the style of Liberty City Stories' box art
+  (`backdrop.cpp`, drawn by the renderer, no image: DECISIONS.md 2026-11-17): three slanted panels with a dark gutter -
+  red, a made man in a fedora smoking under a "LIBERTY CITY, 1998" caption; orange, the skyline with its suspension
+  bridge and searchlights; blue, a sedan with speed lines - each with halftone dots, its art clipped to the panel. It
+  moves, gently: the smoke rises, the searchlights sweep, windows go on and off, the car's wheels and lines run - drawn
+  at 30 frames a second (15 unfocused), only while Home shows, never while the game runs, and still with reduce motion
+  on. In front of it,
   one big button for what's next (Play, or Check again when the check failed; with an update ready Play stays and a
-  smaller *Update the build* sits under it with a pink NEW badge, why in its tooltip - offered, never forced), what was built under it ("Built 2 days ago ·
+  smaller *Update the build* sits under it with an orange NEW badge, why in its tooltip - offered, never forced), what was built under it ("Built 2 days ago ·
   Standard · AVX2"), and three cards along the bottom: Setup (opens it at any step), Saves, Updates. While the game runs
   the button is a "Playing · 12:34" panel (redrawn once a second, never continuously); a non-zero exit becomes a red
   card with `gameExitText()` and the log.
@@ -136,17 +134,22 @@ motion is (2026-11-01, the user's "rethink everything"; before, a sidebar of pag
   stands still. Off until the player turns it on (`reduce_motion` in launcher.ini). Windows' "Animate controls and
   elements inside windows" has no say: it is off on many PCs tuned for speed - the dev machine's too - and first made
   the launcher snap, then (as the starting value) made new installs start with reduce motion on (2026-11-01).
-- Light and dark (`ui/theme.h`): hot pink is the primary colour - the thing to do, the selection - on a deep black
-  (dark) or on white and blush pink (light); teal only for done, amber and red only for attention, no purple. *Appearance*
+- Light and dark (`ui/theme.h`): Liberty City Stories' menu orange is the primary colour - the thing to do, the
+  selection - on a night-blue dark or on newsprint (light; the palette's field is still called `pink`); teal only for
+  done, amber and red only for attention. The wordmark is Pricedown when installed, else Impact. *Appearance*
   in Settings: System (the default: Windows' app mode, `AppsUseLightTheme`, followed live on `WM_SETTINGCHANGE`), Light
   or Dark (`theme=` in launcher.ini). Every colour is a field of a palette; the two palettes crossfade over a quarter
   of a second when the choice or Windows' mode changes, and the window's own frame (DWM dark mode, Windows 11's border)
-  switches with them. The icon (`launcher/make_icon.py`, which writes `launcher.ico`) is Home's backdrop in a rounded square: the
-  striped sun behind the beach's towers, the horizon's line and the sun on the sea, in the dark palette. Each size is
-  drawn for itself: 16 and 20 px only the sun, its stripes and the sea; towers from 24 px; up to 64 px every edge and
-  stripe on whole pixels; lit windows and stars only at 256. The same script draws lcs.exe's icon (`src/vcs.ico`): the
-  scene by day - a white sky, an orange-to-pink sun, rose towers, no stars - so the game and the launcher don't look
-  alike in Explorer or on the taskbar.
+  switches with them. The icon (`launcher/make_icon.py`, which writes `launcher.ico` / `launcher.png`) is a fedora on
+  a red disc on night blue - the title bar's logo; the same script draws lcs.exe's icon (`src/lcs.ico`) on orange, so
+  the game and the launcher don't look alike in Explorer or on the taskbar.
+- Language (`core/i18n.{h,cpp}`): English or Spanish, the same choice as the game's menus - `ui.language` in the
+  build's lcs.ini (0 English, 1 Spanish), read at start and written by Settings > *Language / Idioma*. The screens are
+  written in English; `render/font.cpp` passes every text it measures, draws, shortens or wraps through
+  `core::i18n::tr`, whose table is `core/i18n_es.inc` (whole texts, and patterns with `{}` holes for texts with
+  numbers or names in them, the holes translated in turn). What the scripts report (doctor's reasons, log lines)
+  stays English. `LCS_I18N_DUMP=<file>` appends every text drawn that has no Spanish (with `--screenshot`: a
+  translation pass over each screen).
 - The first frame: the last doctor answer (`build/launcher_state.json`) gives the right mode at once; while this run's
   check is out, only "fine" is believed (anything else shows as checking) and the big button waits.
 

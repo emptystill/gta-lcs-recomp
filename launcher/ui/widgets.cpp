@@ -1,5 +1,7 @@
 #include "widgets.h"
 
+#include "core/i18n.h"
+
 #include "render/draw.h"
 #include "ui/theme.h"
 
@@ -80,8 +82,10 @@ namespace ui
         return y - r.y;
     }
 
-    void eyebrow(float x, float y, Color color, std::string_view text)
+    void eyebrow(float x, float y, Color color, std::string_view english)
     {
+        const std::string translated = core::i18n::tr(english); // (drawn a glyph at a time: translated whole first)
+        const std::string_view text = translated;
         // small capitals with a little tracking: one glyph at a time
         const float size = px(theme::kEyebrow);
         float pen = x;
@@ -218,7 +222,7 @@ namespace ui
             }
             const float near = core::clamp01(1.0f - std::fabs(w.spring.value - float(i)));
             const Color c = mix(mix(theme::kFaint, theme::kDim, in.w->hover), theme::kText, near);
-            label(kFontSemibold, px(theme::kSmall), cell.inset(px(8), 0), c, options[size_t(i)], Align::Centre);
+            label(kFontSemibold, px(theme::kSmall), cell.inset(px(8), 0), c, shownText(options[size_t(i)]), Align::Centre);
             focusRing(cell.inset(px(2)), in.w->focus, radius);
         }
         render::popOpacity();

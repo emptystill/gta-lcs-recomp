@@ -18,6 +18,7 @@ set(VCS_UI_HLSL "${CMAKE_CURRENT_SOURCE_DIR}/render/d3d11/ui.hlsl")
 set(VCS_LAUNCHER_COMMON
     main.cpp
     core/png.cpp
+    core/i18n.cpp
     render/draw.cpp
     render/font.cpp
     render/icons.cpp

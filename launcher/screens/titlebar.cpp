@@ -17,18 +17,22 @@ namespace screens
     {
         void logo(float cx, float cy, float r)
         {
-            // the icon's sun, small: a gradient disc cut by two stripes, over a sea line
-            const Rect disc{cx - r, cy - r, r * 2, r * 2};
-            const float cut1 = cy + r * 0.18f, cut2 = cy + r * 0.48f;
-            pushClip({disc.x, disc.y, disc.w, cut1 - disc.y});
-            gradient(disc, theme::kPinkHi, theme::kPink, r);
-            popClip();
-            pushClip({disc.x, cut1 + r * 0.12f, disc.w, cut2 - cut1 - r * 0.12f});
-            gradient(disc, theme::kPinkHi, theme::kPink, r);
-            popClip();
-            pushClip({disc.x, cut2 + r * 0.16f, disc.w, r});
-            gradient(disc, theme::kPinkHi, theme::kPink, r);
-            popClip();
+            // the icon (launcher/make_icon.py), small: a red disc ringed in orange with a black outline, a black fedora
+            const Color ink = core::rgb(0x07080D);
+            circle(cx, cy, r + px(1), ink);
+            circle(cx, cy, r, core::rgb(0xF6A623));
+            circle(cx, cy, r * 0.84f, ink);
+            circle(cx, cy, r * 0.80f, core::rgb(0xB8141E));
+            auto P = [&](float u, float v) { return std::pair<float, float>{cx + (u - 0.5f) * r * 2, cy + (v - 0.5f) * r * 2}; };
+            auto quad4 = [&](std::pair<float, float> a, std::pair<float, float> b, std::pair<float, float> c, std::pair<float, float> d) {
+                const float q[8] = {a.first, a.second, b.first, b.second, c.first, c.second, d.first, d.second};
+                quad(q, ink);
+            };
+            quad4(P(0.31f, 0.66f), P(0.355f, 0.40f), P(0.645f, 0.40f), P(0.69f, 0.66f)); // the crown
+            quad4(P(0.355f, 0.40f), P(0.44f, 0.35f), P(0.50f, 0.39f), P(0.50f, 0.40f));  // its pinched top
+            quad4(P(0.50f, 0.40f), P(0.50f, 0.39f), P(0.56f, 0.35f), P(0.645f, 0.40f));
+            const auto b0 = P(0.17f, 0.64f), b1 = P(0.83f, 0.74f);
+            rect({b0.first, b0.second, b1.first - b0.first, b1.second - b0.second}, ink, Corners(r * 0.12f)); // the brim
         }
 
         bool windowButton(std::string_view idLabel, char32_t icon, Rect r, bool close)

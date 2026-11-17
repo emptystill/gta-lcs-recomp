@@ -66,4 +66,9 @@ The user does not want anything of the VCS port in what the player sees. The set
   distance), the NPC drive-by fire rate, Reduce Post Processing Effects (VCS's effect timing), the free camera's key and
   the gamepad's free aim. Each comes back when its LCS version exists.
 - Environment overrides show as `LCS_*` (`settings::add`); the `VCS_*` names still work for the test tools.
+- **The launcher too** (the user: "es hora cambiar el aspecto del launcher"): the same orange / red / night-blue
+  palette, Home's Vice City dusk replaced by a comic-book cover in the style of LCS's box art (the user's pick of three:
+  cover, skyline at night, pause-menu look), drawn in code like the old scene (no image shipped), a fedora for the
+  logo and icons. Its language follows the game's menus (`ui.language` in lcs.ini) with a selector of its own in
+  Settings; one setting for both, so the player chooses once (docs/LAUNCHER.md).
 
