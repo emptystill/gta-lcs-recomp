@@ -264,6 +264,33 @@ blend-back itself, not only the buffer's 512-wide resolution (now scaled with th
 Graphics > **PS2 blur filter** (`display.ps2_blur`, `LCS_PS2_BLUR`; on by default, the original): off leaves the
 blend-back out and keeps the tint - sharp, with the game's colours.
 
+### Sharp HUD (2026-11-17)
+
+The user asked for a better-looking HUD. At 1440p the clock, money, ammo, weapon icon and the radar's map and blips are
+blurred: they are a PSP game's tiny textures (64x16 .. 256x256) stretched 3-4 times; the bars and the radar's ring are
+shapes, already sharp.
+
+Graphics > **Sharp HUD** (`display.hud_sharp`, off; `LCS_HUD_SHARP`): the native HUD layer draws those textures from
+copies made 4x larger by **xBR** (runtime `gsHwSetHudUpscale`, `hudxbr::`):
+- **The upscale.** xBR's level-1 rule, 2x twice: a texel becomes 2x2; a corner with an edge through it takes the mean
+  of the texel and its nearer neighbour (smooth diagonals and curves), every other new texel is the texel itself (sharp
+  edges). The Texture upscaling tried on 2026-11-15 (reverted) filled those with bilinear, which is no sharper than the
+  original filtered.
+- **Where.** Only draws of the HUD layer (`LayerTarget::hud`) from a game texture: the first time, the texture is read
+  back from the GPU (`readTexture`, small) and upscaled on a helper thread (`std::async`); until it is ready, a frame
+  or two, the original is drawn. The copies are dropped with their texture (TexDelete) and when the setting changes.
+- **Sampling.** `gs_draw.hlsl` `sampleUpscaled` (linear mode 5, the full shader): bilinear at the copy's own texels,
+  the game texture's wrap / clamp scaled by k - REGION_CLAMP keeps a font or icon cell's own texels, as `appendHudDraw`
+  wants.
+
+Measured (optimised build, 2560x1440, a drive across 8 districts): 60 fps with it on and off alike, render 0.1-0.8 ms
+both. 34 copies made on the way (the radar's map tiles, 128x128, come as he moves), each ready ~10 ms after it was
+first needed. Made on the render thread at first, they had cost ~5 ms a tile and ~25 ms for a 256x256: hitches -
+hence the helper thread.
+
+Checked: crops at 2560x1440 off / on (the clock, money, ammo, the AK's icon, the radar's map and its N): the edges and
+outlines sharp, no texels of the next atlas cell along the quads' edges.
+
 ## Mouse camera (2026-11-15)
 
 The mouse turns the camera itself on foot and behind a vehicle (it was the right stick before: capped at the stick's
