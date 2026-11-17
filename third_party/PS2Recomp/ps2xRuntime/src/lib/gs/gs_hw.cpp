@@ -56,6 +56,7 @@ namespace
     std::atomic<bool> g_trailsBlur{true};                // [gta-recomp] gsHwSetTrailsBlur
     std::atomic<int> g_hudUpscale{1};                    // [gta-recomp] gsHwSetHudUpscale
     std::atomic<bool> g_hudPackOn{false};                // [gta-recomp] gsHwSetHudPack
+    std::atomic<bool> g_fill2d{false};                   // [gta-recomp] gsHwSetFill2d
     std::string g_hudPackDir;                            // (set before rendering starts)
     std::atomic<uint32_t> g_frameW{0}, g_frameH{0};     // [gta-recomp] gsHwSetFrameSize
     struct TargetRole                                   // [gta-recomp] gsHwSetTargetRole
@@ -166,6 +167,7 @@ void gsHwSetTrailsBlur(bool on) { g_trailsBlur.store(on, std::memory_order_relax
 void gsHwSetHudUpscale(int k) { g_hudUpscale.store(k == 2 || k == 4 ? k : 1, std::memory_order_relaxed); }
 void gsHwSetHudPackDir(const char *dir) { g_hudPackDir = dir ? dir : ""; }
 void gsHwSetHudPack(bool on) { g_hudPackOn.store(on, std::memory_order_relaxed); }
+void gsHwSetFill2d(bool on) { g_fill2d.store(on, std::memory_order_relaxed); }
 
 // [gta-recomp] gsHwShownInputNs (gs_hw.h)
 static int64_t steadyNs()
@@ -476,6 +478,7 @@ namespace
         int8_t wide3d = -1; // [gta-recomp] recorded for a wide picture (frameWide): draws squeezed into the buffer; -1: not asked
         int8_t shown = -1;  // [gta-recomp] its shape, decided when executed (decideShape): 1 wide, 0 4:3
         bool menu = false;  // [gta-recomp] has primitives the classifier names as the game's menu (GSHwAnchorMenu)
+        bool cover = false; // [gta-recomp] gsHwSetFill2d: a full-screen picture was enlarged to cover the frame
         uint64_t privRegs[15]{};
         // Display from CPU VRAM when no render target holds the displayed buffer.
         std::vector<uint32_t> cpuDisplay;
@@ -3697,11 +3700,13 @@ namespace
             // (RenderWare keeps ZTE on: ZTE=0 is prohibited on the GS); projected sprites (clouds, coronas) take the
             // same path at their real depth.
             bool far = true;
-            float x0 = out[0].x, x1 = out[0].x;
+            float x0 = out[0].x, x1 = out[0].x, y0 = out[0].y, y1 = out[0].y;
             for (uint32_t i = 0; i < n; ++i)
             {
                 x0 = std::min(x0, out[i].x);
                 x1 = std::max(x1, out[i].x);
+                y0 = std::min(y0, out[i].y);
+                y1 = std::max(y1, out[i].y);
                 far = far && out[i].z >= 0.99999f; // the largest Z24 / Z32 value
             }
             // 3D (widescreen presentation): depth-tested, not at the far plane
@@ -3721,6 +3726,28 @@ namespace
             // frame turns out wide (decideShape); a draw squeezed into the buffer goes by the recording-time guess
             const bool widescreen = squeeze < 0.9999f;
             const bool wide = widescreen && frameWide();
+            // [gta-recomp] gsHwSetFill2d: a full-screen picture of the game's (textured, not the frame itself; a loading
+            // screen's illustration, a menu backdrop) is drawn to the full width of a wide picture: enlarged as much in
+            // height about the middle, it keeps its shape and is cropped top and bottom (the user's choice, 2026-11-17)
+            // What the game draws over that picture without a scissor of its own goes with it: the loading screen's
+            // progress bar, placed under the logo painted into the picture (Liberty City Stories: one 512x512 texture
+            // drawn at y -77..523; squeezed to the middle, the bar was drawn over the enlarged logo). The menus over a
+            // backdrop keep their 4:3 shape: their draws are scissored to x 80..558 (the pause menu).
+            bool followCover = false;
+            if (wide && s.fbw == 10u && g_fill2d.load(std::memory_order_relaxed) && !m_frame->had3d)
+            {
+                const bool picture = s.tme && !s.texIsRt && x0 <= 1.0f && x1 >= 639.0f && y0 <= 1.0f && y1 >= 447.0f;
+                if (picture)
+                    m_frame->cover = true;
+                followCover = !picture && m_frame->cover && far && s.scx0 == 0u && s.scx1 >= 639u &&
+                              !(x0 <= 1.0f && x1 >= 639.0f);
+                // enlarged about three quarters down, not the middle: the progress bar (y 392..410) stays on screen
+                // (at 434 of 448 at 16:9; about the middle it went below the picture), the crop mostly at the top
+                constexpr float kCoverPivot = 336.0f;
+                if (picture || followCover)
+                    for (uint32_t i = 0; i < n; ++i)
+                        out[i].y = kCoverPivot + (out[i].y - kCoverPivot) / squeeze;
+            }
             if ((wide || classify) && s.fbw == 10u)
             {
                 uint8_t anchor = GSHwAnchorNone;
@@ -3743,7 +3770,7 @@ namespace
                     }
                     hud = anchor != GSHwAnchorNone && g_hudLayer.load(std::memory_order_relaxed);
                 }
-                if (anchor == GSHwAnchorNone && far && !s.texIsRt && !(x0 <= 1.0f && x1 >= 639.0f) && wide)
+                if (anchor == GSHwAnchorNone && far && !s.texIsRt && !(x0 <= 1.0f && x1 >= 639.0f) && wide && !followCover)
                     anchor = GSHwAnchorCentre;
                 if (anchor != GSHwAnchorNone && anchor != GSHwAnchorStretch && (hud ? widescreen : wide))
                 {
@@ -6088,6 +6115,15 @@ namespace
                 return !(e && e[0] == '0');
             }();
             m_3dHistory = (m_3dHistory << 1) | (frame.had3d ? 1u : 0u);
+            // [gta-recomp] gsHwSetFill2d: frames without 3D (menus, loading screens) wide like the game's
+            if (g_fill2d.load(std::memory_order_relaxed))
+            {
+                m_3dHistory = ~0u;
+                m_showing3d = true;
+                m_menuShown = false;
+                frame.shown = 1;
+                return;
+            }
             if (menuSwitch && frame.menu && !frame.had3d)
             {
                 m_3dHistory = 0u;

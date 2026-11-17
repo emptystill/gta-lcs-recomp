@@ -202,6 +202,27 @@ Not yet: entity culling's side planes (VCS widens `CCamera::IsSphereVisible`'s, 
 without it VCS lost buildings, peds and cars in the outer eighths of a 16:9 picture - LCS's twin is not found by its
 VCS code shape: watch the edges in the city); the game's own Vert- widescreen option and the cutscene bars setting.
 
+### Menus and loading screens (2026-11-17)
+
+The user asked for the loading screens and menus to fill a 16:9 picture "like the game", the pictures enlarged and
+cropped. Display: **Wide menus and loading screens** (`display.fill_2d`, off; `LCS_FILL_2D`; `gs_hw.cpp`
+`gsHwSetFill2d`):
+
+- **The shape.** Frames without 3D were shown at 4:3 between bars (`decideShape`, the 3D history). With the option they
+  stay wide: their 2D is squeezed into its 4:3 shape in the middle as during play (far-plane 2D not covering the
+  width), full-width draws reach the edges.
+- **The pictures.** A loading screen is one 512x512 texture drawn at y -77..523 (the game crops it already), with the
+  "Grand Theft Auto" logo painted into it; the pause menu's backdrop the same (-75..522, 256x256). A textured draw
+  covering the whole 640 x 448 in a frame without 3D is enlarged in height by the widening, so it keeps its shape across
+  the full width; about y 336 (three quarters down), not the middle.
+- **The progress bar** (untextured, x 113..248, y 392..410, no scissor) belongs under the logo: drawn after such a
+  picture without a scissor of its own it takes the same enlargement instead of the squeeze (squeezed it lay over the
+  enlarged logo; enlarged about the middle it went below the screen - hence the pivot). The pause menu's draws are
+  scissored to x 80..558, so they keep their 4:3 shape over the enlarged backdrop.
+- Found with the F12 draw list (`PS2X_HW_DUMP_KEY=1`) on the first loading screen and the pause menu's Controls page.
+- Off, as before: a loading screen at 4:3 between bars; LCS's pause menu shows wide with its backdrop squeezed into
+  the middle (the menu primitives are not named by a classifier here, so no switch to 4:3).
+
 ### HUD (2026-11-16)
 
 The user reported the HUD and radar still at 4:3 in full screen, and the weapon icon out of place.

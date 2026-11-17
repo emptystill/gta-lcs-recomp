@@ -493,6 +493,23 @@ namespace
         s.lockedNote = "Always on at 4:3, as on the PS2: choose a widescreen aspect ratio to change it.";
         settings::add(s);
 
+        // Menus and loading screens wide (the user's ask, 2026-11-17: "zoom and crop" for the pictures): frames without
+        // 3D stay wide, the menu keeps its 4:3 shape in the middle, a full-screen picture covers the screen
+        // (gs_hw.cpp gsHwSetFill2d). docs/LCS.md "Menus and loading screens in widescreen".
+        s = {};
+        s.key = "display.fill_2d";
+        s.page = "Display";
+        s.section = "Screen";
+        s.label = "Wide menus and loading screens";
+        s.help = "In widescreen, the menus and loading screens fill the screen like the game: their backgrounds reach "
+                 "the edges, a loading screen's picture is enlarged to cover the screen (its top and bottom cut off) and "
+                 "the menu itself keeps its shape in the middle. Off shows them at 4:3 between black bars, the original.";
+        s.type = Type::Toggle;
+        s.defaultValue = 0;
+        s.env = "LCS_FILL_2D";
+        s.onChange = [](int v) { gsHwSetFill2d(v != 0); };
+        settings::add(s);
+
         s = {};
         s.key = "display.scale";
         s.alias = "scale";
