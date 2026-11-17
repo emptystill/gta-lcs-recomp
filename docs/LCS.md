@@ -552,6 +552,12 @@ cycling did nothing until the detonation, then cycled normally. The same happens
 Tec-9, the flamethrower), each let go 5 ways: plain, while firing, right after firing, while moving, and a 0.08 s
 tap. All 45 ended in state 1 with the flags clear, and he walked normally right after (screenshots).
 
+**After getting out of a vehicle (2026-11-16, the user's report: back to the classic aim until he got in and out
+again).** "On foot" was the in-vehicle flag (+0x538) off **and** no vehicle at +0x534 - but +0x534 is m_pMyVehicle,
+which the game keeps after he gets out (his last vehicle; FindPlayerVehicle 0x107278 reads the flag only). So after
+getting out with F the mouse aim never started and the game's own lock-on aim (state 0x16) took the button. Now the flag
+alone. Checked: out of a car with F, his last car still at +0x534, the aim active (before: inactive).
+
 **Shotgun pellets (2026-11-16, the user's report: "the impact does not go where I aim").** `LCS_SHOT_LOG=1`
 logged every line test of the player's shots. The shotguns' pellets (return 0x2A93E4) are always level: the end is
 at the gun's height whatever the pitch. The game spreads them in yaw only, about his heading. The shotgun (19) has 3

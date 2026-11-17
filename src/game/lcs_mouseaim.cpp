@@ -102,7 +102,10 @@ namespace lcs::mouseaim
             return inRam(ped) ? ped : 0u;
         }
 
-        bool onFoot(uint32_t ped) { return !(rd32(ped + kPedDriving) & 0xFFu) && !inRam(rd32(ped + kPedVehicle)); }
+        // On foot: the in-vehicle flag alone, as FindPlayerVehicle (0x107278) reads it. +0x534 is m_pMyVehicle, kept
+        // after he gets out (his last vehicle): with it in the test the aim stayed off after getting out of a car with
+        // F (the user's report, 2026-11-16).
+        bool onFoot(uint32_t ped) { return !(rd32(ped + kPedDriving) & 0xFFu); }
 
         // A gun this aim is for: instant hit (fire type 1) or the flame-thrower (3); not the snipers (types 28 / 29,
         // whose target button opens the scope: camera mode 7, checked weapon by weapon), not melee (0) or thrown (2).
