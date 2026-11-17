@@ -224,6 +224,12 @@ cropped. Display: **Wide menus and loading screens** (`display.fill_2d`, off; `L
   change (found in a recording of their play, then 20 screenshots a second while changing page). Now only untextured
   draws follow, and only until something textured is drawn after the picture (the menu's text and icons; a loading
   screen draws nothing textured after its picture).
+- **The map zoomed in** (the user's screenshot, 2026-11-17): the map is one 512x512 picture drawn larger than the
+  screen (x -750..449 and further) and clipped to the menu's x 80..558, with a dark box over the islands not yet open
+  (untextured, alpha 0x6e). Once the picture spanned the width it counted as full-width - stretched, and enlarged as a
+  backdrop - while the box was squeezed into 4:3: the two no longer matched. Full width now also needs a scissor
+  covering the screen (`fullWidth` in `recordPrimitive`), so whatever the menu clips to its area keeps the 4:3 shape
+  with it: the map, its box and its blips together, as on the PS2. Also true without the option.
 - Found with the F12 draw list (`PS2X_HW_DUMP_KEY=1`) on the first loading screen and the pause menu's Controls page.
 - Off, as before: a loading screen at 4:3 between bars; LCS's pause menu shows wide with its backdrop squeezed into
   the middle (the menu primitives are not named by a classifier here, so no switch to 4:3).

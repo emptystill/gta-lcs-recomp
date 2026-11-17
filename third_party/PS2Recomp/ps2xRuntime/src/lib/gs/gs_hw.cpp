@@ -3727,6 +3727,12 @@ namespace
             // frame turns out wide (decideShape); a draw squeezed into the buffer goes by the recording-time guess
             const bool widescreen = squeeze < 0.9999f;
             const bool wide = widescreen && frameWide();
+            // [gta-recomp] full width: covering the screen and not clipped to a part of it. A menu's draw scissored to its
+            // 4:3 area stays in it however large: Liberty City Stories' pause map zoomed in is a picture wider than the
+            // screen (x -750..449 and beyond) clipped to x 80..558, under a dark box over the locked islands; taken as
+            // full width it was stretched (and enlarged with gsHwSetFill2d) while the box was squeezed - the two
+            // apart (the user, 2026-11-17).
+            const bool fullWidth = x0 <= 1.0f && x1 >= 639.0f && s.scx0 == 0u && s.scx1 >= 630u;
             // [gta-recomp] gsHwSetFill2d: a full-screen picture of the game's (textured, not the frame itself; a loading
             // screen's illustration, a menu backdrop) is drawn to the full width of a wide picture: enlarged as much in
             // height about the middle, it keeps its shape and is cropped top and bottom (the user's choice, 2026-11-17)
@@ -3740,13 +3746,12 @@ namespace
             bool followCover = false;
             if (wide && s.fbw == 10u && g_fill2d.load(std::memory_order_relaxed) && !m_frame->had3d)
             {
-                const bool picture = s.tme && !s.texIsRt && x0 <= 1.0f && x1 >= 639.0f && y0 <= 1.0f && y1 >= 447.0f;
+                const bool picture = s.tme && !s.texIsRt && fullWidth && y0 <= 1.0f && y1 >= 447.0f;
                 if (picture)
                     m_frame->cover = true;
                 else if (s.tme && far)
                     m_frame->cover = false;
-                followCover = !picture && m_frame->cover && !s.tme && far && s.scx0 == 0u && s.scx1 >= 639u &&
-                              !(x0 <= 1.0f && x1 >= 639.0f);
+                followCover = !picture && m_frame->cover && !s.tme && far && s.scx0 == 0u && s.scx1 >= 639u && !fullWidth;
                 // enlarged about three quarters down, not the middle: the progress bar (y 392..410) stays on screen
                 // (at 434 of 448 at 16:9; about the middle it went below the picture), the crop mostly at the top
                 constexpr float kCoverPivot = 336.0f;
@@ -3776,7 +3781,7 @@ namespace
                     }
                     hud = anchor != GSHwAnchorNone && g_hudLayer.load(std::memory_order_relaxed);
                 }
-                if (anchor == GSHwAnchorNone && far && !s.texIsRt && !(x0 <= 1.0f && x1 >= 639.0f) && wide && !followCover)
+                if (anchor == GSHwAnchorNone && far && !s.texIsRt && !fullWidth && wide && !followCover)
                     anchor = GSHwAnchorCentre;
                 if (anchor != GSHwAnchorNone && anchor != GSHwAnchorStretch && (hud ? widescreen : wide))
                 {
