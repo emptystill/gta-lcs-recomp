@@ -820,6 +820,35 @@ before did. A script still waiting when the clock stops (a pause) is taken back 
 - **The menu**: its pages, the vehicle list with the game's names (accents right), Hide HUD.
 - **Weapons as before**: set 2 slot for slot, the M4 in hand, no reload holding the clip at 30.
 
+### The user's first trainer report (2026-11-16)
+
+- **Repair did nothing visible.** It set the health (and the health cheat's engine / tyres), so the dents, the loose
+  panels and the smoke stayed. It now repairs as the Pay 'n' Spray (FUN_00195238, found from the stores of 1000.0 into
+  a vehicle's +0x268): health 1000, the fire timer cleared (+0x6E0 a car, +0x5D8 a bike), then **CAutomobile::Fix
+  0x138648** / **CBike::Fix 0x1619F0** (the damage manager reset 0x32FB68, every component frame put back, the wheels).
+  Checked: a car wrecked with 0x5F7 (doors, panels, engine broken: its damage manager 00fa0200 0000 0303030303..)
+  came back to a new car's bytes and 1000. A door left swinging stays open until the car moves, as after the Pay 'n'
+  Spray. (0x5F7 is the opposite of a repair: health 0, doors and panels damaged.)
+- **Freeze time changed the weather one after another.** It set the time of day again every 10 frames; the minutes went
+  back each time, and CWeather::Update (0x324C50) takes the hour's fraction going back for a new hour: the next
+  weather of its list each time. CClock::Update (0x1F88C0) adds a minute when the game clock is a game minute past its
+  last tick (**0x3D9DD4**; SetGameClock 0x1F87E0 sets it to now): the trainer now keeps that tick at the game clock every
+  frame. Checked: 20 s frozen at 12:16, the weather unchanged; the clock ran on when unfrozen.
+- **The camera behind a vehicle looked down with the trainer.** Two causes:
+  - With a menu open (F2 / F5) the mouse camera turned itself off (`on = mouseCamera && !blocked`), so the game's own
+    camera took over behind the vehicle for that while, and the mouse camera took its pitch back on closing. It now
+    stays the camera, held still (the mouse motion dropped while blocked). Checked: the pitch the same before, during
+    and after 3 s of the menu.
+  - After the trainer's warp into a vehicle the view tipped over it to look straight down within ~1.5 s (also with no
+    menu). The game eases its car camera's pitch toward a target of its own with a speed, **CCam +0xE4** (the
+    heading's +0xF4); the mouse camera wrote the pitch every frame but not the speed, and where the game's target is
+    not that pitch (after a warp: there is no getting in to settle its camera) the speed built up under it: +0xE4 0 ->
+    -0.027, the pitch out 0.116 -> 1.1. With the mouse camera off the game's camera stayed level, and a normal entry
+    never moved the speed. The speed is now zeroed with the pitch (`GameLayout::directAlphaSpeed`). Ruled out on the
+    way: the camera's target (TheCamera +0x494 is the car either way), RESTORE_CAMERA_JUMPCUT (in the warp's script and
+    a frame later), WARP_PLAYER_INTO_CAR (0x36E) instead of the char's, the car's AI mode (+0x198) and a ped flag.
+    Checked: a warp on an open street (Chinatown) and the three spawn variants all level (front z -0.113..-0.116).
+
 ## Foot camera and walls (2026-11-16)
 
 The user saw the foot camera inside walls / a column.

@@ -46,6 +46,8 @@ namespace vcs::input
         unsigned directActive = 0, directCam0 = 0, directCamStride = 0;
         unsigned directMode = 0, directFootMode = 4u, directCarMode = 18u;
         unsigned directBeta = 0, directBetaTarget = 0, directAlpha = 0, directAlphaNeg = 0;
+        // the pitch's speed (the game eases its pitch with it toward its own target): zeroed with the pitch written
+        unsigned directAlphaSpeed = 0;
         // ... and the camera's result vectors inside the CCam (directCameraResult): Front, Source (and the copy kept
         // before looking behind), Up. 0: the result is left to the game (only the angles are written).
         unsigned directFront = 0, directSource = 0, directSource2 = 0, directUp = 0;

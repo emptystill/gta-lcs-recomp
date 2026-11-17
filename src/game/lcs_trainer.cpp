@@ -61,6 +61,8 @@ namespace
     constexpr uint32_t kTimeScale = 0x003D9CE4u;      // CTimer::ms_fTimeScale (SET_TIME_SCALE's)
     constexpr uint32_t kClockHours = 0x003D9B74u;     // CClock (GET_TIME_OF_DAY's): hours, minutes
     constexpr uint32_t kClockMinutes = 0x003D9B80u;
+    // CClock's last tick (ms): CClock::Update (0x1F88C0) adds a minute when the game clock is a game minute past it
+    constexpr uint32_t kClockLastTick = 0x003D9DD4u;
     constexpr uint32_t kMissionRunning = 0x003D9C29u; // u8: cleared by TERMINATE_THIS_SCRIPT of the mission script
     constexpr uint32_t kMaxWanted = 0x003D829Cu;      // CWanted::MaximumWantedLevel: SetWantedLevel (0x2F4C48) caps at it
     constexpr uint32_t kWeaponInfoPtr = 0x003D9B48u;  // *(*(this) + 4) + type * 0x70: +0 fire type, +0x10 clip size,
@@ -71,6 +73,8 @@ namespace
     constexpr uint32_t kModelInfos = 0x003D8720u;     // -> CModelInfo::ms_modelInfoPtrs; count at kModelCount
     constexpr uint32_t kModelCount = 0x003D9BA0u;
     constexpr uint32_t kStreamInfo = 0x003D0CC8u;     // -> the models' streaming info, 0x14 each: +0xC 1 = loaded
+    constexpr uint32_t kCamera = 0x0043BBF0u;         // TheCamera: the active CCam at +0x220 + (byte +0x10C) * 0x2B0,
+                                                      // its mode at +0x40 (4 on foot, 18 behind a vehicle)
     constexpr uint32_t kText = 0x003D89B8u;           // -> CText: +0 entries {u32 UTF-16 text, char key[8]}, +4 u16 count
     // ped fields
     constexpr uint32_t kPos = 0x30u;
@@ -86,7 +90,7 @@ namespace
     constexpr uint32_t kVehHealth = 0x268u; // float, 1000 undamaged (below 250 it burns)
     constexpr uint32_t kVehSpeed = 0x70u;   // CPhysical: move speed +0x70, turn speed +0x80 (SET_CAR_FORWARD_SPEED's)
     constexpr uint32_t kVehClass = 0x344u;  // 0 automobile, 1 boat, 5 bike (the model's class)
-    constexpr uint32_t kVehDamage = 0x350u; // CAutomobile's damage manager (the health cheat's)
+    constexpr uint32_t kCarFireTimer = 0x6E0u, kBikeFireTimer = 0x5D8u; // how long it has burned (the Pay 'n' Spray's)
     // model info fields
     constexpr uint32_t kMiType = 0x10u;  // u8, 6 = vehicle
     constexpr uint32_t kMiClass = 0x38u; // vehicle class (as kVehClass)
@@ -94,7 +98,7 @@ namespace
     // guest functions chained from the frame boundary (the weapon cheats' and the health cheat's)
     constexpr uint32_t kRequestModel = 0x0018B400u, kLoadRequested = 0x0018F648u, kModelDeletable = 0x0018FC38u;
     constexpr uint32_t kGiveWeapon = 0x001E1180u, kSetCurrentWeapon = 0x001E1470u, kClearWeapons = 0x001E16C8u;
-    constexpr uint32_t kSetEngineStatus = 0x0032FCB8u, kSetWheelStatus = 0x0032FC50u; // (damage manager, ...)
+    constexpr uint32_t kCarFix = 0x00138648u, kBikeFix = 0x001619F0u; // CAutomobile::Fix / CBike::Fix (vehicle)
 
     // ---- The script VM (docs/LCS.md "The script VM") -----------------------------------------------------------
     constexpr uint32_t kScriptSpacePtr = 0x003CF0F4u; // -> ScriptSpace (MAIN.SCM); an IP is an offset from it; 0 until
@@ -682,6 +686,11 @@ namespace
                 if (noReload && clip > 1 && clip < 10000 && rd32(ram, slot + 8) < std::min(clip, total))
                     wr32(ram, slot + 8, std::min(clip, total));
             }
+        // Freeze time: the clock's last tick kept at now, so no minute passes. (The first version set the time of day
+        // again every 10 frames: the minutes went back each time, and CWeather::Update (0x324C50) takes the hour's
+        // fraction going back for a new hour - the weather moved on to the next one each time, the user's report.)
+        if (tr::toggle(tr::FreezeTime))
+            wr32(ram, kClockLastTick, rd32(ram, kGameClock));
         if (tr::toggle(tr::VehicleInvincible))
             if (const uint32_t car = vehicleOf(ram, ped))
                 if (rdf(ram, car + kVehHealth) < 1000.0f)
@@ -715,8 +724,6 @@ namespace
             code.op(SET_UPSIDEDOWN_CAR_NOT_DAMAGED).i(h).b(true);
             g_protectedCar = car;
         }
-        if (tr::toggle(tr::FreezeTime))
-            code.op(SET_TIME_OF_DAY).i(g_frozenHour).i(g_frozenMinute);
         if (!code.empty())
             g_tickScript = startScript(ram, code.finished());
     }
@@ -1269,10 +1276,6 @@ namespace vcs::trainer
                 if (car)
                     code.op(WARP_CHAR_FROM_CAR_TO_COORD).i(me).f(x).f(y).f(z);
                 code.op(WARP_CHAR_INTO_CAR).i(me).local(0);
-                // from one vehicle straight into another the camera would keep following the old one; not while a
-                // mission's script camera may hold it
-                if (car && !ram[kMissionRunning])
-                    code.op(RESTORE_CAMERA_JUMPCUT);
             }
             code.op(MARK_MODEL_AS_NO_LONGER_NEEDED).i(model);
             code.op(MARK_CAR_AS_NO_LONGER_NEEDED).local(0);
@@ -1280,20 +1283,32 @@ namespace vcs::trainer
             notice = name + " spawned";
             return true;
         }, {}, {model});
+        // A frame later, once the camera is the vehicle's: RestoreWithJumpCut puts it behind the vehicle, as getting in
+        // does. After the warp the vehicle's camera started where the old one stood (from foot: at the car, then up
+        // above it, looking straight down - the user's report; from another vehicle: following that one). Issued in
+        // the warp's own script it came too soon (the camera was still the foot one). Only for the player's own camera
+        // (behind a vehicle), not a mission's.
+        queue([](uint8_t *ram, Scm &code, std::string &) {
+            const uint32_t cam = kCamera + 0x220u + ram[(kCamera + 0x10Cu) & kRamMask] % 3u * 0x2B0u;
+            if (toggle(WarpIntoSpawned) && vehicleOf(ram, player(ram)) && (rd32(ram, cam + 0x40u) & 0xFFFFu) == 18)
+                code.op(RESTORE_CAMERA_JUMPCUT);
+            return true;
+        });
     }
 
-    // Health back to full (the engine and fire); a car's engine and tyres too, as the health cheat does
-    // (FUN_0016D0D8). The dents stay - a Pay 'n' Spray fixes those.
+    // As the Pay 'n' Spray repairs (FUN_00195238): health 1000, the fire timer cleared, then CAutomobile::Fix
+    // (0x138648) or CBike::Fix (0x1619F0) - the body, doors, panels, lights and wheels. (The first version set the
+    // health only, with the health cheat's engine / tyres: the dents and the smoke stayed - the user's report.) A boat
+    // has health only.
     void repairVehicle()
     {
         vehicleAction("Vehicle repaired", [](uint8_t *ram, uint32_t car, int32_t h, Scm &code) {
             code.op(SET_CAR_HEALTH).i(h).i(1000);
-            if (rd32(ram, car + kVehClass) == 0)
+            const uint32_t cls = rd32(ram, car + kVehClass);
+            if (cls == 0 || cls == 5)
             {
-                std::vector<Step> steps{{kSetEngineStatus, false, car + kVehDamage, 0u}};
-                for (uint32_t wheel = 0; wheel < 4; ++wheel)
-                    steps.push_back({kSetWheelStatus, false, car + kVehDamage, wheel, 0u});
-                queueSteps(std::move(steps));
+                wr32(ram, car + (cls == 0 ? kCarFireTimer : kBikeFireTimer), 0);
+                queueSteps({{cls == 0 ? kCarFix : kBikeFix, false, car}});
             }
         });
     }

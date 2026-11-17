@@ -501,7 +501,12 @@ namespace vcs::input
                 }
                 // a hand on the mouse moves it more than a nudge of the desk does
                 keysUsed = keysUsed || std::fabs(dx) + std::fabs(dy) > 12.0f;
-                const bool on = m.mouseCamera && !blocked;
+                // A menu with the input (F2, F5): the mouse camera stays the camera, held still. Off instead, the game's
+                // own camera took over behind a vehicle for that while and tilted down, and the mouse camera took that
+                // pitch back when the menu closed (the user's report, 2026-11-16).
+                if (blocked)
+                    dx = dy = 0.0f;
+                const bool on = m.mouseCamera && !freeCamera;
                 // up (+) for a mouse moved forward (SDL: y grows downwards); the game looks up for a stick pulled
                 // back (y > 0)
                 const float up = -dy * (m.mouseInvertY ? -1.0f : 1.0f);
@@ -587,8 +592,10 @@ namespace vcs::input
                         {
                             static const bool mlog = std::getenv("VCS_MOUSE_LOG") != nullptr;
                             if (mlog)
-                                std::fprintf(stderr, "[mouse] camera taken from the game: active %d mode %u -> %u cam 0x%x -> 0x%x frame %u\n",
-                                             dstate.active ? 1 : 0, dstate.mode, dmode, dstate.cam, dcam, frame);
+                                std::fprintf(stderr, "[mouse] camera taken from the game: active %d mode %u -> %u cam 0x%x -> 0x%x frame %u "
+                                             "heading %.3f pitch %.3f\n",
+                                             dstate.active ? 1 : 0, dstate.mode, dmode, dstate.cam, dcam, frame,
+                                             rdf(dcam + L.directBetaTarget), pitchOf(rdf(dcam + L.directAlpha)));
                             dstate.active = true;
                             dstate.mode = dmode;
                             dstate.cam = dcam;
@@ -648,6 +655,13 @@ namespace vcs::input
                             const float gameAlpha = inCar && L.directFront ? std::max(dstate.alpha, -0.07f) : dstate.alpha;
                             wrf(dcam + L.directAlpha, gameAlpha);
                             wrf(dcam + L.directAlphaNeg, -gameAlpha);
+                            // and its pitch speed stopped: the game eases its pitch toward its own target with it, and
+                            // where that target is not this pitch the speed built up frame after frame under the pitch
+                            // written - after the trainer's warp into a car (no getting-in to settle the game's
+                            // camera) the view tipped over the car to look straight down (+0xE4 to -0.027, the pitch
+                            // out 1.1; the user's report, 2026-11-16)
+                            if (L.directAlphaSpeed)
+                                wrf(dcam + L.directAlphaSpeed, 0.0f);
                         }
                     }
                 }

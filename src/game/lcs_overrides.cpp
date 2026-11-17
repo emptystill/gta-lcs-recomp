@@ -541,6 +541,7 @@ namespace
             input.directBetaTarget = 0xF0u;
             input.directAlpha = 0xD8u;
             input.directAlphaNeg = 0xE0u;
+            input.directAlphaSpeed = 0xE4u; // (the stick's pitch speed; +0xF4 the heading's)
             // the result vectors (Front +0x1C0: read by CCamera::Process at 0x28FCE8; Source / its copy / Up next to it)
             input.directFront = 0x1C0u;
             input.directSource = 0x1D0u;
