@@ -222,6 +222,27 @@ namespace render
         rect({cx - radius, cy - radius, radius * 2, radius * 2}, color, radius);
     }
 
+    void image(Rect r, const float uv[4], const float *mask, float opacity)
+    {
+        if (r.w <= 0 || r.h <= 0)
+            return;
+        Instance *i = add(kImage, r, 0);
+        if (!i)
+            return;
+        std::memcpy(i->uv, uv, sizeof(i->uv));
+        i->color0 = faded(core::rgb(0xFFFFFF, uint8_t(255.0f * core::clamp01(opacity))));
+        if (mask)
+        {
+            float *slots[4] = {&i->radii[0], &i->radii[2], &i->params[0], &i->params[2]};
+            for (int k = 0; k < 4; ++k)
+            {
+                slots[k][0] = mask[k * 2] + draw.dx;
+                slots[k][1] = mask[k * 2 + 1] + draw.dy;
+            }
+            i->color1 = 0xFFFFFFFFu; // "masked"
+        }
+    }
+
     void glyph(Rect r, const float uv[4], Color color, float blur)
     {
         Instance *i = add(kGlyph, r, blur > 0 ? blur + 1 : 0);

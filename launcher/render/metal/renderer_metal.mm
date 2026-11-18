@@ -323,6 +323,7 @@ namespace render
                 [enc setFragmentBytes:&c length:sizeof(c) atIndex:0];
                 [enc setVertexBuffer:mtl.instances[mtl.frame] offset:0 atIndex:kInstanceBuffer];
                 [enc setFragmentTexture:mtl.atlas atIndex:0];
+                [enc setFragmentTexture:mtl.atlas atIndex:1]; // the pictures' (render/images.h: none decoded on macOS yet)
                 [enc setFragmentSamplerState:mtl.sampler atIndex:0];
                 [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4 instanceCount:count];
                 rendererStats.instances = int(count);

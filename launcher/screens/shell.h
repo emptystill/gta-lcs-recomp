@@ -5,6 +5,7 @@
 #include "model/tasks.h"
 #include "render/draw.h"
 #include "render/font.h"
+#include "render/images.h"
 #include "screens/screens.h"
 #include "ui/theme.h"
 #include "ui/widgets.h"
@@ -149,6 +150,8 @@ namespace screens
 
     // ---- the parts (each in its own file) --------------------------------------------------------------------------
     void drawBackdrop(Rect r, float hero, bool alive = false); // hero: 0..1, the scene of Home; alive: it moves
+    // Home's pictures from launcher/art (backdrop.cpp): 0..2 the cover's panels, 3 the logo; null when not there
+    const render::Image *homeArt(int which);
     float drawTitleBar(Rect r);              // returns its height
     void drawSetup(Rect r);
     void drawHome(Rect r);

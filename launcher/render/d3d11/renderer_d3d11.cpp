@@ -12,6 +12,7 @@
 
 #include "render/draw.h"
 #include "render/font.h"
+#include "render/images.h"
 
 #include <windows.h>
 #include <d3d11.h>
@@ -58,6 +59,9 @@ namespace render
             ID3D11ShaderResourceView *atlasView = nullptr;
             int atlasSize = 0;
             uint32_t atlasGeneration = 0;
+            ID3D11Texture2D *imageTexture = nullptr; // render/images.h: the pictures, made again when they change
+            ID3D11ShaderResourceView *imageView = nullptr;
+            uint32_t imageGeneration = 0;
             bool loseDevice = false;
         };
         State d3d;
@@ -326,6 +330,31 @@ namespace render
             atlas.dirtyX1 = atlas.dirtyY1 = 0;
         }
 
+        // the pictures' atlas: whole, when a picture was added (rare: at start)
+        void uploadImages()
+        {
+            if (imageAtlas.size == 0 || (d3d.imageTexture && d3d.imageGeneration == imageAtlas.generation))
+                return;
+            release(d3d.imageView);
+            release(d3d.imageTexture);
+            D3D11_TEXTURE2D_DESC desc{};
+            desc.Width = desc.Height = UINT(imageAtlas.size);
+            desc.MipLevels = desc.ArraySize = 1;
+            desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+            desc.SampleDesc.Count = 1;
+            desc.Usage = D3D11_USAGE_DEFAULT;
+            desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+            D3D11_SUBRESOURCE_DATA data{imageAtlas.rgba.data(), UINT(imageAtlas.size * 4), 0};
+            if (FAILED(d3d.device->CreateTexture2D(&desc, &data, &d3d.imageTexture)) ||
+                FAILED(d3d.device->CreateShaderResourceView(d3d.imageTexture, nullptr, &d3d.imageView)))
+            {
+                release(d3d.imageTexture);
+                return;
+            }
+            d3d.imageGeneration = imageAtlas.generation;
+            rendererStats.uploadBytes += imageAtlas.rgba.size();
+        }
+
         bool resize(int width, int height)
         {
             if (width <= 0 || height <= 0)
@@ -353,6 +382,8 @@ namespace render
             d3d.frameWaitable = nullptr;
             release(d3d.atlasView);
             release(d3d.atlasTexture);
+            release(d3d.imageView);
+            release(d3d.imageTexture);
             release(d3d.instances);
             release(d3d.constants);
             release(d3d.sampler);
@@ -366,6 +397,7 @@ namespace render
             release(d3d.device);
             d3d.instanceCapacity = 0;
             d3d.atlasGeneration = 0;
+            d3d.imageGeneration = 0;
             d3d.frameWaited = false;
         }
 
@@ -418,6 +450,7 @@ namespace render
         if (!d3d.rtv)
             return;
         uploadAtlas();
+        uploadImages();
         const size_t count = uploadInstances();
 
         D3D11_MAPPED_SUBRESOURCE mapped{};
@@ -448,7 +481,8 @@ namespace render
         d3d.context->VSSetConstantBuffers(0, 1, &d3d.constants);
         d3d.context->PSSetShader(d3d.ps, nullptr, 0);
         d3d.context->PSSetConstantBuffers(0, 1, &d3d.constants);
-        d3d.context->PSSetShaderResources(0, 1, &d3d.atlasView);
+        ID3D11ShaderResourceView *views[2] = {d3d.atlasView, d3d.imageView ? d3d.imageView : d3d.atlasView};
+        d3d.context->PSSetShaderResources(0, 2, views);
         d3d.context->PSSetSamplers(0, 1, &d3d.sampler);
         d3d.context->DrawInstanced(4, UINT(count), 0, 0);
         rendererStats.instances = int(count);

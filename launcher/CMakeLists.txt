@@ -22,6 +22,7 @@ set(VCS_LAUNCHER_COMMON
     model/game_settings.cpp
     screens/game_settings.cpp
     render/draw.cpp
+    render/images.cpp
     render/font.cpp
     render/icons.cpp
     ui/ui.cpp
@@ -69,7 +70,7 @@ if(WIN32)
     )
     # the resource compiler doesn't report the files it embeds: a redrawn icon would otherwise not rebuild
     set_source_files_properties(launcher.rc PROPERTIES OBJECT_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/launcher.ico")
-    target_link_libraries(LCSLauncher PRIVATE d3d11 dxgi dwrite dwmapi ole32 shell32 uuid winmm advapi32)
+    target_link_libraries(LCSLauncher PRIVATE d3d11 dxgi dwrite dwmapi ole32 shell32 uuid winmm advapi32 windowscodecs)
     target_compile_definitions(LCSLauncher PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
     if(MINGW)  # mingw-w64's headers default to Windows 7; the Windows SDK's (and the launcher) to Windows 10
         target_compile_definitions(LCSLauncher PRIVATE _WIN32_WINNT=0x0A00 WINVER=0x0A00)

@@ -833,12 +833,14 @@ namespace render
             if (VkResult r = vk.vkCreateSampler(d.device, &s, nullptr, &d.sampler); r != VK_SUCCESS)
                 return fail(error, "vkCreateSampler", r);
 
-            // the bindings tools/hlsl_spirv.py gives the registers: texture t0 -> 16, sampler s0 -> 32
-            VkDescriptorSetLayoutBinding bindings[2]{};
+            // the bindings tools/hlsl_spirv.py gives the registers: texture t0 -> 16, sampler s0 -> 32; t1 (the pictures,
+            // render/images.h: none decoded on Linux yet) -> 17, the glyph atlas stands in for it
+            VkDescriptorSetLayoutBinding bindings[3]{};
             bindings[0] = {16, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr};
             bindings[1] = {32, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr};
+            bindings[2] = {17, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr};
             VkDescriptorSetLayoutCreateInfo sl{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-            sl.bindingCount = 2;
+            sl.bindingCount = 3;
             sl.pBindings = bindings;
             if (VkResult r = vk.vkCreateDescriptorSetLayout(d.device, &sl, nullptr, &d.setLayout); r != VK_SUCCESS)
                 return fail(error, "vkCreateDescriptorSetLayout", r);
@@ -851,7 +853,7 @@ namespace render
             if (VkResult r = vk.vkCreatePipelineLayout(d.device, &pl, nullptr, &d.pipelineLayout); r != VK_SUCCESS)
                 return fail(error, "vkCreatePipelineLayout", r);
 
-            VkDescriptorPoolSize sizes[2] = {{VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1}, {VK_DESCRIPTOR_TYPE_SAMPLER, 1}};
+            VkDescriptorPoolSize sizes[2] = {{VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 2}, {VK_DESCRIPTOR_TYPE_SAMPLER, 1}};
             VkDescriptorPoolCreateInfo dp{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
             dp.maxSets = 1;
             dp.poolSizeCount = 2;
@@ -1081,12 +1083,14 @@ namespace render
                 atlas.markAllDirty();
                 VkDescriptorImageInfo image{VK_NULL_HANDLE, d.atlasView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
                 VkDescriptorImageInfo sampler{d.sampler, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_UNDEFINED};
-                VkWriteDescriptorSet writes[2]{};
+                VkWriteDescriptorSet writes[3]{};
                 writes[0] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, d.descriptorSet, 16, 0, 1,
                              VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, &image, nullptr, nullptr};
                 writes[1] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, d.descriptorSet, 32, 0, 1,
                              VK_DESCRIPTOR_TYPE_SAMPLER, &sampler, nullptr, nullptr};
-                vk.vkUpdateDescriptorSets(d.device, 2, writes, 0, nullptr);
+                writes[2] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, d.descriptorSet, 17, 0, 1,
+                             VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, &image, nullptr, nullptr}; // the pictures' stand-in
+                vk.vkUpdateDescriptorSets(d.device, 3, writes, 0, nullptr);
             }
             if (atlas.dirtyX0 >= atlas.dirtyX1 || atlas.dirtyY0 >= atlas.dirtyY1)
                 return;

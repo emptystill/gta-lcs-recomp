@@ -29,6 +29,7 @@ namespace render
         kLine = 3,   // antialiased segment with round caps
         kArc = 4,    // antialiased arc with round caps (spinners, rings)
         kQuad = 5,   // a filled convex quadrilateral, antialiased (corners in uv and radii)
+        kImage = 6,  // a picture from the image atlas (uv 0..1), optionally masked by a convex quad (radii + params)
     };
 
     // Keep in sync with Instance in render/d3d11/ui.hlsl.
@@ -110,4 +111,7 @@ namespace render
     // a convex quadrilateral, corners in order around it (x0 y0 x1 y1 x2 y2 x3 y3)
     void quad(const float corners[8], Color color);
     void glyph(Rect r, const float uv[4], Color color, float blur = 0); // blur: a radius in pixels
+    // a picture (render/images.h): r shows the image atlas's uv (0..1: u0 v0 u1 v1); mask: 4 corners (x, y, clockwise)
+    // the picture is cut to, or null; opacity multiplies it
+    void image(Rect r, const float uv[4], const float *mask = nullptr, float opacity = 1);
 }

@@ -106,6 +106,14 @@ motion is (2026-11-01, the user's "rethink everything"; before, a sidebar of pag
   step carries the box there while its corners blend from the old shape into the new one (`render::quad`, a filled
   convex quadrilateral). Any step can be looked at from the
   rail. The Folder step only stops Setup when doctor has a warning for it and nothing is built yet.
+- **Home's pictures** (the user's, 2026-11-17): `launcher/art/cover-1..3.jpg|png` (the tall left panel, top right,
+  bottom right) and `logo.png` - Rockstar's art and a fan's, so **never committed** (`.gitignore`; a release has none,
+  and Home falls back to its drawings and the name in the brand font). `render/images.cpp` decodes them with WIC
+  (Windows; Linux / macOS have no decoder yet and draw the fallback), shrinks them to the size Home needs on a 4K
+  screen, premultiplies and packs them into one 2048 RGBA atlas; the renderer's `kImage` instance samples it (t1; 4 x 4
+  samples over a pixel's footprint, no mipmaps) cut to a convex quad (the panel). Vulkan and Metal bind the glyph atlas
+  in t1's place. Each panel's picture is fitted around its face and drifts slowly closer and back; the logo replaces
+  the eyebrow and the name, "Recompiled for PC" under it.
 - **Home** (`home.cpp`): the name beside a comic-book cover in the style of Liberty City Stories' box art
   (`backdrop.cpp`, drawn by the renderer, no image: DECISIONS.md 2026-11-17): three slanted panels with a dark gutter -
   red, a made man in a fedora smoking under a "LIBERTY CITY, 1998" caption; orange, the skyline with its suspension

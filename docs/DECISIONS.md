@@ -75,6 +75,11 @@ The user does not want anything of the VCS port in what the player sees. The set
   Game sheet with every F2 page. The game describes its own registry (`lcs.exe --settings-json`) instead of the
   launcher keeping a copy of the list, so a setting added to the game shows in the launcher with no launcher change;
   the launcher edits lcs.ini only while the game is closed.
+- **Home's pictures and cards** (the user, 2026-11-17: three pictures and the logo for the cover, "Recompilado para
+  PC", cards unlike VCS's launcher): the pictures load from `launcher/art` and stay out of git (Rockstar's and a fan
+  artist's work, not ours to publish); without them Home is the drawn cover as before. The three cards became slanted
+  comic panels - black border, a hard offset shadow and a tag in the cover's red / orange / blue, titles in the heavy
+  face - where VCS's are rounded glass cards.
 - **F2 off, the game's own menu instead** (the user, after the Game sheet: "podemos quitar el menu que viene del
   juego... a menos que algunas opciones se puedan integrar nativamente"): the pause menu's table has room, so Aspect
   ratio, Widescreen HUD, Frame rate cap (Display) and Master volume (Audio) are rows of the game's menu

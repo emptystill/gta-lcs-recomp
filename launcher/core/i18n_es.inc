@@ -9,6 +9,7 @@
 {"Liberty City Stories", "Liberty City Stories"},
 {"LIBERTY CITY, 1998", "LIBERTY CITY, 1998"},
 {"The PS2 classic, recompiled for this PC.", "El clásico de PS2, recompilado para este PC."},
+{"Recompiled for PC", "Recompilado para PC"},
 {"The launcher comes back when the game ends.", "El launcher vuelve cuando termina el juego."},
 {"It comes back when the game ends", "Vuelve cuando termina el juego"},
 {"Close the launcher", "Cerrar el launcher"},

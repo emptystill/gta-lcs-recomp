@@ -1,7 +1,10 @@
-// Home: everything is ready. The name over the setting sun, one big button for the next thing to do (Play, Update the
-// build, Check again), what was built under it, and three quiet cards along the bottom: the setup, the saves, updates.
+// Home: everything is ready. The game's logo (launcher/art/logo.png; else the name in the brand font) beside the comic
+// cover, one big button for the next thing to do (Play, Update the build, Check again), what was built under it, and
+// three cards along the bottom - slanted comic panels with a hard offset shadow, each in one of the cover's colours: the
+// setup, the saves, updates.
 #include "shell.h"
 
+#include "core/i18n.h"
 #include "model/system.h"
 #include "platform/platform.h"
 
@@ -18,22 +21,65 @@ namespace screens
 
     namespace
     {
-        // a translucent card over the backdrop; clicking it does `action`
-        bool glassCard(std::string_view idLabel, Rect r, char32_t icon, Color iconColor, std::string_view title, std::string_view line)
+        // the cover's printed colours (backdrop.cpp's)
+        constexpr Color kInk = core::rgb(0x07080D);
+        constexpr Color kComicRed = core::rgb(0xB8141E), kComicOrange = core::rgb(0xF4A12A), kComicBlue = core::rgb(0x2D5C9E);
+
+        // capitals, Spanish ones too (Latin-1's lower case letters in UTF-8: C3 A0..BE but B7)
+        std::string upper(std::string s)
+        {
+            for (size_t i = 0; i < s.size(); ++i)
+            {
+                const unsigned char c = static_cast<unsigned char>(s[i]);
+                if (c >= 'a' && c <= 'z')
+                    s[i] = char(c - 32);
+                else if (c == 0xC3 && i + 1 < s.size())
+                {
+                    const unsigned char d = static_cast<unsigned char>(s[i + 1]);
+                    if (d >= 0xA0 && d <= 0xBE && d != 0xB7)
+                        s[i + 1] = char(d - 0x20);
+                    ++i;
+                }
+            }
+            return s;
+        }
+
+        void slanted(Rect r, float skew, Color c)
+        {
+            const float q[8] = {r.x + skew, r.y, r.right(), r.y, r.right() - skew, r.bottom(), r.x, r.bottom()};
+            quad(q, c);
+        }
+
+        // a card as a comic panel: slanted, a black border, a hard shadow in its colour that it lifts off when hovered,
+        // its colour's tag with the icon, the title in the heavy face; `dot`: something to look at (a colour, or 0)
+        bool comicCard(std::string_view idLabel, Rect r, char32_t icon, Color accent, std::string_view title, std::string_view line,
+                       Color dot = 0)
         {
             const ui::Interaction in = ui::interact(ui::id(idLabel), r, true);
             ui::Widget &w = *in.w;
-            const Rect box = r.offset(0, -w.hover * px(2));
-            shadow(box.offset(0, px(10)), theme::shade(0.45f + 0.15f * w.hover), px(20), px(theme::kRadius));
-            rectEx(box, withAlpha(mix(theme::kSurface, theme::kSurfaceHi, w.hover), 0.78f), withAlpha(theme::kSurface, 0.70f),
-                   px(theme::kRadius), theme::ink(0.07f + 0.05f * w.hover), ui::hairline());
-            circle(box.x + px(34), box.y + px(36), px(16), withAlpha(iconColor, 0.14f));
-            drawIcon(kFontIcons, px(15), box.x + px(34), box.y + px(36), iconColor, icon);
-            ui::label(kFontSemibold, px(theme::kBody), {box.x + px(60), box.y + px(18), box.w - px(80), px(22)}, theme::kText, title);
-            ui::label(kFontBody, px(theme::kSmall), {box.x + px(60), box.y + px(40), box.w - px(80), px(20)}, theme::kDim, line);
-            drawIcon(kFontIcons, px(11), box.right() - px(22), box.y + px(36), withAlpha(theme::kDim, 0.4f + 0.6f * w.hover), theme::icon::kChevronRight);
+            const float skew = px(12), b = px(2.5f), lift = w.hover * px(3);
+            const Rect box = r.offset(-lift, -lift);
+            slanted(r.offset(px(7), px(7)), skew, withAlpha(accent, 0.85f));
+            slanted({box.x - b, box.y - b, box.w + 2 * b, box.h + 2 * b}, skew + b * 0.4f, kInk);
+            slanted(box, skew, mix(theme::kSurface, theme::kSurfaceHi, w.hover));
+            // the colour's tag down the left edge, the icon on it
+            const float tagW = px(50);
+            const float tag[8] = {box.x + skew, box.y, box.x + skew + tagW, box.y, box.x + tagW, box.bottom(), box.x, box.bottom()};
+            quad(tag, accent);
+            drawIcon(kFontIcons, px(17), box.x + skew * 0.5f + tagW * 0.5f, box.cy(), accent == kComicOrange ? kInk : core::rgb(0xFFFFFF), icon);
+            const float tx = box.x + tagW + px(18), tw = box.w - tagW - px(52);
+            const float titleSize = fontFound(kFontBrand) ? px(22) : px(19);
+            const std::string shownTitle = upper(core::i18n::tr(title));
+            ui::label(kFontBrand, titleSize, {tx, box.y + px(10), tw, px(30)}, theme::kText, shownTitle);
+            if (dot)
+            {
+                const float dx = tx + std::min(measure(kFontBrand, titleSize, shownTitle), tw) + px(10);
+                circle(dx, box.y + px(25), px(4), dot);
+            }
+            ui::label(kFontBody, px(theme::kSmall), {tx, box.y + px(42), tw, px(20)}, theme::kDim, line);
+            drawIcon(kFontIcons, px(12), box.right() - skew - px(18), box.cy(), mix(theme::kDim, accent, w.hover), theme::icon::kChevronRight);
             if (w.focus > 0.01f)
-                outline(box.inset(-px(3)), withAlpha(theme::kPink, w.focus), px(2), px(theme::kRadius + 3));
+                outline(box.inset(-px(6)), withAlpha(accent, w.focus), px(2), px(4));
             return in.clicked;
         }
 
@@ -58,11 +104,24 @@ namespace screens
         const float colW = std::min(px(560), r.w * 0.55f);
         float y = r.y + std::max(px(40), r.h * 0.17f);
 
-        pushReveal(since, 0);
-        ui::eyebrow(left, y, theme::kPink, "GRAND THEFT AUTO");
-        popReveal();
-        y += px(24);
-        pushReveal(since, 1);
+        if (const render::Image *logo = homeArt(3))
+        {
+            // the game's logo (launcher/art/logo.png), a warm glow behind it
+            pushReveal(since, 0);
+            const float h = std::min(px(170), r.h * 0.26f);
+            const float w = h * float(logo->width) / float(logo->height);
+            shadow({left + w * 0.1f, y + h * 0.2f, w * 0.8f, h * 0.6f}, withAlpha(theme::kPink, 0.14f), px(30), px(20));
+            drawImageFit(*logo, {left - px(6), y - px(8), w, h});
+            popReveal();
+            y += h - px(4);
+        }
+        else
+        {
+            pushReveal(since, 0);
+            ui::eyebrow(left, y, theme::kPink, "GRAND THEFT AUTO");
+            popReveal();
+            y += px(24);
+            pushReveal(since, 1);
         {
             // the name in Pricedown when the player has it (kFontBrand), else in the display font
             const float size = fontFound(kFontBrand) ? px(66) : px(58);
@@ -73,9 +132,10 @@ namespace screens
             drawText(kFontBrand, size, left - px(2), y + m.ascent, theme::kText, "Liberty City Stories");
             y += m.ascent + m.descent + px(4);
         }
-        popReveal();
+            popReveal();
+        }
         pushReveal(since, 2);
-        ui::label(kFontBody, px(16), {left, y, colW, px(26)}, theme::kDim, "The PS2 classic, recompiled for this PC.");
+        ui::label(kFontBody, px(16), {left, y, colW, px(26)}, theme::kDim, "Recompiled for PC");
         popReveal();
         y += px(48);
 
@@ -190,7 +250,7 @@ namespace screens
 
         // the cards along the bottom
         const float cardsH = px(74);
-        const float gap = px(16);
+        const float gap = px(24);
         Rect strip{left, r.bottom() - px(36) - cardsH, r.right() - left - std::max(px(56), r.w * 0.07f), cardsH};
         if (strip.y < y + px(12))
             return; // a short window: the cards make room for the essentials
@@ -202,8 +262,8 @@ namespace screens
             for (int i = 0; i < kStepCount; ++i)
                 good += stepStatus(app, i) == ui::Status::Good ? 1 : 0;
             const std::string line = good == kStepCount ? "Everything is ready" : std::to_string(good) + " of 4 steps ready  \xC2\xB7  " + gameLine(app);
-            if (glassCard("#card-setup", {strip.x, strip.y, cw, cardsH}, theme::icon::kRepair,
-                          status == ui::Status::Good ? theme::kTeal : theme::kAmber, "Setup", line))
+            if (comicCard("#card-setup", {strip.x, strip.y, cw, cardsH}, theme::icon::kRepair, kComicRed, "Setup", line,
+                          status == ui::Status::Good ? 0 : theme::kAmber))
                 openSetup(-1);
         }
         popReveal();
@@ -212,7 +272,7 @@ namespace screens
             std::string line = "Your memory card, backed up on demand";
             if (app.backups.size())
                 line = "Last backup " + app.backups[0]["name"].str();
-            if (glassCard("#card-saves", {strip.x + cw + gap, strip.y, cw, cardsH}, theme::icon::kSave, theme::kPink, "Saves", line))
+            if (comicCard("#card-saves", {strip.x + cw + gap, strip.y, cw, cardsH}, theme::icon::kSave, kComicOrange, "Saves", line))
                 openSheet(Sheet::Saves);
         }
         popReveal();
@@ -223,10 +283,10 @@ namespace screens
             const std::string line = installed ? "Version " + app.updatedTo + " is installed"
                                      : newer   ? "Version " + app.updateInfo["latest"].str() + " is available"
                                                : "Version " + app.sourceVersion;
-            if (glassCard("#card-updates", {strip.x + 2 * (cw + gap), strip.y, cw, cardsH},
-                          installed ? theme::icon::kRefresh : newer ? theme::icon::kDownload : theme::icon::kSync,
-                          installed ? theme::kTeal : newer ? theme::kPink : theme::kDim,
-                          installed ? "Restart to finish" : newer ? "Update available" : "Updates", line))
+            if (comicCard("#card-updates", {strip.x + 2 * (cw + gap), strip.y, cw, cardsH},
+                          installed ? theme::icon::kRefresh : newer ? theme::icon::kDownload : theme::icon::kSync, kComicBlue,
+                          installed ? "Restart to finish" : newer ? "Update available" : "Updates", line,
+                          installed ? theme::kTeal : newer ? theme::kPink : 0))
                 openSheet(Sheet::Settings);
         }
         popReveal();

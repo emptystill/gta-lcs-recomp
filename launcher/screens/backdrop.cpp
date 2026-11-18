@@ -1,13 +1,16 @@
 // Behind everything: a night-blue sky and, on Home, a comic book's cover in Liberty City Stories' manner - three slanted
-// panels with thick black borders and flat colours on a halftone ground: a made man in a fedora with a cigarette (red),
-// Liberty City's skyline and its suspension bridge at dusk (orange), a 1970s sedan at speed (the game's pale blue), and
-// a caption box. Everything is drawn with the renderer's own primitives - no picture of the game's. Alive while Home
-// shows and the game isn't running: the smoke curls up, windows go on and off, searchlights sweep, the speed lines run,
-// the halftone breathes - at 30 frames a second (15 when the window isn't focused); standing still with reduce motion
-// on. Every other screen draws the sky once and sleeps. (DECISIONS.md 2026-11-17: the launcher's look is LCS's.)
+// panels with thick black borders on a halftone ground, and a caption box. In the panels: the player's pictures when
+// launcher/art has them (cover-1..3: the user's choice, 2026-11-17 - LCS's art, never committed; render/images.h), each
+// cut to its panel and drifting slowly closer; else the launcher's own drawings - a made man in a fedora with a
+// cigarette (red), Liberty City's skyline and its suspension bridge at dusk (orange), a 1970s sedan at speed (blue).
+// Alive while Home shows and the game isn't running: the pictures drift, the smoke curls up, windows go on and off,
+// searchlights sweep, the speed lines run, the halftone breathes - at 30 frames a second (15 when the window isn't
+// focused); standing still with reduce motion on. Every other screen draws the sky once and sleeps. (DECISIONS.md
+// 2026-11-17: the launcher's look is LCS's.)
 #include "shell.h"
 
 #include "platform/platform.h"
+#include "render/images.h"
 
 #include <algorithm>
 #include <cmath>
@@ -72,8 +75,9 @@ namespace screens
             quad(q, col);
         }
 
-        // a panel: its drop shadow, the black border (the quad grown about its centre), the flat fill
-        void panel(const Scene &S, const Panel &P, Color fill, Rect &box)
+        // a panel: its drop shadow, the black border (the quad grown about its centre), the flat fill; its corners in
+        // pixels to `corners` (8 floats)
+        void panel(const Scene &S, const Panel &P, Color fill, Rect &box, float *corners)
         {
             Pt p[4];
             float cx = 0, cy = 0;
@@ -104,7 +108,20 @@ namespace screens
             };
             fillQuad(grow(p[0]), grow(p[1]), grow(p[2]), grow(p[3]), kInk);
             fillQuad(p[0], p[1], p[2], p[3], fill);
+            for (int i = 0; i < 4; ++i)
+            {
+                corners[i * 2] = p[i].x;
+                corners[i * 2 + 1] = p[i].y;
+            }
         }
+
+        // the pictures (launcher/art), loaded once: the three panels' and the logo
+        struct Art
+        {
+            bool tried = false;
+            render::Image image[4];
+        };
+        Art g_art;
 
         // halftone: dots on a slanted grid, larger toward `light` (a comic's printed shading); `breathe` swells them
         void halftone(Rect area, float cell, Color col, Pt light, float reach, float breathe, float maxR)
@@ -317,11 +334,13 @@ namespace screens
         }
 
         // the comic's caption box: yellowed paper, a black border, the heavy face
-        void caption(Rect box, const char *text)
+        void caption(Rect box, const char *text, bool atBottom)
         {
             const float size = px(15);
             const float tw = measure(kFontBrand, size, text);
-            const Rect r{box.x + px(10), box.y + px(10), tw + px(16), size * 1.45f};
+            const float h = size * 1.45f;
+            // at the top over the drawing; at the bottom over a picture (its face is up there)
+            const Rect r{box.x + px(10), atBottom ? box.bottom() - h - px(12) : box.y + px(10), tw + px(16), h};
             rect({r.x - px(2.5f), r.y - px(2.5f), r.w + px(5), r.h + px(5)}, kInk);
             rect(r, kPaper);
             drawText(kFontBrand, size, r.x + px(8), r.y + size * 1.08f, kInk, text);
@@ -334,6 +353,30 @@ namespace screens
             shadow({S.w * 0.55f, S.h * 0.05f, S.w * 0.5f, S.h * 0.7f}, withAlpha(theme::kPink, 0.05f + 0.07f * hero), S.s * 0.22f, S.s * 0.2f);
             shadow({-S.w * 0.2f, S.h * 0.65f, S.w * 0.55f, S.h * 0.5f}, withAlpha(theme::kHorizon, 0.35f), S.s * 0.25f, S.s * 0.2f);
         }
+    }
+
+    const render::Image *homeArt(int which)
+    {
+        if (!g_art.tried && shell.app)
+        {
+            g_art.tried = true;
+            const std::filesystem::path dir = shell.app->root / "launcher" / "art";
+            // the longest side each is stored at: as large as Home shows it on a 4K screen, and all four fit the atlas
+            static const char *kNames[4] = {"cover-1", "cover-2", "cover-3", "logo"};
+            static const int kSides[4] = {1200, 700, 900, 600};
+            for (int i = 0; i < 4; ++i)
+                for (const char *ext : {".jpg", ".png", ".jpeg"})
+                {
+                    const std::filesystem::path file = dir / (std::string(kNames[i]) + ext);
+                    std::error_code ec;
+                    if (std::filesystem::is_regular_file(file, ec))
+                    {
+                        g_art.image[i] = render::loadImage(file, kSides[i]);
+                        break;
+                    }
+                }
+        }
+        return which >= 0 && which < 4 && g_art.image[which].ok ? &g_art.image[which] : nullptr;
     }
 
     void drawBackdrop(Rect r, float hero, bool alive)
@@ -355,13 +398,39 @@ namespace screens
         halftone({S.w * 0.47f, S.h * 0.06f, S.w * 0.53f, S.h * 0.80f}, px(14), withAlpha(theme::kHorizon, 0.55f),
                  {S.w * 0.78f, S.h * 0.40f}, S.s * 0.75f, 0.5f + 0.5f * std::sin(S.t * 0.4f), px(5.5f));
         Rect boxes[3];
+        float corners[3][8];
         const Color fills[3] = {kPanelRed, kPanelOrange, kPanelBlue};
         for (int i = 0; i < 3; ++i)
-            panel(S, kPanels[i], fills[i], boxes[i]);
-        madeMan(S, boxes[0]);
-        skyline(S, boxes[1]);
-        sedan(S, boxes[2]);
-        caption(boxes[0], "LIBERTY CITY, 1998");
+            panel(S, kPanels[i], fills[i], boxes[i], corners[i]);
+        // the pictures: each where its face is (focus), drifting closer and back over half a minute or so
+        struct Look
+        {
+            float fx, fy, period;
+        };
+        constexpr Look kLooks[3] = {{0.57f, 0.36f, 31.0f}, {0.46f, 0.45f, 27.0f}, {0.48f, 0.30f, 35.0f}};
+        for (int i = 0; i < 3; ++i)
+        {
+            const render::Image *img = homeArt(i);
+            if (!img)
+                continue;
+            float x0 = 1e9f, y0 = 1e9f, x1 = -1e9f, y1 = -1e9f;
+            for (int k = 0; k < 4; ++k)
+            {
+                x0 = std::min(x0, corners[i][k * 2]);
+                x1 = std::max(x1, corners[i][k * 2]);
+                y0 = std::min(y0, corners[i][k * 2 + 1]);
+                y1 = std::max(y1, corners[i][k * 2 + 1]);
+            }
+            const float drift = 0.5f - 0.5f * std::cos(S.t * 2.0f * core::kPi / kLooks[i].period + float(i) * 1.7f);
+            render::drawImageCover(*img, {x0, y0, x1 - x0, y1 - y0}, corners[i], kLooks[i].fx, kLooks[i].fy, 1.02f + 0.07f * drift);
+        }
+        if (!homeArt(0))
+            madeMan(S, boxes[0]);
+        if (!homeArt(1))
+            skyline(S, boxes[1]);
+        if (!homeArt(2))
+            sedan(S, boxes[2]);
+        caption(boxes[0], "LIBERTY CITY, 1998", homeArt(0) != nullptr);
         popOffset();
         popOpacity();
 

@@ -24,6 +24,8 @@ cbuffer Frame : register(b0)
 
 Texture2D<float> glyph_atlas : register(t0);
 SamplerState atlas_sampler : register(s0);
+// pictures (render/images.h): RGBA8, premultiplied; a backend without pictures binds the glyph atlas here
+Texture2D<float4> image_atlas : register(t1);
 
 static const uint KIND_RECT = 0;
 static const uint KIND_GLYPH = 1;
@@ -31,6 +33,7 @@ static const uint KIND_SHADOW = 2;
 static const uint KIND_LINE = 3;
 static const uint KIND_ARC = 4;
 static const uint KIND_QUAD = 5;
+static const uint KIND_IMAGE = 6;
 
 struct Instance
 {
@@ -68,7 +71,7 @@ VSOut vs_main(uint vertex_id : SV_VertexID, Instance inst)
     // pixels a clip edge cuts through by how much of them is inside, so a clip that moves by a fraction of a pixel
     // moves smoothly (the sun's slices on Home) and one on pixel edges is exactly as before.
     float2 grow = 1.0;
-    if (inst.kind == KIND_GLYPH || inst.kind == KIND_LINE || inst.kind == KIND_ARC)
+    if (inst.kind == KIND_GLYPH || inst.kind == KIND_LINE || inst.kind == KIND_ARC || inst.kind == KIND_IMAGE)
         grow = 0.0; // their rects already hold their edges
     if (inst.kind == KIND_SHADOW)
         grow = 3.0 * inst.params.y + 1.0;
@@ -86,7 +89,7 @@ VSOut vs_main(uint vertex_id : SV_VertexID, Instance inst)
     o.position = float4(p * (2.0 / viewport_size) * float2(1, -1) + float2(-1, 1), 0, 1);
     o.pixel = p;
     float2 t = (p - inst.rect.xy) / max(inst.rect.zw - inst.rect.xy, 1e-5);
-    o.uv = lerp(inst.uv.xy, inst.uv.zw, t) * atlas_inv_size;
+    o.uv = lerp(inst.uv.xy, inst.uv.zw, t) * (inst.kind == KIND_IMAGE ? 1.0 : atlas_inv_size); // pictures: 0..1 already
     o.rect = inst.rect;
     o.radii = inst.radii;
     o.color0 = inst.color0;
@@ -210,8 +213,45 @@ float sd_arc(float2 p, float start, float sweep, float r)
     return min(length(p - e0), length(p - e1));
 }
 
+// The distance outside a convex quadrilateral (the largest distance outside any of its edges), in pixels
+float sd_quad(float2 pixel, float2 q0, float2 q1, float2 q2, float2 q3)
+{
+    float2 q[4] = {q0, q1, q2, q3};
+    float area = 0.0;
+    [unroll] for (int k = 0; k < 4; k++)
+        area += q[k].x * q[(k + 1) % 4].y - q[(k + 1) % 4].x * q[k].y;
+    float side = area > 0.0 ? 1.0 : -1.0;
+    float d = -1e9;
+    [unroll] for (int k = 0; k < 4; k++)
+    {
+        float2 e = q[(k + 1) % 4] - q[k];
+        float2 outward = side * float2(e.y, -e.x) / max(length(e), 1e-5);
+        d = max(d, dot(pixel - q[k], outward));
+    }
+    return d;
+}
+
 float4 shade(VSOut i)
 {
+    if (i.kind == KIND_IMAGE)
+    {
+        // a picture: 4 x 4 samples over the pixel's footprint (it is shown smaller than it is stored, and there are no
+        // mipmaps), masked by a quadrilateral when one is given (corners in radii.xy, radii.zw, params.xy, params.zw;
+        // color1 non-zero)
+        float2 per_pixel = (i.data.zw - i.data.xy) / max(i.rect.zw - i.rect.xy, 1e-5);
+        float4 c = 0.0;
+        [unroll] for (int y = 0; y < 4; y++)
+        {
+            [unroll] for (int x = 0; x < 4; x++)
+                c += image_atlas.SampleLevel(atlas_sampler, i.uv + (float2(x, y) - 1.5) * 0.25 * per_pixel, 0);
+        }
+        c *= 1.0 / 16.0;
+        float a = i.color0.a;
+        if (any(i.color1 != 0.0))
+            a *= saturate(0.5 - sd_quad(i.pixel, i.radii.xy, i.radii.zw, i.params.xy, i.params.zw));
+        return c * a;
+    }
+
     if (i.kind == KIND_LINE)
     {
         float d = sd_segment(i.pixel, i.data.xy, i.data.zw) - i.params.z * 0.5;
@@ -221,20 +261,8 @@ float4 shade(VSOut i)
 
     if (i.kind == KIND_QUAD)
     {
-        // a convex quadrilateral (corners in uv.xy, uv.zw, radii.xy, radii.zw): the distance to it is the largest
-        // distance outside any of its edges
-        float2 q[4] = {i.data.xy, i.data.zw, i.radii.xy, i.radii.zw};
-        float area = 0.0;
-        [unroll] for (int k = 0; k < 4; k++)
-            area += q[k].x * q[(k + 1) % 4].y - q[(k + 1) % 4].x * q[k].y;
-        float side = area > 0.0 ? 1.0 : -1.0;
-        float d = -1e9;
-        [unroll] for (int k = 0; k < 4; k++)
-        {
-            float2 e = q[(k + 1) % 4] - q[k];
-            float2 outward = side * float2(e.y, -e.x) / max(length(e), 1e-5);
-            d = max(d, dot(i.pixel - q[k], outward));
-        }
+        // a convex quadrilateral (corners in uv.xy, uv.zw, radii.xy, radii.zw)
+        float d = sd_quad(i.pixel, i.data.xy, i.data.zw, i.radii.xy, i.radii.zw);
         float a = saturate(0.5 - d) * i.color0.a;
         return float4(i.color0.rgb * a, a);
     }
