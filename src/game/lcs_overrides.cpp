@@ -17,6 +17,7 @@
 
 #include <cmath>
 #include "game/vcs_framerate.h"
+#include "game/vcs_particle_timing.h"
 #include "game/vcs_input.h"
 #include "game/vcs_stream.h"
 #include "runtime/ps2_disc_image.h"
@@ -613,6 +614,40 @@ namespace
             frame.timeStep = 0x003D9B8Cu;     // 1.0 = 1/50 s ($gp + 0x2C9C)
             frame.timeStepNonClipped = 0x003D9D9Cu;
             vcs::installFrameRateHooks(runtime, frame);
+        }
+        // Particles on the time step (game/vcs_particle_timing.h; docs/LCS.md "Above 30 fps"): the same particle record
+        // as VCS's (rates at +0x38 / +0x3A / +0x3E, size +0x30 / +0x34, next +0x48), systems of 0x94 bytes. AddParticle
+        // 0x1CD5B8 (its overload 0x1CD580 = xmatch of VCS 0x1E9040, which calls it), CParticle::Update 0x1CE1B0 (the
+        // free list 0x3D9DB0's other user; decompiled: the per-frame rates as in VCS), the systems at *0x3D9AF8 ($gp +
+        // 0x2C08), 82 of them, their particles from +0x90, the animation period at +0x42. Update returns at once while
+        // 0x3D9CB4 (the pause menu), 0x3D9C68 or the byte 0x3D8BA4 is set.
+        {
+            vcs::ParticleLayout p;
+            p.addParticle = 0x001CD5B8u;
+            p.addParticle2 = 0x001CD580u;
+            p.update = 0x001CE1B0u;
+            p.addJet = 0;
+            p.systems = 0x003D9AF8u;
+            p.systemCount = 82u;
+            p.systemStride = 0x94u;
+            p.listHead = 0x90u;
+            p.period = 0x42u;
+            p.timeStep = 0x003D9B8Cu;
+            p.frameCounter = 0x003D9B6Cu;
+            p.clock = 0x003D9B70u;
+            p.pauses = {{0x003D9CB4u, 4u}, {0x003D9C68u, 4u}, {0x003D8BA4u, 1u}};
+            // the continuous emitters by their behaviour (330 call sites in 64 functions; the measured per-frame ones -
+            // car PreRender 0x12FD58's rain on the body, tyre smoke and exhaust, 0x12F738, 0x325CA8, 0x326EB0 - run in
+            // calls ~33 ms apart or less), not a list. Never throttled: 0x1F9B28 and 0x2A7854 read the particle back,
+            // 0x1CD5AC is the overload's own call
+            p.autoThrottle = true;
+            p.never = {0x001CD5ACu, 0x001F9B28u, 0x002A7854u};
+            // spawns on a chance rolled every frame (no runs to see): per call. 0x326EB0's type 77 in the rain (0.9
+            // calls a second at 30 fps, 4.5 at 144). (The exhaust - the car's PreRender rolls (revs + 1.1) x (2 rand + 1)
+            // against a threshold each frame - is left to the runs: per call it came out at 3.4 puffs a second against
+            // the PS2's 8.6, by runs 11.7 - its chance a frame is lower at 144 fps, the revs differing.)
+            p.throttled = {0x00327000u};
+            vcs::installParticleTimingHooks(runtime, p);
         }
         // Widescreen (Hor+, game/vcs_display.h): the camera's view-window setter 0x113478 is VCS's FUN_001AB9E0 (xmatch,
         // identical code); the settings' aspect widens its horizontal extent. The presenter and the renderer's HUD

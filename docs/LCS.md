@@ -183,8 +183,41 @@ Differences from VCS, and the instruction patches they needed (`game/lcs/overrid
   wheels' rolling resistance per frame (VCS `CVehicle::ProcessWheel` + `vcs_physics_timing.cpp`: cars coast to a stop
   faster at high frame rates - LCS has no function with VCS's constants together), cars / bikes in water, boats'
   rudder, bike lean, moving platforms, the follow cameras' automatic turn (`max(step, 1.0)`), and the per-frame
-  effects (particles, mission meters, lightning...: `src/game/vcs_*_timing.cpp`). `tools/stepscan.py` lists LCS's
-  step comparisons to start from.
+  effects (mission meters, lightning...: `src/game/vcs_*_timing.cpp`). `tools/stepscan.py` lists LCS's step
+  comparisons to start from.
+
+### Above 30 fps: particles (2026-11-17)
+
+VCS's particle timing (`src/game/vcs_particle_timing.cpp`) runs on LCS with a `vcs::ParticleLayout` of LCS's addresses
+(`lcs_overrides.cpp`):
+
+- **Found**: `AddParticle` 0x1CD5B8 (its overload 0x1CD580 = xmatch of VCS 0x1E9040, which calls it), `CParticle::Update`
+  0x1CE1B0 (the free list 0x3D9DB0's other user, `FUN_001CFF30` frees; decompiled in `build/analysis/decomp/
+  lcs_pupdate.c`). The particle record is VCS's (rates at +0x38 / +0x3A / +0x3E, size +0x30 / +0x34, destroy time
+  +0x20, next +0x48); the systems differ: 82 of 0x94 bytes at `*0x3D9AF8` ($gp + 0x2C08), particles from +0x90, the
+  animation period at +0x42. Update returns at once while 0x3D9CB4, 0x3D9C68 or the byte 0x3D8BA4 is set. 330 calls of
+  AddParticle in 64 functions (`build/analysis/lcs_particle_sites.txt`: type and whether the caller reads the particle
+  back - 0x1F9B28 and 0x2A7854 do).
+- **The emitters without a list** (`ParticleLayout::autoThrottle`): VCS's list of continuous emitters came from
+  measuring every scene; for LCS an emitter (call site, entity) that calls on frames at most 2 apart for more than 100
+  ms goes at the PS2's rate - a frame's calls together (rain on a car spawns `rain x 4.5 + 1` a frame) - while events
+  (shots, crashes) and short bursts pass. Sites that roll a chance every frame make no runs: listed (0x327000, type
+  77 in the rain), throttled per call as in VCS. The exhaust rolls one too, but per call it came out too thin (3.4 a
+  second against 8.6: its chance a frame was lower at 144 fps), so it is left to the runs (11.7).
+- **Measured** (`tools/lcs_particle_audit.py`: a new game, an Idaho idling, driven, a burnout, rain, walking in it, at
+  forced steps; game seconds):
+
+  | | 30 fps | 144 fps before | 144 fps after |
+  |---|---|---|---|
+  | particles made a second | 487 | 3566 | 784 |
+  | exhaust (type 65) lives | 267 ms | 56 ms | 271 ms |
+  | tyre smoke (66) | 400 ms | 83 ms | 403 ms |
+  | 67 / 61 / 75 | 1067 / 1333 / 8033 ms | 222 / 278 / 1771 | 1069 / 1340 / 8007 |
+
+  The rest of the 784 against 487 is the rain on the car (367 against 215 a second: the rain's intensity ramps on the
+  clock and the two runs' scenes differ in it). Sparks (type 1) still live one frame (7 ms against 33).
+- Not covered by the scenes: fire, damage smoke, water, boats, helicopters, explosions - the runs rule covers them as
+  long as they spawn every frame or every other.
 
 Speed: uncapped 130 game frames a second at the first mission (hidden run); the GS stage is the limit (texture uploads
 and their hashing). `soleQueuedWriter` (runtime) walked every queued writer of each block for each texture lookup; from
@@ -1176,9 +1209,10 @@ own menu, the rest in the launcher's Game sheet):
 
 In the order agreed with the user (most likely to break play first). VCS has each of these; on LCS none is done.
 
-- [ ] **Above 30 fps**: what counts frames instead of time - particles and effects (`vcs_particle_timing`,
-  `vcs_effects_timing`), mission bars and timers (`vcs_script_timing`), physics / music timing, the scripted cutscenes
-  stuck on "Loading..." at 60 fps (`vcs_script_fixes`). Expected to break missions as the user goes on.
+- [ ] **Above 30 fps**: what counts frames instead of time - [x] particles (2026-11-17, "Above 30 fps: particles"),
+  effects (`vcs_effects_timing`: lightning, clouds, shake, ped fade...), mission bars and timers
+  (`vcs_script_timing`), physics / music timing, the scripted cutscenes stuck on "Loading..." at 60 fps
+  (`vcs_script_fixes`). Expected to break missions as the user goes on.
 - [x] **The pause menu with the mouse and keyboard** (2026-11-17, `lcs_frontend`): Enter / Escape, tabs by click,
   the wheel and the buttons in pages, the map's zoom. Still to do: hovering a page's options, sliders by dragging,
   the map dragged.

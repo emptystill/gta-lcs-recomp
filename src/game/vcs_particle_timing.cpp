@@ -38,15 +38,10 @@ namespace vcs
 {
     namespace
     {
-        constexpr uint32_t kAddParticle = 0x001E9078u;  // CParticle::AddParticle(type a0, pos a1, dir a2, entity a3, ...)
-        constexpr uint32_t kAddParticle2 = 0x001E9040u; // the overload without a colour (calls kAddParticle)
-        constexpr uint32_t kUpdate = 0x001E9C90u;       // CParticle::Update
-        constexpr uint32_t kSystems = 0x0070F318u;      // pointer to the particle systems: 0x84 bytes each
-        constexpr uint32_t kSystemCount = 90u;
-        constexpr uint32_t kPool = 0x004EFC30u, kPoolSize = 750u, kParticleSize = 0x50u;
-        constexpr uint32_t kTimeStep = 0x004CD110u;     // CTimer::ms_fTimeStep (1.0 = 1/50 s)
-        constexpr uint32_t kFrameCounter = 0x004CD124u; // CTimer::m_FrameCounter
-        constexpr uint32_t kUserPause = 0x004CD2ACu, kCodePause = 0x004CD11Cu;
+        // VCS: AddParticle(type a0, pos a1, dir a2, entity a3, ...), systems of 0x84 bytes, the pool 750 x 0x50 at
+        // 0x4EFC30; the time step 1.0 = 1/50 s. ParticleLayout holds the addresses (another game's: lcs_overrides.cpp).
+        ParticleLayout g_L;
+        constexpr uint32_t kPoolSize = 4096u; // a list walk's safety limit (VCS's pool holds 750)
         constexpr float kPs2Step = 50.0f / 30.0f;
 
         // The continuous emitters' AddParticle calls: return addresses (jal + 8). From build/analysis/particle_sites.txt
@@ -273,7 +268,6 @@ namespace vcs
             0x002E2734u,
         };
 
-        constexpr uint32_t kAddJetExplosion = 0x001EBD28u; // CParticle::AddJetExplosion (a burst of its own)
 
         PS2Runtime::RecompiledFunction g_origAdd = nullptr, g_origAdd2 = nullptr, g_origUpdate = nullptr, g_origJet = nullptr;
 
@@ -307,7 +301,7 @@ namespace vcs
         {
             if (!active())
                 return 1.0f;
-            const float step = rd<float>(rdram, kTimeStep);
+            const float step = rd<float>(rdram, g_L.timeStep);
             return step > 0.0f && step < kPs2Step * 0.9f ? step / kPs2Step : 1.0f;
         }
 
@@ -315,7 +309,8 @@ namespace vcs
         bool throttled(uint32_t ra)
         {
             static const std::vector<uint32_t> sorted = [] {
-                std::vector<uint32_t> v(std::begin(kThrottled), std::end(kThrottled));
+                std::vector<uint32_t> v = g_L.throttled.empty() ? std::vector<uint32_t>(std::begin(kThrottled), std::end(kThrottled))
+                                                                : g_L.throttled;
                 std::sort(v.begin(), v.end());
                 return v;
             }();
@@ -326,6 +321,7 @@ namespace vcs
         {
             float sum = 1.0f; // the first call passes
             uint32_t frame = 0;
+            uint32_t lastMs = 0, runStartMs = 0; // autoThrottle: the last call, and when its run of calls began
         };
         std::unordered_map<uint64_t, Emitter> g_emitters;
         std::unordered_map<uint64_t, uint32_t> g_callsThisFrame; // (site, entity) -> calls so far this frame
@@ -345,13 +341,17 @@ namespace vcs
             (void)rdram;
         }
 
+        bool never(uint32_t ra) { return std::find(g_L.never.begin(), g_L.never.end(), ra) != g_L.never.end(); }
+
         // whether this call spawns: the PS2's count per second at any frame rate
         bool emitterPasses(uint8_t *rdram, uint32_t ra, uint32_t entity)
         {
             const float scale = frameScale(rdram);
-            if (scale >= 1.0f || !throttled(ra))
+            if (scale >= 1.0f || (g_L.autoThrottle ? never(ra) : !throttled(ra)))
                 return true;
-            const uint32_t frame = rd<uint32_t>(rdram, kFrameCounter);
+            // (autoThrottle: `throttled` names the sites that spawn on a chance rolled every frame - no runs to see -
+            // throttled per call as in VCS's list)
+            const uint32_t frame = rd<uint32_t>(rdram, g_L.frameCounter);
             if (frame != g_callsFrame)
             {
                 g_callsFrame = frame;
@@ -361,6 +361,41 @@ namespace vcs
                         it = frame - it->second.frame > 600u ? g_emitters.erase(it) : std::next(it);
             }
             const uint64_t site = static_cast<uint64_t>(ra) << 32 | entity;
+            if (g_L.autoThrottle && !throttled(ra))
+            {
+                // By the emitter (site, entity) and the frame: its first call of a frame decides for all its calls of
+                // that frame (some spawn a varying number a frame: rain on a car). A run - calls on frames 1 or 2
+                // apart at most - is throttled once it has lasted 100 ms: a continuous emitter,
+                // not an event or a burst.
+                Emitter &e = g_emitters[site];
+                if (e.frame == frame && e.frame != 0)
+                    return e.sum >= 0.0f; // (this frame's decision: sum kept >= 0 when it passed, -1 when not)
+                const uint32_t ms = rd<uint32_t>(rdram, g_L.clock);
+                // (every frame or every other: what the PS2 did once or every other frame. An emitter already on a
+                // timer of its own - the exhaust: a call every ~9 frames at 144 fps - never makes a run)
+                const bool inRun = e.frame != 0 && frame - e.frame <= 2u;
+                float acc = e.sum < 0.0f ? -e.sum - 1.0f : e.sum; // what is carried (stored as -1 - carry when vetoed)
+                if (!inRun)
+                {
+                    e.runStartMs = ms;
+                    acc = 1.0f;
+                }
+                e.lastMs = ms;
+                e.frame = frame;
+                if (ms - e.runStartMs < 100u)
+                {
+                    e.sum = 0.0f;
+                    return true;
+                }
+                acc += scale;
+                if (acc < 1.0f + 1e-4f)
+                {
+                    e.sum = -1.0f - std::max(acc, 0.0f);
+                    return false;
+                }
+                e.sum = std::min(acc - 1.0f, 1.0f);
+                return true;
+            }
             const uint32_t n = g_callsThisFrame[site]++;
             Emitter &e = g_emitters[site ^ (static_cast<uint64_t>(n) * 0x9E3779B97F4A7C15ull)];
             // one that stopped and starts again (a car stood, rain began) starts like on the PS2: its first call passes
@@ -412,7 +447,7 @@ namespace vcs
             ++l.first;
             l.second += nowMs - s.spawnMs;
         }
-        Slot g_slots[kPoolSize];
+        std::unordered_map<uint32_t, Slot> g_slots; // by the particle's address
         constexpr uint32_t kRateOffsets[3] = {0x38u, 0x3Au, 0x3Eu};
 
         struct Period
@@ -420,7 +455,7 @@ namespace vcs
             bool valid = false;
             uint16_t orig = 0, wrote = 0;
         };
-        Period g_periods[kSystemCount];
+        std::vector<Period> g_periods;
 
         // this frame's amount of a per-frame integer rate: orig x scale, the fraction carried to the next frames
         int16_t dither(int16_t orig, float scale, float &acc)
@@ -439,10 +474,7 @@ namespace vcs
         // write: scale the rates (else only follow the particle, for VCS_PARTICLE_LOG)
         void scaleParticle(uint8_t *rdram, uint32_t p, int type, float scale, float step, bool write, uint32_t nowMs)
         {
-            const uint32_t i = (p - kPool) / kParticleSize;
-            if (p < kPool || i >= kPoolSize || (p - kPool) % kParticleSize)
-                return;
-            Slot &s = g_slots[i];
+            Slot &s = g_slots[p];
             const uint32_t destroy = rd<uint32_t>(rdram, p + 0x20);
             int16_t cur[3];
             for (int k = 0; k < 3; ++k)
@@ -505,44 +537,51 @@ namespace vcs
             const bool restore = !write && wasWriting;
             wasWriting = write;
             write = write || restore;
-            if ((!write && !log) || rd<uint8_t>(rdram, kUserPause) || rd<uint8_t>(rdram, kCodePause))
+            if (!write && !log)
                 return;
+            for (const auto &[addr, bytes] : g_L.pauses) // paused: Update does nothing
+                if (bytes == 1 ? rd<uint8_t>(rdram, addr) != 0 : rd<uint32_t>(rdram, addr) != 0)
+                    return;
             ++g_walk;
-            const uint32_t nowMs = rd<uint32_t>(rdram, 0x004CD104u);
-            const float scale = write && !restore ? frameScale(rdram) : 1.0f, step = rd<float>(rdram, kTimeStep);
-            const uint32_t systems = rd<uint32_t>(rdram, kSystems);
+            const uint32_t nowMs = rd<uint32_t>(rdram, g_L.clock);
+            const float scale = write && !restore ? frameScale(rdram) : 1.0f, step = rd<float>(rdram, g_L.timeStep);
+            const uint32_t systems = rd<uint32_t>(rdram, g_L.systems);
             if (!systems)
                 return;
-            for (uint32_t t = 0; t < kSystemCount; ++t)
+            if (g_periods.size() != g_L.systemCount)
+                g_periods.assign(g_L.systemCount, Period{});
+            for (uint32_t t = 0; t < g_L.systemCount; ++t)
             {
-                const uint32_t sys = systems + t * 0x84u;
+                const uint32_t sys = systems + t * g_L.systemStride;
                 // the animation period (+0x32): the counter +0x3C counts up to it and resets the frame after, so a
                 // picture lasts period + 2 frames - on the PS2 (period + 2) / 30 s
                 Period &per = g_periods[t];
-                const uint16_t cur = rd<uint16_t>(rdram, sys + 0x32);
+                const uint16_t cur = rd<uint16_t>(rdram, sys + g_L.period);
                 if (!per.valid || cur != per.wrote)
                     per = {true, cur, cur};
                 if (per.orig && write)
                 {
                     const float frames = (per.orig + 2.0f) / scale - 2.0f;
                     per.wrote = scale >= 1.0f ? per.orig : static_cast<uint16_t>(std::clamp(std::lround(frames), 1l, 0xFFFFl));
-                    wr<uint16_t>(rdram, sys + 0x32, per.wrote);
+                    wr<uint16_t>(rdram, sys + g_L.period, per.wrote);
                 }
                 const int type = rd<int32_t>(rdram, sys);
-                uint32_t p = rd<uint32_t>(rdram, sys + 0x80);
+                uint32_t p = rd<uint32_t>(rdram, sys + g_L.listHead);
                 for (uint32_t n = 0; p && n < kPoolSize; ++n)
                 {
                     scaleParticle(rdram, p, type, scale, step, write, nowMs);
                     p = rd<uint32_t>(rdram, p + 0x48);
                 }
             }
-            for (Slot &sl : g_slots) // not on any list now: freed by the last Update
-                if (sl.valid && sl.seen != g_walk)
+            for (auto it = g_slots.begin(); it != g_slots.end();) // not on any list now: freed by the last Update
+                if (it->second.seen != g_walk)
                 {
-                    if (log)
-                        particleDied(sl, nowMs);
-                    sl.valid = false;
+                    if (log && it->second.valid)
+                        particleDied(it->second, nowMs);
+                    it = g_slots.erase(it);
                 }
+                else
+                    ++it;
         }
 
         void logRates(uint8_t *rdram)
@@ -551,7 +590,7 @@ namespace vcs
             if (!log)
                 return;
             static int64_t lastMs = -1;
-            const int64_t ms = static_cast<int64_t>(rd<uint32_t>(rdram, 0x004CD104u)); // the game clock
+            const int64_t ms = static_cast<int64_t>(rd<uint32_t>(rdram, g_L.clock)); // the game clock
             ++g_logFrames;
             if (lastMs < 0)
                 lastMs = ms;
@@ -563,7 +602,8 @@ namespace vcs
             std::fprintf(stderr, "[particles] %.1f s, %.1f frames/s, AddParticle calls/s by return address (passed):", secs,
                          g_logFrames / secs);
             for (const auto &[ra, calls] : rows)
-                std::fprintf(stderr, " %x:%.1f(%.1f)%s", ra, calls / secs, g_logPassed[ra] / secs, throttled(ra) ? "*" : "");
+                std::fprintf(stderr, " %x:%.1f(%.1f)%s", ra, calls / secs, g_logPassed[ra] / secs,
+                             (g_L.autoThrottle ? !never(ra) : throttled(ra)) ? "*" : "");
             std::fprintf(stderr, "\n");
             std::vector<std::pair<int, std::pair<uint64_t, uint64_t>>> lives(g_lifetimes.begin(), g_lifetimes.end());
             std::sort(lives.begin(), lives.end(), [](auto &a, auto &b) { return a.second.first > b.second.first; });
@@ -588,23 +628,27 @@ namespace vcs
 
     void setParticleTimingReduced(bool on) { g_reduced.store(on, std::memory_order_relaxed); }
 
-    void installParticleTimingHooks(PS2Runtime &runtime)
+    void installParticleTimingHooks(PS2Runtime &runtime) { installParticleTimingHooks(runtime, ParticleLayout{}); }
+
+    void installParticleTimingHooks(PS2Runtime &runtime, const ParticleLayout &layout)
     {
-        g_origAdd = runtime.lookupFunction(kAddParticle);
-        g_origAdd2 = runtime.lookupFunction(kAddParticle2);
-        g_origUpdate = runtime.lookupFunction(kUpdate);
-        if (!g_origAdd || !g_origAdd2 || !g_origUpdate)
+        g_L = layout;
+        g_origAdd = runtime.lookupFunction(g_L.addParticle);
+        g_origAdd2 = g_L.addParticle2 ? runtime.lookupFunction(g_L.addParticle2) : nullptr;
+        g_origUpdate = runtime.lookupFunction(g_L.update);
+        if (!g_origAdd || (g_L.addParticle2 && !g_origAdd2) || !g_origUpdate)
         {
             std::fprintf(stderr, "[particle-timing] AddParticle / Update (0x%x / 0x%x / 0x%x) not found: particles stay on the frame rate\n",
-                         kAddParticle, kAddParticle2, kUpdate);
+                         g_L.addParticle, g_L.addParticle2, g_L.update);
             return;
         }
-        runtime.replaceFunction(kAddParticle, &addParticle<&g_origAdd>);
-        runtime.replaceFunction(kAddParticle2, &addParticle<&g_origAdd2>);
-        runtime.replaceFunction(kUpdate, &update);
-        g_origJet = runtime.lookupFunction(kAddJetExplosion);
+        runtime.replaceFunction(g_L.addParticle, &addParticle<&g_origAdd>);
+        if (g_origAdd2)
+            runtime.replaceFunction(g_L.addParticle2, &addParticle<&g_origAdd2>);
+        runtime.replaceFunction(g_L.update, &update);
+        g_origJet = g_L.addJet ? runtime.lookupFunction(g_L.addJet) : nullptr;
         if (g_origJet)
-            runtime.replaceFunction(kAddJetExplosion, &addParticle<&g_origJet>);
+            runtime.replaceFunction(g_L.addJet, &addParticle<&g_origJet>);
         if (!enabled())
             std::fprintf(stderr, "[particle-timing] off (VCS_PARTICLE_TIMING=0): particles fade and spawn per frame\n");
     }
