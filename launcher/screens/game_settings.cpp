@@ -1,4 +1,4 @@
-// The Game sheet: the game's own settings (its F2 menu) in the launcher, from lcs.exe's description of them
+// The Game sheet: the game's own settings (the F2 menu's) in the launcher, from lcs.exe's description of them
 // (model/game_settings.h): its pages as tabs, each page's sections and rows - a switch, a choice (segments, or arrows
 // for long lists), a slider, a key to bind, a button - and the hovered row's help at the bottom. Changes go to lcs.ini
 // at once and apply when the game starts; while the game runs the sheet only shows them (the game owns lcs.ini then).
@@ -362,7 +362,7 @@ namespace screens
         if (app.gameRunning)
         {
             y += ui::paragraph(kFontBody, px(theme::kBody), {r.x, y, r.w, 0}, theme::kAmber,
-                               "The game is running: change them in the game (F2). Here they show as the game started.") + px(12);
+                               "The game is running: aspect ratio, HUD, frame rate cap and volume change in its pause menu (Display, Audio), the rest here once it is closed.") + px(12);
             S.capturing.clear();
         }
 

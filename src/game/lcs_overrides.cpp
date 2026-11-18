@@ -5,6 +5,7 @@
 #include "debug/rig.h"
 #include "game/lcs_camwall.h"
 #include "game/lcs_mouseaim.h"
+#include "game/lcs_options.h"
 #include "game/lcs_frontend.h"
 #include "game/lcs_prompts.h"
 #include "game/lcs_trainer.h"
@@ -255,6 +256,7 @@ namespace
     {
         vcs::onFrameKick();
         lcs::prompts::onFrameKick(rdram); // the button prompts' textures and context to the renderer (game/lcs_prompts.h)
+        lcs::options::onFrameKick(rdram); // our settings' rows in the pause menu's table (game/lcs_options.h)
         g_origFrameKick(rdram, ctx, runtime);
     }
 
@@ -656,6 +658,7 @@ namespace
         lcs::weapons::install(runtime); // the detonator's weapon switch (game/lcs_weapons.h)
         lcs::prompts::install(runtime); // button prompts by device (game/lcs_prompts.h)
         lcs::frontend::install(runtime); // the pause menu with Enter / Escape and the mouse (game/lcs_frontend.h)
+        lcs::options::install(runtime); // our settings as rows of the pause menu (game/lcs_options.h)
         g_origLimiter = runtime.lookupFunction(kLimiter);
         if (g_origLimiter)
             runtime.replaceFunction(kLimiter, &frameBoundary);

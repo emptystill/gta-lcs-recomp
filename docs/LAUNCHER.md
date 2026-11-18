@@ -125,8 +125,9 @@ motion is (2026-11-01, the user's "rethink everything"; before, a sidebar of pag
   bottom (Ctrl+L, or *Show details*; it opens by itself on a failure). A failure slides in a card with a red edge that
   shakes once: the code's title and fix (`errorHelp` in `launcher/model/tasks.cpp`), *Try again*, *Open the log*,
   *Make a report*. Success: the check, what happened, *Play* after a build.
-- **Game settings** (`game_settings.cpp`, the title bar's *Game*; the user's ask, 2026-11-17): the game's own F2 menu
-  in a wide sheet - its pages as tabs, each page's sections and rows (a switch; a choice as segments, or arrows for long
+- **Game settings** (`game_settings.cpp`, the title bar's *Game*; the user's ask, 2026-11-17): the game's settings -
+  the F2 menu's, which is off by default since (Advanced > *Settings menu in the game (F2)*; four of them are rows of
+  the game's own pause menu, docs/LCS.md) - in a wide sheet - its pages as tabs, each page's sections and rows (a switch; a choice as segments, or arrows for long
   lists; a slider; a key to bind - click, then a key, mouse button or wheel notch, Escape cancels, right-click clears an
   optional one; a button for the presets and Reset all), the hovered row's help in a band at the bottom, and *Restore
   this page's defaults*. Nothing is written twice: lcs.exe describes its registry (`lcs.exe --settings-json FILE`,

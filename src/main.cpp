@@ -763,6 +763,20 @@ namespace
         vcs::prompts::registerSettings(); // the Enhancements page: button prompts by device (game/vcs_prompts.h)
         lcs::weapons::registerSettings(); // Enhancements > Combat: switching weapons with the detonator (game/lcs_weapons.h)
 
+        // The F2 menu off by default (the user's choice, 2026-11-17): the settings are in the launcher's Game sheet, the
+        // ones that matter in play in the game's own pause menu (game/lcs_options.h). Turned on from the launcher.
+        s = {};
+        s.key = "ui.f2_menu";
+        s.page = "Advanced";
+        s.section = "Menus";
+        s.label = "Settings menu in the game (F2)";
+        s.help = "Off: F2 does nothing - the settings are in the launcher (Game), and aspect ratio, HUD, frame rate cap and "
+                 "volume in the game's pause menu (Display, Audio). On: F2 (or Back + Start) opens this menu while playing.";
+        s.type = Type::Toggle;
+        s.defaultValue = 0;
+        s.env = "LCS_F2_MENU";
+        settings::add(s);
+
         s = {};
         s.key = "graphics.perf_overlay";
         s.page = "Advanced";

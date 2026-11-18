@@ -9,6 +9,7 @@
 //   game - the text's widths are the language's, so the boxes are generous.
 #include "game/lcs_frontend.h"
 
+#include "game/lcs_options.h"
 #include "game/vcs_frontend.h"
 #include "platform/platform.h"
 #include "ps2_runtime.h"
@@ -236,6 +237,7 @@ namespace lcs::frontend
         bool dOpen() { return menuOpen(); }
         void dHostFrame()
         {
+            lcs::options::onHostFrame(); // what our menu rows changed (main thread)
             if (g_injected.load(std::memory_order_relaxed))
                 return;
             int w = 0, h = 0;
@@ -265,7 +267,7 @@ namespace lcs::frontend
                     return g.owned[i] || (menuOpen() && (g_mouseOn || !isMouseKey(i)));
             return false;
         }
-        const vcs::frontend::Delegate kDelegate{&dOpen, &dHostFrame, &dPadButtons, &dOwnsKey};
+        const vcs::frontend::Delegate kDelegate{&dOpen, &dHostFrame, &dPadButtons, &dOwnsKey, &lcs::options::filterPad};
     }
 
     void install(PS2Runtime &runtime)

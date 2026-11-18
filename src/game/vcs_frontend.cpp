@@ -998,6 +998,12 @@ namespace vcs::frontend
         return g.out;
     }
 
+    void filterPad(uint16_t &buttons, float &lx, float &ly)
+    {
+        if (g_delegate && g_delegate->filterPad)
+            g_delegate->filterPad(buttons, lx, ly);
+    }
+
     bool ownsKey(int key)
     {
         if (g_delegate)

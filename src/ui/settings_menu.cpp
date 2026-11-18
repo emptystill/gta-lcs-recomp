@@ -390,7 +390,9 @@ namespace ui
         // blocked while the menu is open, so ps2control::keyPressed alone would not close it)
         const int key = settings::value("controls.menu_key");
         const bool menuKey = g_capturing.empty() && (platform::keyPressed(key) || ps2control::keyPressed(key));
-        if (menuKey || chordPressed)
+        // ui.f2_menu off (the default): the key and the chord do nothing - the settings are in the launcher and the
+        // game's pause menu (main.cpp); an open menu still closes
+        if ((menuKey || chordPressed) && (g_open || settings::value("ui.f2_menu") != 0))
             g_open ? close() : open();
         else if (g_open && g_capturing.empty() && !g_popupWasOpen &&
                  (ImGui::IsKeyPressed(ImGuiKey_Escape, false) || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false)))

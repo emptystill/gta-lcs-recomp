@@ -75,4 +75,9 @@ The user does not want anything of the VCS port in what the player sees. The set
   Game sheet with every F2 page. The game describes its own registry (`lcs.exe --settings-json`) instead of the
   launcher keeping a copy of the list, so a setting added to the game shows in the launcher with no launcher change;
   the launcher edits lcs.ini only while the game is closed.
+- **F2 off, the game's own menu instead** (the user, after the Game sheet: "podemos quitar el menu que viene del
+  juego... a menos que algunas opciones se puedan integrar nativamente"): the pause menu's table has room, so Aspect
+  ratio, Widescreen HUD, Frame rate cap (Display) and Master volume (Audio) are rows of the game's menu
+  (docs/LCS.md "Our settings in the pause menu"); everything else, the restart-only settings among them, is the
+  launcher's. The F2 menu stays in the code, off by default (`ui.f2_menu`), for whoever turns it on.
 

@@ -1149,6 +1149,29 @@ sheet otherwise). The menu is the series' classic frontend (GTA III / VC's CMenu
   GXT lookup, its left / right handled by `lcs_frontend` (it knows the screen and row from the manager). Its value has
   no drawing of its own: the label would carry it, or a value row (action 0, a label the cursor skips) beside it.
 
+## Our settings in the pause menu (2026-11-17)
+
+`src/game/lcs_options.cpp`, from the table above (the user's wish: the F2 menu off, what matters in play in the game's
+own menu, the rest in the launcher's Game sheet):
+
+- **Rows**: Display becomes Brightness, Subtitles, **Aspect ratio** (in the PS2's Widescreen row's place - the port
+  keeps that option off), Radar mode, HUD mode, **Widescreen HUD**, **Frame rate cap**, Screen position (y 40..180);
+  Audio gets **Master volume** in its gap at y 80 (Music, SFX, ours, the radio station). Written into the table at the
+  first frame kick, and again whenever the table shows the original rows. RAM only: nothing reaches a save.
+- **Text**: our rows are 0x0B (Subtitles) rows whose keys are ours (`LCSASP`, `LCSHUD`, `LCSFPS`, `LCSVOL`):
+  CText::Get (0x332E68, hooked) gives their labels, and the Get right after one of them (the Subtitles value's keys,
+  0x3D8D50 / 0x3D8DA8) gives the setting's value. Written into 0x7C000 (EE kernel RAM no one uses) in the font's code
+  page: capitals, Latin-1's accented capitals 0x40 lower (Á 0x81, Í 0x8D - read from the disc's GXT, whose
+  ENGLISH.GXT holds the Spanish text on the user's disc). The language is the menus' (`ui.language`).
+- **Input**: the menu's input (0x340B80) is hooked for its manager (a0); on one of our rows `filterPad` (the frontend
+  delegate's, after the menu's own buttons) takes left / right / Cross and the left stick's x away from the game -
+  they would turn the subtitles - and steps the setting (choices wrap, the volume by 10 between 0 and 100); the
+  change is applied on the main thread (`settings::set`, as the F2 menu did).
+- Checked (hidden runs, Spanish and English): each row steps both ways, the subtitles stay as they were, the station
+  row still works below ours. A setting fixed by the environment (the test tools pin `VCS_FPS=30`) does not change.
+- **F2** is off by default (`ui.f2_menu`, Advanced > Menus; the launcher turns it on); `LCS_MENU_ROWS=0` leaves the
+  game's menu as it was.
+
 ## Pending (the user's checklist, 2026-11-17)
 
 In the order agreed with the user (most likely to break play first). VCS has each of these; on LCS none is done.

@@ -200,7 +200,7 @@ namespace screens
                 if (ui::segmented("#language", {r.x, y, std::min(r.w, px(340)), px(38)}, {"English##en", "Español##es"}, selected))
                     app.setLanguage(selected);
                 y += px(48);
-                text(r, y, "The launcher's and the game's menus (F2, F5). The game's own text is the disc's.", theme::kFaint);
+                text(r, y, "The launcher's, the trainer's (F5) and the rows the port adds to the pause menu. The game's own text is the disc's.", theme::kFaint);
             }
             divider(r, y);
 
@@ -223,7 +223,7 @@ namespace screens
                 toast(app.shortcut(error) ? "Shortcut \"GTA Liberty City Stories\" added to the desktop" : "No shortcut: " + error,
                       error.empty() ? 0 : theme::kRed);
             }
-            text(r, y, "The game's own settings - graphics, widescreen, controls, sound - are under Game in the title bar, and in the game (F2).", theme::kFaint);
+            text(r, y, "The game's own settings - graphics, widescreen, controls, sound - are under Game in the title bar; aspect ratio, HUD, frame rate cap and volume also in the game's pause menu (Display, Audio).", theme::kFaint);
             if (action(r, y, "Open the game's settings", ButtonStyle::Secondary, theme::icon::kGame))
                 openSheet(Sheet::Game);
             if (changed)
@@ -333,7 +333,7 @@ namespace screens
         case Sheet::Settings: title = "Settings"; subtitle = "The launcher's own options. The game's are under Game."; break;
         case Sheet::Help: title = "Help"; subtitle = "When something goes wrong, the logs say why."; break;
         case Sheet::Folder: title = "Build folder"; subtitle = "Where the game is built."; break;
-        case Sheet::Game: title = "Game settings"; subtitle = "The game's F2 menu. What you change here is used the next time the game starts."; break;
+        case Sheet::Game: title = "Game settings"; subtitle = "The game's own settings. What you change here is used the next time the game starts."; break;
         default: break;
         }
         Rect inner = panel.inset(px(32), 0);

@@ -491,6 +491,7 @@ namespace vcs::input
             // the pause menu: Enter / Escape as Cross / Triangle, the mouse's steps and clicks (game/vcs_frontend.h);
             // what the player presses meanwhile takes over
             buttons |= frontend::padButtons(buttons, lx != 0.0f || ly != 0.0f || rx != 0.0f || ry != 0.0f, blocked);
+            frontend::filterPad(buttons, lx, ly); // LCS: its menu rows of our settings take their presses
 
             // the mouse camera, on top of the right stick: worked out once per game frame (the game reads the pad three
             // times a frame; the frame's other reads repeat the deflection)

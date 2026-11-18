@@ -46,6 +46,11 @@ namespace vcs::frontend
         void (*onHostFrame)();
         uint16_t (*padButtons)(uint16_t user, bool sticks, bool blocked);
         bool (*ownsKey)(int key);
+        // optional: the pad as the menu will see it, after padButtons - the delegate may take buttons or the left
+        // stick away (LCS: the menu rows of its own settings, game/lcs_options.h)
+        void (*filterPad)(uint16_t &buttons, float &lx, float &ly) = nullptr;
     };
+    // Game thread, after padButtons: the delegate's filterPad (nothing for VCS).
+    void filterPad(uint16_t &buttons, float &lx, float &ly);
     void setDelegate(const Delegate *d);
 }
