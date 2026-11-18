@@ -30,6 +30,10 @@ namespace render
     // decodes `file`, shrinks it so its longer side is at most maxSide, packs it; ok false when it can't
     Image loadImage(const std::filesystem::path &file, int maxSide);
 
+    // a raw RGBA8 file of width x height (an installed texture pack's, tools/hud_pack.py); gsAlpha: the PS2's alpha (128
+    // opaque, PCSX2's packs); gain multiplies the colours; shrunk by whole factors until its longer side fits maxSide
+    Image loadRawImage(const std::filesystem::path &file, int width, int height, int maxSide, bool gsAlpha, float gain = 1.0f);
+
     // `img` filling `dest` the way a cover does (cut to dest's shape around focus, 0..1; zoom >= 1 shows less of it),
     // cut to `mask` (4 corners, or null)
     void drawImageCover(const Image &img, core::Rect dest, const float *mask, float focusX = 0.5f, float focusY = 0.5f,

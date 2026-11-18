@@ -4,6 +4,7 @@
 #include "render/draw.h"
 
 #include <algorithm>
+#include <cstdio>
 #include <cstring>
 #include <initializer_list>
 
@@ -18,7 +19,7 @@ namespace render
 
     namespace
     {
-        constexpr int kAtlasSize = 2048, kPad = 2;
+        constexpr int kAtlasSize = 3072, kPad = 2; // the cover's three, the logo and the menu's backdrop
 
         struct Pixels
         {
@@ -103,15 +104,73 @@ namespace render
         }
     }
 
+    namespace
+    {
+        Image pack(const Pixels &p);
+    }
+
     Image loadImage(const std::filesystem::path &file, int maxSide)
     {
-        Image img;
         std::error_code ec;
         if (!std::filesystem::is_regular_file(file, ec))
-            return img;
+            return {};
         Pixels p;
         if (!decode(file, std::min(maxSide, kAtlasSize - 2 * kPad), p) || p.w <= 0 || p.h <= 0)
-            return img;
+            return {};
+        return pack(p);
+    }
+
+    Image loadRawImage(const std::filesystem::path &file, int width, int height, int maxSide, bool gsAlpha, float gain)
+    {
+        std::error_code ec;
+        if (width <= 0 || height <= 0 || std::filesystem::file_size(file, ec) != uintmax_t(width) * uintmax_t(height) * 4u || ec)
+            return {};
+        Pixels src;
+        src.w = width;
+        src.h = height;
+        src.rgba.resize(size_t(width) * size_t(height) * 4);
+        if (FILE *f = std::fopen(file.string().c_str(), "rb"))
+        {
+            const size_t got = std::fread(src.rgba.data(), 1, src.rgba.size(), f);
+            std::fclose(f);
+            if (got != src.rgba.size())
+                return {};
+        }
+        else
+            return {};
+        // shrunk by a whole factor (a box filter), then the alpha made 0..255, premultiplied and brightened
+        int k = 1;
+        while (std::max(width, height) / k > std::min(maxSide, kAtlasSize - 2 * kPad))
+            ++k;
+        Pixels p;
+        p.w = width / k;
+        p.h = height / k;
+        p.rgba.resize(size_t(p.w) * size_t(p.h) * 4);
+        for (int y = 0; y < p.h; ++y)
+            for (int x = 0; x < p.w; ++x)
+            {
+                float sum[4] = {};
+                for (int j = 0; j < k; ++j)
+                    for (int i = 0; i < k; ++i)
+                        for (int c = 0; c < 4; ++c)
+                            sum[c] += src.rgba[(size_t(y * k + j) * width + size_t(x * k + i)) * 4 + c];
+                const float n = float(k * k);
+                float a = sum[3] / n / 255.0f;
+                if (gsAlpha)
+                    a = std::min(1.0f, a * 255.0f / 128.0f);
+                uint8_t *out = &p.rgba[(size_t(y) * p.w + x) * 4];
+                for (int c = 0; c < 3; ++c)
+                    out[c] = uint8_t(std::clamp(sum[c] / n * gain * a, 0.0f, 255.0f));
+                out[3] = uint8_t(a * 255.0f + 0.5f);
+            }
+        return pack(p);
+    }
+
+    namespace
+    {
+    Image pack(const Pixels &p)
+    {
+        Image img;
         int x = 0, y = 0;
         if (!place(p.w, p.h, x, y))
             return img;
@@ -135,6 +194,7 @@ namespace render
         img.uv[2] = float(x + p.w) / float(a.size);
         img.uv[3] = float(y + p.h) / float(a.size);
         return img;
+    }
     }
 
     void drawImageCover(const Image &img, core::Rect dest, const float *mask, float focusX, float focusY, float zoom, float opacity)

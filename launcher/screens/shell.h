@@ -150,7 +150,8 @@ namespace screens
 
     // ---- the parts (each in its own file) --------------------------------------------------------------------------
     void drawBackdrop(Rect r, float hero, bool alive = false); // hero: 0..1, the scene of Home; alive: it moves
-    // Home's pictures from launcher/art (backdrop.cpp): 0..2 the cover's panels, 3 the logo; null when not there
+    // Home's pictures from launcher/art (backdrop.cpp): 0..2 the cover's panels, 3 the logo; 4 the pause menu's
+    // backdrop (the player's installed frontend pack); null when not there
     const render::Image *homeArt(int which);
     float drawTitleBar(Rect r);              // returns its height
     void drawSetup(Rect r);

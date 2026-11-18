@@ -13,6 +13,8 @@
 #include "render/images.h"
 
 #include <algorithm>
+#include <fstream>
+#include <sstream>
 #include <cmath>
 #include <cstdint>
 
@@ -119,7 +121,7 @@ namespace screens
         struct Art
         {
             bool tried = false;
-            render::Image image[4];
+            render::Image image[5]; // the cover's three, the logo, the pause menu's backdrop
         };
         Art g_art;
 
@@ -349,6 +351,13 @@ namespace screens
         void sky(const Scene &S, float hero)
         {
             gradient({0, 0, S.w, S.h}, theme::kSky, theme::kNight);
+            // the game's pause menu's backdrop (dark: its navy silhouettes of a fire escape and a bike; from the player's
+            // installed frontend pack), the whole window, drifting slowly; the light theme keeps its paper
+            if (const render::Image *menu = homeArt(4); menu && darkTheme(*shell.app))
+            {
+                const float drift = 0.5f - 0.5f * std::cos(S.t * 2.0f * core::kPi / 60.0f);
+                render::drawImageCover(*menu, {0, 0, S.w, S.h}, nullptr, 0.45f + 0.1f * drift, 0.45f, 1.06f + 0.04f * drift, 0.92f);
+            }
             // a warm glow behind the cover, Home only; a cool one low on the left
             shadow({S.w * 0.55f, S.h * 0.05f, S.w * 0.5f, S.h * 0.7f}, withAlpha(theme::kPink, 0.05f + 0.07f * hero), S.s * 0.22f, S.s * 0.2f);
             shadow({-S.w * 0.2f, S.h * 0.65f, S.w * 0.55f, S.h * 0.5f}, withAlpha(theme::kHorizon, 0.35f), S.s * 0.25f, S.s * 0.2f);
@@ -375,8 +384,23 @@ namespace screens
                         break;
                     }
                 }
+            // the pause menu's backdrop: from the frontend pack tools/hud_pack.py installed (<data>/hud_pack: raw RGBA,
+            // index.txt names each file's source) - the game's own texture, so read from the player's pack, never
+            // shipped; its PCSX2 file name is the pack's ("Remastered Frontend PCSX2 [LCS]")
+            std::ifstream index(shell.app->savesFolder() / "hud_pack" / "index.txt");
+            std::string line;
+            while (std::getline(index, line))
+                if (line.find("69836e67aa9f75b6-4c033bf7e4e65774-00006214") != std::string::npos)
+                {
+                    std::istringstream in(line);
+                    int pw = 0, ph = 0, w = 0, h = 0;
+                    std::string probe, name;
+                    if (in >> pw >> ph >> w >> h >> probe >> name)
+                        g_art.image[4] = render::loadRawImage(shell.app->savesFolder() / "hud_pack" / name, w, h, 1024, true, 1.8f);
+                    break;
+                }
         }
-        return which >= 0 && which < 4 && g_art.image[which].ok ? &g_art.image[which] : nullptr;
+        return which >= 0 && which < 5 && g_art.image[which].ok ? &g_art.image[which] : nullptr;
     }
 
     void drawBackdrop(Rect r, float hero, bool alive)

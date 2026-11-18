@@ -115,6 +115,12 @@ motion is (2026-11-01, the user's "rethink everything"; before, a sidebar of pag
   samples over a pixel's footprint, no mipmaps) cut to a convex quad (the panel). Vulkan and Metal bind the glyph atlas
   in t1's place. Each panel's picture is fitted around its face and drifts slowly closer and back; the logo replaces
   the eyebrow and the name, "Recompiled for PC" under it.
+- **The window's backdrop** (the user's ask, 2026-11-17: "una imagen como la que tiene el menu original"): with the
+  dark theme, the game's pause menu's backdrop - navy silhouettes of a fire escape and a bike - covers every screen,
+  drifting slowly. It is a game texture, so it is never shipped: `backdrop.cpp` reads it from the frontend pack the
+  player installed with `tools/hud_pack.py` (`<data>/hud_pack/index.txt` names each raw RGBA file's source; this one is
+  the PCSX2 pack's `69836e67aa9f75b6-4c033bf7e4e65774-00006214.png`; `render::loadRawImage`: PS2 alpha, colours x 1.8).
+  Without the pack, or with the light theme, the plain sky as before.
 - **Home** (`home.cpp`): the name beside a comic-book cover in the style of Liberty City Stories' box art
   (`backdrop.cpp`, drawn by the renderer, no image: DECISIONS.md 2026-11-17): three slanted panels with a dark gutter -
   red, a made man in a fedora smoking under a "LIBERTY CITY, 1998" caption; orange, the skyline with its suspension
