@@ -71,4 +71,8 @@ The user does not want anything of the VCS port in what the player sees. The set
   cover, skyline at night, pause-menu look), drawn in code like the old scene (no image shipped), a fedora for the
   logo and icons. Its language follows the game's menus (`ui.language` in lcs.ini) with a selector of its own in
   Settings; one setting for both, so the player chooses once (docs/LAUNCHER.md).
+- **The game's settings in the launcher** (the user: "que el launcher tenga las opciones del menu que tiene f2"): a
+  Game sheet with every F2 page. The game describes its own registry (`lcs.exe --settings-json`) instead of the
+  launcher keeping a copy of the list, so a setting added to the game shows in the launcher with no launcher change;
+  the launcher edits lcs.ini only while the game is closed.
 

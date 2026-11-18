@@ -125,6 +125,17 @@ motion is (2026-11-01, the user's "rethink everything"; before, a sidebar of pag
   bottom (Ctrl+L, or *Show details*; it opens by itself on a failure). A failure slides in a card with a red edge that
   shakes once: the code's title and fix (`errorHelp` in `launcher/model/tasks.cpp`), *Try again*, *Open the log*,
   *Make a report*. Success: the check, what happened, *Play* after a build.
+- **Game settings** (`game_settings.cpp`, the title bar's *Game*; the user's ask, 2026-11-17): the game's own F2 menu
+  in a wide sheet - its pages as tabs, each page's sections and rows (a switch; a choice as segments, or arrows for long
+  lists; a slider; a key to bind - click, then a key, mouse button or wheel notch, Escape cancels, right-click clears an
+  optional one; a button for the presets and Reset all), the hovered row's help in a band at the bottom, and *Restore
+  this page's defaults*. Nothing is written twice: lcs.exe describes its registry (`lcs.exe --settings-json FILE`,
+  `src/main.cpp exportSettings`: every setting with its texts in English and Spanish, type, range, choices, default,
+  the key names, and what each Action sets - recorded through `settings::recordSets`, not done), cached in
+  `build/settings_schema.json` and asked for again when lcs.exe is newer (`model/game_settings.cpp`). Values are
+  build/lcs.ini's, written as the game writes them (its lines updated in place, the rest kept); keys of a group stay
+  exclusive as in the game's menu. While the game runs the sheet only shows them: the game owns lcs.ini then, and the
+  values are read again when it ends.
 - **Sheets** (`sheets.cpp`): Saves, Settings and Help from the title bar slide in from the right on a spring over a
   dimmed window; Escape, the dim or the button close them. **Dialogs** (`overlays.cpp`: restore a backup, cancel a
   task, quit during a task, the chosen build folder's check) scale up and fade in; **toasts** rise at the bottom and

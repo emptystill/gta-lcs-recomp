@@ -34,6 +34,7 @@ namespace screens
         Settings,
         Help,
         Folder,
+        Game, // the game's own settings (game_settings.cpp)
     };
 
     enum class Dialog
@@ -157,4 +158,8 @@ namespace screens
     void drawToasts(Rect window);
     void drawGallery(Rect r);
     void drawFolderBody(Rect r, float &y);   // the folder step's content, also the Folder sheet's
+    float drawGameSettings(App &app, Rect r); // the Game sheet's content (game_settings.cpp); returns its bottom
+    bool gameSettingsCapturing();            // a key binding waits for a key: Escape is its cancel
+    std::string gameSettingsHelp();          // the hovered row's help
+    void gameSettingsPage(const std::string &english); // the page shown (screenshots)
 }

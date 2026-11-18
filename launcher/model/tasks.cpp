@@ -459,6 +459,7 @@ namespace launcher
     void App::update(double now)
     {
         m_now = now;
+        gameSettings.update();
         if (m_doctor)
         {
             for (auto &line : m_doctor->takeLines())
@@ -516,6 +517,7 @@ namespace launcher
             gameEnded = true;
             gameEnd = now;
             game.reset();
+            gameSettings.reloadValues(); // the game's menu may have changed them
         }
     }
 
@@ -777,9 +779,12 @@ namespace launcher
         lines.push_back("ui.language=" + std::to_string(language));
         std::error_code ec;
         fs::create_directories(build, ec);
-        std::ofstream out(ini, std::ios::trunc | std::ios::binary);
-        for (const auto &l : lines)
-            out << l << "\n";
+        {
+            std::ofstream out(ini, std::ios::trunc | std::ios::binary);
+            for (const auto &l : lines)
+                out << l << "\n";
+        }
+        gameSettings.reloadValues(); // the Game sheet shows the same
     }
 
     bool App::writeIsoToIni(const fs::path &path)

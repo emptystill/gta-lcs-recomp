@@ -223,7 +223,9 @@ namespace screens
                 toast(app.shortcut(error) ? "Shortcut \"GTA Liberty City Stories\" added to the desktop" : "No shortcut: " + error,
                       error.empty() ? 0 : theme::kRed);
             }
-            text(r, y, "The game's own settings - graphics, widescreen, controls, sound - are in the game: press F2 while playing.", theme::kFaint);
+            text(r, y, "The game's own settings - graphics, widescreen, controls, sound - are under Game in the title bar, and in the game (F2).", theme::kFaint);
+            if (action(r, y, "Open the game's settings", ButtonStyle::Secondary, theme::icon::kGame))
+                openSheet(Sheet::Game);
             if (changed)
                 app.saveSettings();
             return y;
@@ -316,7 +318,8 @@ namespace screens
         if (scrim.clicked)
             shell.sheet = Sheet::None;
 
-        const float width = std::min(px(480), area.w * 0.9f);
+        const bool game = shell.sheetShown == Sheet::Game;
+        const float width = std::min(px(game ? 680 : 480), area.w * (game ? 0.94f : 0.9f));
         const Rect panel{area.right() - width * open, area.y, width, area.h};
         ui::blockInput(panel);
         shadow(panel.offset(-px(6), 0), theme::shade(0.8f * core::clamp01(open)), px(24), 0);
@@ -327,9 +330,10 @@ namespace screens
         switch (shell.sheetShown)
         {
         case Sheet::Saves: title = "Saves"; subtitle = "Back up and restore your memory card."; break;
-        case Sheet::Settings: title = "Settings"; subtitle = "The launcher's own options. The game's are in the game (F2)."; break;
+        case Sheet::Settings: title = "Settings"; subtitle = "The launcher's own options. The game's are under Game."; break;
         case Sheet::Help: title = "Help"; subtitle = "When something goes wrong, the logs say why."; break;
         case Sheet::Folder: title = "Build folder"; subtitle = "Where the game is built."; break;
+        case Sheet::Game: title = "Game settings"; subtitle = "The game's F2 menu. What you change here is used the next time the game starts."; break;
         default: break;
         }
         Rect inner = panel.inset(px(32), 0);
@@ -341,7 +345,18 @@ namespace screens
         ui::label(kFontBody, px(theme::kSmall), {inner.x, y, inner.w, px(20)}, theme::kDim, subtitle);
         y += px(36);
 
-        const Rect view{panel.x, y, panel.w, panel.bottom() - y};
+        // the Game sheet: the hovered setting's help in a band at the bottom, as in the game's menu
+        const float helpH = game ? px(92) : 0;
+        if (game)
+        {
+            const Rect band{panel.x, panel.bottom() - helpH, panel.w, helpH};
+            rect(band, mix(theme::kBase, theme::kNight, 0.6f));
+            rect({band.x, band.y, band.w, 1}, theme::ink(0.06f));
+            const std::string help = gameSettingsHelp();
+            ui::paragraph(kFontBody, px(theme::kSmall), {inner.x, band.y + px(14), inner.w, 0}, help.empty() ? theme::kFaint : theme::kDim,
+                          help.empty() ? "Point at a setting to read what it does." : help, 1.4f);
+        }
+        const Rect view{panel.x, y, panel.w, panel.bottom() - helpH - y};
         const ui::Id scroll = ui::id("#sheet-scroll", int(shell.sheetShown));
         ui::beginScroll(scroll, view);
         const Rect content{inner.x, y + px(4), inner.w, 0};
@@ -354,6 +369,7 @@ namespace screens
         case Sheet::Settings: bottom = settings(app, content); break;
         case Sheet::Help: bottom = help(app, content); break;
         case Sheet::Folder: bottom = folder(app, content); break;
+        case Sheet::Game: bottom = drawGameSettings(app, content); break;
         default: break;
         }
         render::popOffset();

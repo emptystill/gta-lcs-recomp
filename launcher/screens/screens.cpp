@@ -143,7 +143,7 @@ namespace screens
         void keyboard(App &app)
         {
             const platform::Input &in = platform::input;
-            if (in.key(platform::kKeyEscape))
+            if (in.key(platform::kKeyEscape) && !gameSettingsCapturing())
             {
                 if (shell.dialog != Dialog::None)
                     shell.dialog = Dialog::None;
@@ -446,6 +446,8 @@ namespace screens
         shell.sheet = sheet;
         if (sheet == Sheet::Saves)
             shell.backupsAsked = false; // the list again
+        if (sheet == Sheet::Game) // described again when lcs.ini or lcs.exe changed since
+            shell.app->gameSettings.refresh(shell.app->build);
     }
 
     void openDialog(Dialog dialog) { shell.dialog = dialog; }
@@ -560,6 +562,12 @@ namespace screens
             if (!app.task)
                 demoTask(app, "running");
             g_forcedMode = int(Mode::Task);
+        }
+        else if (kind == "sheet" && which.rfind("game", 0) == 0) // sheet:game, sheet:game/<page> (its English name)
+        {
+            if (which.size() > 5)
+                gameSettingsPage(which.substr(5));
+            openSheet(Sheet::Game);
         }
         else if (kind == "sheet")
             openSheet(which == "saves" ? Sheet::Saves : which == "settings" ? Sheet::Settings : which == "help" ? Sheet::Help : Sheet::Folder);

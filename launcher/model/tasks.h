@@ -4,6 +4,7 @@
 #pragma once
 
 #include "disc_check.h"
+#include "game_settings.h"
 #include "json.h"
 #include "process.h"
 
@@ -133,6 +134,9 @@ namespace launcher
 
         Settings settings;
         void saveSettings();
+
+        // the game's own settings (its F2 menu), in lcs.ini (model/game_settings.h)
+        GameSettings gameSettings;
 
         std::string toast; // a short message under the buttons
         double toastTime = 0;

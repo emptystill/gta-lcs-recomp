@@ -130,7 +130,8 @@ namespace screens
         };
         const Nav navs[] = {{"Help", theme::icon::kHelp, Sheet::Help},
                             {"Settings", theme::icon::kSettings, Sheet::Settings},
-                            {"Saves", theme::icon::kSave, Sheet::Saves}};
+                            {"Saves", theme::icon::kSave, Sheet::Saves},
+                            {"Game", theme::icon::kGame, Sheet::Game}};
         for (const Nav &n : navs)
         {
             const float w = measure(kFontBody, px(theme::kSmall), n.text) + px(46);

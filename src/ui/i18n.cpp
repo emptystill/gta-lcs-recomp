@@ -67,6 +67,14 @@ namespace ui::i18n
         return *kept.insert(english).first;
     }
 
+    const std::string &spanishOf(const std::string &english)
+    {
+        const auto &t = table();
+        if (const auto it = t.find(english); it != t.end())
+            return it->second;
+        return english;
+    }
+
     void dumpMissing()
     {
         const char *path = std::getenv("LCS_I18N_DUMP");

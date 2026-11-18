@@ -25,6 +25,7 @@ namespace settings
         std::unordered_set<std::string> g_overridden; // by their environment variable, at load()
         std::unordered_map<std::string, std::string> g_loaded; // every key = value of lcs.ini at load()
         std::map<std::string, std::string> g_state;            // setState() values, written by save()
+        std::vector<std::pair<std::string, int>> *g_record = nullptr; // recordSets()
 
         bool valid(const Spec &s, int v)
         {
@@ -160,6 +161,11 @@ namespace settings
         const Spec &s = g_specs[it->second];
         if (!valid(s, v))
             return false;
+        if (g_record)
+        {
+            g_record->push_back({key, v});
+            return true;
+        }
         {
             std::lock_guard<std::mutex> lock(g_mutex);
             if (g_values[key] == v)
@@ -221,6 +227,8 @@ namespace settings
     }
 
     void keepFile() { g_keepFile = true; }
+
+    void recordSets(std::vector<std::pair<std::string, int>> *into) { g_record = into; }
 
     std::string state(const std::string &key)
     {

@@ -82,6 +82,10 @@ namespace settings
     bool overridden(const std::string &key);   // set by its environment variable at load (the menu shows it read-only)
     bool changedSinceStart(const std::string &key); // Restart settings: "applies after restart"
 
+    // Records what set() would do instead of doing it (nothing changes, nothing is saved or applied): what an Action
+    // sets, for the launcher's copy of the menu (lcs.exe --settings-json). nullptr ends it.
+    void recordSets(std::vector<std::pair<std::string, int>> *into);
+
     void load(const std::filesystem::path &ini);
     void keepFile(); // after load: changes last for this run only, lcs.ini is never rewritten (hidden test runs)
     void applyAll();

@@ -14,6 +14,8 @@ namespace ui::i18n
     // The text in the menus' language; the reference stays valid (texts are kept).
     const std::string &tr(const std::string &english);
     inline const char *trc(const char *english) { return tr(english).c_str(); }
+    // The Spanish of a text whatever the language (the English when the table has none): the launcher's copy.
+    const std::string &spanishOf(const std::string &english);
     // Once, after every setting is registered: LCS_I18N_DUMP.
     void dumpMissing();
 }

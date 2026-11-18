@@ -824,6 +824,100 @@ namespace
         });
     }
 
+    // lcs.exe --settings-json FILE: the settings registry as JSON for the launcher's copy of the menu (docs/LAUNCHER.md
+    // "Game settings"): every setting with its page, section, texts in English and Spanish, type, range, choices and
+    // default; what each Action sets (recorded, not done); the key names. Nothing is loaded, saved or started.
+    std::string jsonText(const std::string &s)
+    {
+        std::string out = "\"";
+        for (const char c : s)
+            switch (c)
+            {
+            case '"': out += "\\\""; break;
+            case '\\': out += "\\\\"; break;
+            case '\n': out += "\\n"; break;
+            case '\t': out += "\\t"; break;
+            default:
+                if (static_cast<unsigned char>(c) < 0x20)
+                {
+                    char hex[8];
+                    std::snprintf(hex, sizeof(hex), "\\u%04x", c);
+                    out += hex;
+                }
+                else
+                    out += c;
+            }
+        return out + "\"";
+    }
+
+    // {"en": ..., "es": ...}
+    std::string jsonTexts(const std::string &english)
+    {
+        return "{\"en\":" + jsonText(english) + ",\"es\":" + jsonText(ui::i18n::spanishOf(english)) + "}";
+    }
+
+    int exportSettings(const fs::path &file)
+    {
+        using settings::Type;
+        static const char *kTypes[] = {"toggle", "choice", "integer", "key", "action"};
+        std::string out = "{\"version\":1,\"settings\":[";
+        bool first = true;
+        for (const settings::Spec &s : settings::all())
+        {
+            out += first ? "\n" : ",\n";
+            first = false;
+            out += "{\"key\":" + jsonText(s.key) + ",\"alias\":" + jsonText(s.alias) + ",\"page\":" + jsonTexts(s.page) +
+                   ",\"section\":" + jsonTexts(s.section) + ",\"label\":" + jsonTexts(s.label) +
+                   ",\"help\":" + jsonTexts(s.help) + ",\"type\":\"" + kTypes[static_cast<int>(s.type)] + "\"" +
+                   ",\"default\":" + std::to_string(s.defaultValue) + ",\"min\":" + std::to_string(s.min) +
+                   ",\"max\":" + std::to_string(s.max) + ",\"format\":" + jsonText(s.format) +
+                   ",\"restart\":" + (s.apply == settings::Apply::Restart ? "true" : "false") +
+                   ",\"optional\":" + (s.optional ? "true" : "false") + ",\"group\":" + jsonText(s.group) +
+                   ",\"partner\":" + jsonText(s.partner) + ",\"hidden\":" + (s.hidden ? "true" : "false") +
+                   ",\"confirm\":" + (s.confirm ? "true" : "false");
+            if (!s.button.empty())
+                out += ",\"button\":" + jsonTexts(s.button);
+            out += ",\"choices\":[";
+            for (size_t i = 0; i < s.choices.size(); ++i)
+                out += (i ? "," : "") + std::string("{\"label\":") + jsonTexts(s.choices[i].label) +
+                       ",\"value\":" + std::to_string(s.choices[i].value) + "}";
+            out += "]";
+            if (s.type == Type::Action && s.onChange)
+            {
+                std::vector<std::pair<std::string, int>> sets;
+                settings::recordSets(&sets);
+                s.onChange(0);
+                settings::recordSets(nullptr);
+                out += ",\"sets\":[";
+                for (size_t i = 0; i < sets.size(); ++i)
+                    out += (i ? "," : "") + std::string("[") + jsonText(sets[i].first) + "," + std::to_string(sets[i].second) + "]";
+                out += "]";
+            }
+            out += "}";
+        }
+        out += "\n],\"keys\":[";
+        first = true;
+        for (int k = 1; k < platform::KEY_COUNT; ++k)
+            if (const std::string name = platform::keyName(k); name != "?")
+            {
+                out += (first ? "\n" : ",\n") + std::string("{\"code\":") + std::to_string(k) + ",\"name\":" + jsonTexts(name) + "}";
+                first = false;
+            }
+        out += "\n]}\n";
+        std::error_code ec;
+        fs::create_directories(file.parent_path(), ec);
+        fs::path tmp = file;
+        tmp += ".tmp";
+        {
+            std::ofstream f(tmp, std::ios::binary | std::ios::trunc);
+            f << out;
+            if (!f)
+                return 1;
+        }
+        fs::rename(tmp, file, ec);
+        return ec ? 1 : 0;
+    }
+
     fs::path firstIsoIn(const fs::path &dir)
     {
         std::error_code ec;
@@ -900,6 +994,8 @@ int main(int argc, char *argv[])
                 setEnv(off, "0");
         registerSettings();
         ui::i18n::dumpMissing(); // LCS_I18N_DUMP (a translation pass)
+        if (argc >= 3 && std::string(argv[1]) == "--settings-json") // the launcher's copy of the menu
+            return exportSettings(fs::u8path(argv[2]));
         settings::load(exeDirectory() / "lcs.ini");
         // a test run never changes the player's settings: hidden, or shown (VCS_KEEP_SETTINGS=1 from
         // toolchain.test_window when VCS_TEST_VISIBLE=1)

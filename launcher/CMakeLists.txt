@@ -19,6 +19,8 @@ set(VCS_LAUNCHER_COMMON
     main.cpp
     core/png.cpp
     core/i18n.cpp
+    model/game_settings.cpp
+    screens/game_settings.cpp
     render/draw.cpp
     render/font.cpp
     render/icons.cpp
