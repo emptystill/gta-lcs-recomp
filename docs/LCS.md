@@ -233,6 +233,12 @@ with what burns). The render worker is the next limit there (`worker_ms` ~ the f
 - **`perf` / F3 said 60 fps whatever the rate**: LCS never marked its game frames (`ps2perf::markGameFrame`), so each
   VBlank was a frame; now the frame kick (0x212810) marks them, as VCS's does.
 
+**Loading screens whole** (2026-11-18, the user: "recorta demasiado"): with Wide menus and loading screens a
+full-screen picture was enlarged to keep its 4:3 shape on a wide screen - cropped by a quarter, and still tall: LCS's
+loading pictures are PSP art (480x272) squeezed into 4:3 on the PS2, so the logo came out 40% taller than in the
+picture itself. Now it is enlarged in height only as far as the screen is wider than the PSP's (none at 16:9): stretched
+to the width it is whole and in its own shape, the progress bar under the logo as before (gs_hw.cpp; PS2RECOMP_PATCHES).
+
 **Intro movies** (2026-11-18): RSNY, RSLEEDS, RSNORTH and DM.PSS (`Play(path, 0, 0 / 10)` at 0x35A020 from
 `FUN_001F3728`, VCS's signature) play through VCS's native player (`game/vcs_movie.h`, FFmpeg) - they were always
 skipped, the game's own player never ending emulated. Game > **Skip intro movies** (`display.skip_intro`, off by

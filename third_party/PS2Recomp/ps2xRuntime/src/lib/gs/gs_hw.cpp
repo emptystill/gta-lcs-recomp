@@ -3876,9 +3876,16 @@ namespace
                 // enlarged about three quarters down, not the middle: the progress bar (y 392..410) stays on screen
                 // (at 434 of 448 at 16:9; about the middle it went below the picture), the crop mostly at the top
                 constexpr float kCoverPivot = 336.0f;
+                // [gta-recomp] Only as much as the screen is wider than the PSP's (480x272): Liberty City Stories' pictures
+                // were drawn for the PSP's wide screen and squeezed into 4:3 on the PS2, so stretched to the width of a
+                // 16:9 screen they have their own shape back, whole. Enlarged to keep the 4:3 shape (1 / squeeze) they
+                // were cropped by a quarter and still tall (the user, 2026-11-18: "recorta demasiado").
+                constexpr float kPspAspect = 480.0f / 272.0f;
+                const float aspect = (4.0f / 3.0f) / squeeze;
+                const float enlarge = std::max(1.0f, aspect / kPspAspect);
                 if (picture || followCover)
                     for (uint32_t i = 0; i < n; ++i)
-                        out[i].y = kCoverPivot + (out[i].y - kCoverPivot) / squeeze;
+                        out[i].y = kCoverPivot + (out[i].y - kCoverPivot) * enlarge;
             }
             if ((wide || classify) && s.fbw == 10u)
             {
