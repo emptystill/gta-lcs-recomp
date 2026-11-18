@@ -14,11 +14,13 @@
 #include "game/vcs_hud.h"
 #include "platform/platform.h"
 #include "runtime/ps2_control.h"
+#include "runtime/ps2_perf.h"
 
 #include <cmath>
 #include "game/vcs_framerate.h"
 #include "game/vcs_particle_timing.h"
 #include "game/vcs_input.h"
+#include "game/vcs_movie.h"
 #include "game/vcs_stream.h"
 #include "runtime/ps2_disc_image.h"
 
@@ -255,6 +257,10 @@ namespace
     PS2Runtime::RecompiledFunction g_origFrameKick = nullptr;
     PS2_GUEST_CC void frameKick(uint8_t *rdram, R5900Context *ctx, PS2Runtime *runtime)
     {
+        // a game frame for the perf overlay (F3), its CSV and `perf` (as VCS's markFrameKick): without it each VBlank
+        // counted as a frame, so they showed 60 fps whatever the game ran at (2026-11-18: 78 to 150 frames a second
+        // while they said 60)
+        ps2perf::markGameFrame();
         vcs::onFrameKick();
         lcs::prompts::onFrameKick(rdram); // the button prompts' textures and context to the renderer (game/lcs_prompts.h)
         lcs::options::onFrameKick(rdram); // our settings' rows in the pause menu's table (game/lcs_options.h)
@@ -709,12 +715,21 @@ namespace
         // Sound is not native for LCS yet: the emulated IOP stays on, unless PS2X_IOP=0 (an experiment: no sound driver
         // answers then).
         vcs::retireIop(false);
-        if (!envOn("LCS_MOVIES"))
+        // The logo movies (RSNY, RSLEEDS, RSNORTH, DM.PSS: Play(path, 0, 0 / 10) as VCS's) played natively by VCS's
+        // player (game/vcs_movie.h: demuxed, FFmpeg, the sound into the audio output), or skipped with Game > Skip intro
+        // movies (2026-11-18, the user's wish: they were always skipped). LCS_MOVIES=1: the game's own (emulated, the
+        // first never ends); LCS_MOVIES=0: skipped as before.
+        if (envOn("LCS_MOVIES"))
+            std::fprintf(stderr, "[lcs] movies through the game's own player (emulated)\n");
+        else if (envOff("LCS_MOVIES"))
         {
             if (runtime.replaceFunction(kMoviePlay, &returnZero))
-                std::fprintf(stderr, "[lcs] movies skipped (LCS_MOVIES=1 plays them, emulated)\n");
-            else
-                std::fprintf(stderr, "[lcs] could not skip the movie player at 0x%x\n", kMoviePlay);
+                std::fprintf(stderr, "[lcs] movies skipped (LCS_MOVIES=0)\n");
+        }
+        else
+        {
+            vcs::installMovieHooks(runtime, kMoviePlay);
+            std::fprintf(stderr, "[lcs] movies played natively (Game > Skip intro movies)\n");
         }
         (void)envOff;
     }

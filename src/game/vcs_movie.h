@@ -9,6 +9,8 @@ namespace vcs
     // FFmpeg and shown by the presenter at 4:3, its PCM sound mixed into the audio output (the clock the video
     // follows). Start / Cross skip where the game allows it (the intro, not the logos).
     void installMovieHooks(PS2Runtime &runtime);
+    // Another game's Play(path, 0, frames before a skip is allowed) at `playAddress` (Liberty City Stories: 0x35A020)
+    void installMovieHooks(PS2Runtime &runtime, unsigned playAddress);
 
     // Display > Intro movies: skip both (the logos and the intro) when on. Any thread.
     void setSkipIntroMovies(bool skip);

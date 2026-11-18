@@ -82,6 +82,8 @@ The user does not want anything of the VCS port in what the player sees. The set
   cover as before. The three cards became slanted
   comic panels - black border, a hard offset shadow and a tag in the cover's red / orange / blue, titles in the heavy
   face - where VCS's are rounded glass cards.
+- **Intro movies as an option** (the user, 2026-11-18): played by VCS's native player, Game > Skip intro movies off
+  by default (authentic), as in VCS.
 - **F2 off, the game's own menu instead** (the user, after the Game sheet: "podemos quitar el menu que viene del
   juego... a menos que algunas opciones se puedan integrar nativamente"): the pause menu's table has room, so Aspect
   ratio, Widescreen HUD, Frame rate cap (Display) and Master volume (Audio) are rows of the game's menu

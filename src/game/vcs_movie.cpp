@@ -378,8 +378,10 @@ namespace vcs
 
     void setSkipIntroMovies(bool skip) { g_skipIntro.store(skip, std::memory_order_relaxed); }
 
-    void installMovieHooks(PS2Runtime &runtime)
+    void installMovieHooks(PS2Runtime &runtime) { installMovieHooks(runtime, kMoviePlay); }
+
+    void installMovieHooks(PS2Runtime &runtime, unsigned playAddress)
     {
-        runtime.replaceFunction(kMoviePlay, &moviePlay);
+        runtime.replaceFunction(playAddress, &moviePlay);
     }
 }

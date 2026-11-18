@@ -220,7 +220,24 @@ VCS's particle timing (`src/game/vcs_particle_timing.cpp`) runs on LCS with a `v
   long as they spawn every frame or every other.
 
 Speed: uncapped 130 game frames a second at the first mission (hidden run); the GS stage is the limit (texture uploads
-and their hashing). `soleQueuedWriter` (runtime) walked every queued writer of each block for each texture lookup; from
+and their hashing).
+
+**Drops in action** (2026-11-18, the user's report: explosions and high speed): `PS2X_TRACE_VU0=1` showed one VU0
+microprogram still interpreted - **0x0C00**, 300-660k calls / 5 s (more with more going on), 0.9-1.9 s of the game
+thread per 5 s (3-6 ms a frame). It is VCS's "sphere vs three plane sets" (0x0C10) entered two pairs earlier: `B 0x0C18`
+with `IADDIU vi4, vi15, 12` in its delay slot (0x0C10's own is vi15+24) - the same code (0x0C10..0x0CE8 hashes as VCS's).
+Its native is `sphereClipFrom(.., 12)` in `vcs_vu0_native.cpp` (`PS2X_VU0_VERIFY=1`: 14.4M runs, 0 differed;
+`LCS_VU0_0C00=0` interprets it again): 28.6 ms / 5 s now. Measured game frames a second (the frame counter, 2560x1440,
+the player's settings, no cap): calm ~105-118, high speed ~140-150, the explosions' fire 69-117 (min 48-55; runs differ
+with what burns). The render worker is the next limit there (`worker_ms` ~ the frame).
+- **`perf` / F3 said 60 fps whatever the rate**: LCS never marked its game frames (`ps2perf::markGameFrame`), so each
+  VBlank was a frame; now the frame kick (0x212810) marks them, as VCS's does.
+
+**Intro movies** (2026-11-18): RSNY, RSLEEDS, RSNORTH and DM.PSS (`Play(path, 0, 0 / 10)` at 0x35A020 from
+`FUN_001F3728`, VCS's signature) play through VCS's native player (`game/vcs_movie.h`, FFmpeg) - they were always
+skipped, the game's own player never ending emulated. Game > **Skip intro movies** (`display.skip_intro`, off by
+default; test runs set `VCS_SKIP_MOVIES=1`). Measured: 168 / 180 / 181 / 2177 pictures, none dropped.
+`LCS_MOVIES=0` skips them as before, `=1` the game's own player. `soleQueuedWriter` (runtime) walked every queued writer of each block for each texture lookup; from
 the newest, it stops at the first (GS stage time in `bindTexture` 19.5% -> 3.9%).
 
 ## Widescreen (2026-11-15)

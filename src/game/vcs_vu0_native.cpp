@@ -8,6 +8,7 @@
 #include "runtime/ps2_vu1_compiled.h"
 
 #include <cstdint>
+#include <cstdlib>
 #include <cmath>
 #include <cstring>
 #include <limits>
@@ -166,11 +167,13 @@ namespace
     // VU0 0x0C10: a sphere against three plane sets (the sphere variant of boxClip). In: vf1 = centre (xyz) and
     // radius (w), vi15 = VU address of the matrices (at vi15+24). Out: vi1 / vi2 = per set the sign flags of
     // radius - distance / distance + radius (4 bits each, shifted in by 4 per set). 18.8k calls / 5 s while driving.
-    void sphereClip(R5900Context *ctx, uint8_t *data, uint32_t size)
+    // Liberty City Stories also enters at 0x0C00 (B 0x0C18, its delay slot IADDIU vi4, vi15, 12): the same loop on the
+    // matrices at vi15+12 - 300-660k calls / 5 s there, ~1 to 2 s of the game thread interpreted (2026-11-18).
+    void sphereClipFrom(R5900Context *ctx, uint8_t *data, uint32_t size, int16_t from)
     {
         Vu0Regs r;
         loadRegs(ctx, r);
-        r.vi[4] = static_cast<int16_t>(r.vi[15] + 24);                     // 0c10 IADDIU vi4, vi15, 24
+        r.vi[4] = static_cast<int16_t>(r.vi[15] + from);                   // 0c10 IADDIU vi4, vi15, 24 (0c08: 12)
         store<0xFu>(r.vf[31], mulBc(r.vf[0], r.vf[0], 0));                 // 0c18 MULx vf31, vf0, vf0x | IADD vi1 = 0
         r.vi[1] = 0;
         store<0xFu>(r.vf[31], operand(vu1v::add(operand(load(r.vf[31])), splat(vu1fast::operand(r.vf[0][3]))))); // 0c20 ADDw vf31 (= 1) | vi2 = 0
@@ -201,6 +204,8 @@ namespace
         } while (r.vi[3] != 0);
         storeRegs(r, ctx);
     }
+    void sphereClip(R5900Context *ctx, uint8_t *data, uint32_t size) { sphereClipFrom(ctx, data, size, 24); }
+    void sphereClipFirst(R5900Context *ctx, uint8_t *data, uint32_t size) { sphereClipFrom(ctx, data, size, 12); }
 
     // VU0 0x0E30: vf1..vf12 stored to vi15+0 .. vi15+11 (the last in the E bit's delay slot)
     void storeTwelve(R5900Context *ctx, uint8_t *data, uint32_t size)
@@ -673,6 +678,11 @@ namespace
             ps2RegisterVu0NativeRange(0x0068u, 0x0000u, 0x7A8u, 0xBD552AA3D758E079ull, &segmentTriangleFloat,
                                       "VCS VU0 segment vs triangle, float inputs (0x068)");
             ps2RegisterVu0Native(0x0C10u, 0x0D8u, 0x29291AE3B92E1ED5ull, &sphereClip, "VCS VU0 sphere vs three plane sets (0x0C10)");
+            // LCS: the same program entered at 0x0C00 (planes at vi15+12; the hash covers 0x0C00..0x0CE0).
+            // LCS_VU0_0C00=0: interpreted, as before (comparisons)
+            if (const char *e = std::getenv("LCS_VU0_0C00"); !(e && e[0] == '0'))
+                ps2RegisterVu0Native(0x0C00u, 0x0E0u, 0xA4310C1963224F67ull, &sphereClipFirst,
+                                     "VU0 sphere vs three plane sets from vi15+12 (0x0C00)");
             ps2RegisterVu0Native(0x0E98u, 0x110u, 0xD8B903EF47C24DF7ull, &matrixTimes3First, "VCS VU0 3x matrix product (0x0E98)");
             ps2RegisterVu0Native(0x0E30u, 0x068u, 0x0EAEDF438E869B5Bull, &storeTwelve, "VCS VU0 store vf1..vf12 (0x0E30)");
         }

@@ -613,6 +613,21 @@ namespace
 
         ui::i18n::registerSetting(); // Game > Language: the menus' language (ui/i18n.h)
 
+        // The logo movies at start-up (game/lcs_overrides.cpp: VCS's native player at LCS's Play 0x35A020; the user's
+        // wish, 2026-11-18 - they were always skipped)
+        s = {};
+        s.key = "display.skip_intro";
+        s.page = "Game";
+        s.section = "Start-up";
+        s.label = "Skip intro movies";
+        s.help = "The Rockstar logos at start-up. Off plays them as on the PS2 (Start or Cross skips each); on goes straight "
+                 "to the game.";
+        s.type = Type::Toggle;
+        s.defaultValue = 0;
+        s.env = "VCS_SKIP_MOVIES";
+        s.onChange = [](int v) { vcs::setSkipIntroMovies(v != 0); };
+        settings::add(s);
+
         s = {};
         s.key = "game.background";
         s.page = "Game";
