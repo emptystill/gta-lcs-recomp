@@ -407,7 +407,7 @@ namespace screens
         {
             float fx, fy, period;
         };
-        constexpr Look kLooks[3] = {{0.57f, 0.36f, 31.0f}, {0.46f, 0.45f, 27.0f}, {0.48f, 0.30f, 35.0f}};
+        constexpr Look kLooks[3] = {{0.57f, 0.36f, 31.0f}, {0.46f, 0.45f, 27.0f}, {0.50f, 0.58f, 35.0f}}; // the taxi and the van: their fronts
         for (int i = 0; i < 3; ++i)
         {
             const render::Image *img = homeArt(i);
