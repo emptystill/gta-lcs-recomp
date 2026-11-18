@@ -76,8 +76,10 @@ The user does not want anything of the VCS port in what the player sees. The set
   launcher keeping a copy of the list, so a setting added to the game shows in the launcher with no launcher change;
   the launcher edits lcs.ini only while the game is closed.
 - **Home's pictures and cards** (the user, 2026-11-17: three pictures and the logo for the cover, "Recompilado para
-  PC", cards unlike VCS's launcher): the pictures load from `launcher/art` and stay out of git (Rockstar's and a fan
-  artist's work, not ours to publish); without them Home is the drawn cover as before. The three cards became slanted
+  PC", cards unlike VCS's launcher): the pictures load from `launcher/art`. First kept out of git (Rockstar's and a fan
+  artist's work); the user wants them in the repository and the releases ("no tengo pensado monetizar"), so they are
+  committed - cover-1 shrunk to 1600 px high (the launcher stores it at 1200 at most). Without them Home is the drawn
+  cover as before. The three cards became slanted
   comic panels - black border, a hard offset shadow and a tag in the cover's red / orange / blue, titles in the heavy
   face - where VCS's are rounded glass cards.
 - **F2 off, the game's own menu instead** (the user, after the Game sheet: "podemos quitar el menu que viene del

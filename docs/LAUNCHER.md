@@ -107,8 +107,9 @@ motion is (2026-11-01, the user's "rethink everything"; before, a sidebar of pag
   convex quadrilateral). Any step can be looked at from the
   rail. The Folder step only stops Setup when doctor has a warning for it and nothing is built yet.
 - **Home's pictures** (the user's, 2026-11-17): `launcher/art/cover-1..3.jpg|png` (the tall left panel, top right,
-  bottom right) and `logo.png` - Rockstar's art and a fan's, so **never committed** (`.gitignore`; a release has none,
-  and Home falls back to its drawings and the name in the brand font). `render/images.cpp` decodes them with WIC
+  bottom right) and `logo.png`, in the repository and the releases (the user's choice: Rockstar's art and a fan's, the
+  project is not for profit; DECISIONS.md). Without them Home falls back to its drawings and the name in the brand
+  font. `render/images.cpp` decodes them with WIC
   (Windows; Linux / macOS have no decoder yet and draw the fallback), shrinks them to the size Home needs on a 4K
   screen, premultiplies and packs them into one 2048 RGBA atlas; the renderer's `kImage` instance samples it (t1; 4 x 4
   samples over a pixel's footprint, no mipmaps) cut to a convex quad (the panel). Vulkan and Metal bind the glyph atlas

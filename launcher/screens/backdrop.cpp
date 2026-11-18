@@ -1,6 +1,6 @@
 // Behind everything: a night-blue sky and, on Home, a comic book's cover in Liberty City Stories' manner - three slanted
 // panels with thick black borders on a halftone ground, and a caption box. In the panels: the player's pictures when
-// launcher/art has them (cover-1..3: the user's choice, 2026-11-17 - LCS's art, never committed; render/images.h), each
+// launcher/art has them (cover-1..3: the user's choice, 2026-11-17; render/images.h), each
 // cut to its panel and drifting slowly closer; else the launcher's own drawings - a made man in a fedora with a
 // cigarette (red), Liberty City's skyline and its suspension bridge at dusk (orange), a 1970s sedan at speed (blue).
 // Alive while Home shows and the game isn't running: the pictures drift, the smoke curls up, windows go on and off,

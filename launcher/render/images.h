@@ -1,7 +1,6 @@
 // Pictures: decoded once (Windows: WIC, the system's JPEG / PNG decoders; elsewhere none yet), scaled down to the size
 // they are needed at, premultiplied and packed into one RGBA8 atlas the renderer samples (render::kImage). Home's
-// cover and the logo use them when the player put them in launcher/art (kept out of git: docs/LAUNCHER.md "Home's
-// pictures"); without them Home draws its own.
+// cover and the logo come from launcher/art (docs/LAUNCHER.md "Home's pictures"); without them Home draws its own.
 #pragma once
 
 #include "core/math.h"
