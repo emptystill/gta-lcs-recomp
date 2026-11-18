@@ -1122,6 +1122,33 @@ state, found by RAM dumps across pages and before / during / after the menu:
   button goes back; the wheel moves a page's selection, zooms the map (R1 / L1). The tabs' boxes are measured on the
   Spanish game. `menustate`, `menumouse X Y [left|right|wheelup|wheeldown]` for tests; `LCS_MENU_MOUSE=0` keys only.
 
+## The pause menu's own table: screens, rows, actions (2026-11-17)
+
+Found to see whether settings can live in the game's own menu (the user's question; the F2 menu or the launcher's Game
+sheet otherwise). The menu is the series' classic frontend (GTA III / VC's CMenuManager), not VCS's item objects
+(vcs-reference game-internals 6m): a static table of screens in the executable's data, rows with an action code each.
+
+- **The screen table at 0x393A30** (found: the GXT keys `FEH_DIS`, `FED_BRI`... searched in the ELF, then the EE code
+  that forms addresses in that range - lui / addiu pairs, a linear scan - all in 0x339A5C..0x342EF0): **0x116 bytes a
+  screen** - its title key (8 bytes), then **15 rows of 0x12 bytes**: u16 action, char key[8] (GXT), u8 0, u8 the
+  screen's own index, u16 x, u16 y (PSP units, 480 x 272), u16 alignment (2: the label right-aligned at x with the
+  value at x + 12; 3: centred, no value). Screens: 0 STA, 1 LOA (Game), 2 BRI, 3 CON, 4 AUD, 5 DIS, 6 LAN, then the map
+  and the save / load / memory card screens.
+- **Display (screen 5)**: Brightness 0x0D (y 40), Subtitles 0x0B (60), Widescreen 0x0C (80), Radar mode 0x28 (100),
+  HUD mode 0x29 (120), Screen position 0x1D (140, align 3) - six of fifteen rows; the help bar starts near y 200, so
+  three more rows fit (160, 180, 200). **Audio (4)**: Music 0x0E (40), SFX 0x0F (60), radio station 0x11 (100) - y 80 is
+  free, the station logos fill the rest.
+- **Drawing, `FUN_00339fe0`** (DrawStandardMenus): each row's label is `FUN_00332e68(text table, row key)` (CText::Get);
+  its value comes from a switch on (action - 5) that picks a GXT key from the option's global (Subtitles `gp+0x1c98`,
+  Widescreen `gp+0x1c9a`, Radar mode `0x3d08f8`...) and draws it at the row's x + 12. An action the switch doesn't know
+  draws its label only. Brightness (0x0D), Music (0x0E), SFX (0x0F) draw bars further down (`sVar3 == 0xd/0xe/0xf`).
+- **Input, `FUN_00340b80`** (ProcessUserInput): the manager (`piVar16`) +0x588 the screen, **+0x58C the selected
+  row**; up / down skip rows whose action is **0 or 0x19** (labels); left / right / Cross switch on the action - an
+  unknown action does nothing.
+- So a row of our own is possible: a free slot of a screen's table (guest RAM, written at boot), its text through the
+  GXT lookup, its left / right handled by `lcs_frontend` (it knows the screen and row from the manager). Its value has
+  no drawing of its own: the label would carry it, or a value row (action 0, a label the cursor skips) beside it.
+
 ## Pending (the user's checklist, 2026-11-17)
 
 In the order agreed with the user (most likely to break play first). VCS has each of these; on LCS none is done.
