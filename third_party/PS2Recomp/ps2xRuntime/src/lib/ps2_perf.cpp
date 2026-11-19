@@ -69,6 +69,8 @@ namespace ps2perf
         // EE thread
         uint64_t g_firstMarkNs = 0, g_lastMarkNs = 0, g_lastGameMarkNs = 0;
         uint32_t g_vblanks = 0;
+        // [gta-recomp] running totals for liveness() (the stall report, src/debug/watchdog.cpp): read from any thread
+        std::atomic<uint64_t> g_totalGameFrames{0}, g_totalVBlanks{0};
         uint64_t g_lastUnderruns = 0;
 
         // shared (g_mutex)
@@ -596,15 +598,22 @@ namespace ps2perf
     {
         const uint64_t now = nowNs();
         g_lastGameMarkNs = now;
+        g_totalGameFrames.fetch_add(1, std::memory_order_relaxed);
         closeFrame(now);
     }
 
     void markVBlank()
     {
         ++g_vblanks;
+        g_totalVBlanks.fetch_add(1, std::memory_order_relaxed);
         const uint64_t now = nowNs();
         if (!g_lastGameMarkNs || now - g_lastGameMarkNs > 1000000000ull) // the game marks no frames: VBlank = frame
             closeFrame(now);
+    }
+
+    Liveness liveness()
+    {
+        return {g_totalGameFrames.load(std::memory_order_relaxed), g_totalVBlanks.load(std::memory_order_relaxed)};
     }
 
     void hostFrame(double glMs)

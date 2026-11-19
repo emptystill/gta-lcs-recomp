@@ -84,6 +84,13 @@ namespace ps2perf
     void markGameFrame();
     // EE thread: a VBlank started.
     void markVBlank();
+    // [gta-recomp] Any thread: game frames (markGameFrame) and VBlanks since start - frames that stop while VBlanks go on
+    // are a stuck game (the stall report, src/debug/watchdog.cpp).
+    struct Liveness
+    {
+        uint64_t gameFrames = 0, vblanks = 0;
+    };
+    Liveness liveness();
 
     // Main thread, once per host frame: how long the GPU renderer's command execution took.
     void hostFrame(double glMs);

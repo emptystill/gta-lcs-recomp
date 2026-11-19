@@ -7,6 +7,8 @@
 // Works without debug symbols. Windows (SuspendThread) and Linux (a SIGPROF per sample).
 #pragma once
 
+#include <string>
+
 class PS2Runtime;
 
 namespace vcs
@@ -15,4 +17,7 @@ namespace vcs
     // VCS_PROFILE_SPIKES=<ms> (with VCS_PROFILE): the game thread calls this once a frame (at the frame kick); a frame
     // longer than <ms> gets its own report - the samples taken during it, by guest function / host symbol ("[spike]")
     void profilerFrame();
+    // Any thread: every host thread's stack, by name, symbolised (Windows; empty elsewhere). Each thread is suspended
+    // only while its context is read and unwound. The stall report (debug/watchdog.cpp) uses it.
+    std::string hostThreadStacks();
 }

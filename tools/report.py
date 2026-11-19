@@ -4,7 +4,7 @@
     python tools/report.py [OUT.zip]        default: build/reports/report-<date>.zip
 
 What goes in: the build logs (configure, build, recompiler), the newest four build/run/*.log (the game's output, crash reports included:
-the crash handler writes to it), build/build_info.json, generated/recompile_stamp.json, build/lcs.ini and
+the crash handler writes to it), the newest three stall reports (<data>/logs/stall-*.txt), build/build_info.json, generated/recompile_stamp.json, build/lcs.ini and
 launcher.ini (settings), tools/doctor.py --json, Windows / CPU / GPU names. What never goes in: the disc, the
 executable or anything extracted or generated from it (generated/*.cpp), the memory card. Logs keep their last 2 MB.
 """
@@ -69,6 +69,10 @@ def main():
     files = [os.path.join(tc.BUILD, n) for n in BUILD_LOGS + ["build_info.json", "lcs.ini", "launcher.ini"]]
     files.append(os.path.join(tc.ROOT, "generated", "recompile_stamp.json"))
     files += sorted(glob.glob(os.path.join(tc.BUILD, "run", "*.log")), key=os.path.getmtime, reverse=True)[:4]
+    # the newest stall reports (the game stuck: what its threads wait for - written even without the launcher's log)
+    import backup  # noqa: E402 (its data_dir: VCS_DATA_DIR or the game's own folder)
+    files += sorted(glob.glob(os.path.join(backup.data_dir(), "logs", "stall-*.txt")), key=os.path.getmtime,
+                    reverse=True)[:3]
     files = [p for p in files if os.path.isfile(p)]
     doctor = subprocess.run(tc.PY + [tc.tool("doctor.py"), "--json"], capture_output=True, cwd=tc.ROOT,
                             encoding="utf-8", errors="replace")  # the tools print UTF-8 (toolchain)

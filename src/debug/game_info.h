@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 
 class PS2Runtime;
 
@@ -14,4 +15,6 @@ namespace vcs::gameinfo
     void install(PS2Runtime &runtime);
     // Game thread, at the frame kick: takes the snapshot the panel shows (only while the panel is on screen).
     void onGameFrame(const uint8_t *rdram);
+    // Any thread: the panel's lines read now, one per line (the stall report, debug/watchdog.cpp); empty before the game.
+    std::string text();
 }

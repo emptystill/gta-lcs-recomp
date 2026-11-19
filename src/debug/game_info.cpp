@@ -324,6 +324,15 @@ namespace vcs::gameinfo
         });
     }
 
+    std::string text()
+    {
+        std::string out;
+        if (g_rdram)
+            for (const auto &l : build(g_rdram))
+                out += (l.header ? "[" + l.text + "]" : "  " + l.text) + "\n";
+        return out;
+    }
+
     void onGameFrame(const uint8_t *rdram)
     {
         if (ticksNow() > g_wantedUntil.load(std::memory_order_relaxed))

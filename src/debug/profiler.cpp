@@ -517,6 +517,85 @@ namespace vcs
             g_spikeToNs.store(now, std::memory_order_release);
         }
     }
+
+    std::string hostThreadStacks()
+    {
+        using GetThreadDescriptionFn = HRESULT(WINAPI *)(HANDLE, PWSTR *);
+        auto getDesc = reinterpret_cast<GetThreadDescriptionFn>(
+            GetProcAddress(GetModuleHandleW(L"Kernel32.dll"), "GetThreadDescription"));
+        static const bool symbols = [] {
+            SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS);
+            return SymInitialize(GetCurrentProcess(), nullptr, TRUE) != 0 || GetLastError() == ERROR_INVALID_PARAMETER;
+        }();
+        (void)symbols;
+        struct Taken
+        {
+            DWORD id;
+            std::string name;
+            uintptr_t frames[32];
+            int count;
+        };
+        std::vector<Taken> taken;
+        taken.reserve(64);
+        HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+        THREADENTRY32 te{sizeof(te)};
+        const DWORD pid = GetCurrentProcessId(), self = GetCurrentThreadId();
+        for (BOOL ok = Thread32First(snap, &te); ok; ok = Thread32Next(snap, &te))
+        {
+            if (te.th32OwnerProcessID != pid || te.th32ThreadID == self)
+                continue;
+            HANDLE h = OpenThread(THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT | THREAD_QUERY_LIMITED_INFORMATION, FALSE,
+                                  te.th32ThreadID);
+            if (!h)
+                continue;
+            Taken t{te.th32ThreadID, {}, {}, 0};
+            PWSTR name = nullptr;
+            if (getDesc && SUCCEEDED(getDesc(h, &name)) && name)
+            {
+                for (const wchar_t *c = name; *c; ++c)
+                    t.name += static_cast<char>(*c);
+                LocalFree(name);
+            }
+            // only the context and the unwind while it is suspended (it may hold the heap's lock): names afterwards
+            if (SuspendThread(h) != static_cast<DWORD>(-1))
+            {
+                CONTEXT c{};
+                c.ContextFlags = CONTEXT_FULL;
+                if (GetThreadContext(h, &c))
+                {
+                    t.frames[0] = static_cast<uintptr_t>(c.Rip);
+                    t.count = 1 + unwindFrames(c, t.frames + 1, 31);
+                }
+                ResumeThread(h);
+            }
+            CloseHandle(h);
+            taken.push_back(std::move(t));
+        }
+        CloseHandle(snap);
+        std::string out;
+        for (const Taken &t : taken)
+        {
+            if (t.name.empty() && t.count == 0)
+                continue;
+            out += "thread " + std::to_string(t.id) + " " + (t.name.empty() ? std::string("(unnamed)") : t.name) + "\n";
+            for (int k = 0; k < t.count; ++k)
+            {
+                alignas(SYMBOL_INFO) char buffer[sizeof(SYMBOL_INFO) + 256];
+                auto *sym = reinterpret_cast<SYMBOL_INFO *>(buffer);
+                sym->SizeOfStruct = sizeof(SYMBOL_INFO);
+                sym->MaxNameLen = 255;
+                DWORD64 displacement = 0;
+                char line[400];
+                if (symFromAddr(GetCurrentProcess(), t.frames[k], &displacement, sym))
+                    std::snprintf(line, sizeof(line), "    %s+0x%llx\n", sym->Name,
+                                  static_cast<unsigned long long>(displacement));
+                else
+                    std::snprintf(line, sizeof(line), "    0x%llx\n", static_cast<unsigned long long>(t.frames[k]));
+                out += line;
+            }
+        }
+        return out;
+    }
 #elif defined(__linux__) || defined(__APPLE__)
     // Linux: the sampler thread sends SIGPROF to each sampled thread (tgkill); the handler hands its RIP back. macOS: the
     // sampler suspends each sampled thread (a Mach thread port), reads its PC and resumes it. Same reports as on Windows
@@ -919,5 +998,11 @@ namespace vcs
 #else
     void startProfiler(PS2Runtime &) {}
     void profilerFrame() {}
+#endif
+#if !defined(_WIN32)
+    std::string hostThreadStacks()
+    {
+        return {}; // Windows only for now (the stall report says where the EE threads are either way)
+    }
 #endif
 }

@@ -1274,6 +1274,16 @@ In the order agreed with the user (most likely to break play first). VCS has eac
   writer's thread and RIP (`exe+0x...`; vcs.exe has no symbols for the runtime, read the code with llvm-objdump).
 - `LCS_TRACE_ALLOC=1`: the heap's large-block path, the OOM handler and the vector push, on entry.
 - `VCS_STREAM_TRACE=1`: every stream read (channel, dest, LSN, bytes, caller).
+- **The stall report** (2026-11-19, `src/debug/watchdog.cpp`; off with `VCS_STALL_REPORT=0`): the user's game froze
+  in a rainy night fight (the picture stuck, F3 and the trainer alive), started without the launcher - so no log. Its
+  F4 recording showed the game thread nearly idle (0.07 ms a frame, 0 draws, VBlanks going on): a guest wait, not a
+  loop. Now no game frame for 6 s writes `<data>/logs/stall-<time>.txt` (and a `[stall]` line to the log): VBlanks
+  since the frame (going on: the EE runs, its threads wait; none: the game thread held in host code), the F3 game
+  state, four EE / IOP snapshots a second apart (threads with status / wait / pc / ra, semaphores, event flags) and
+  every host thread's stack, symbolised, at +0 / +3 s (Windows). At most three a run; `tools/report.py` zips the
+  newest three. Checked with the rig's `pause on` (12 s): "the EE stands still", the game thread in
+  `vcs::rig::onGameFrame` / `SleepEx`. A 15-minute hunt (rain, night, M60, burning cars; the wanted level held down
+  by the card's mission) did not freeze.
 - `tools/eedecomp.py ADDR...`: works on the `lcs` Ghidra project (Ghidra / JDK in `build/ghidra-tools`, set
   GHIDRA_HOME / JAVA_HOME).
 

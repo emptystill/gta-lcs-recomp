@@ -1151,6 +1151,7 @@ int main(int argc, char *argv[])
         vcs::configureWatch(runtime.memory().getRDRAM());
         vcs::runSelfTest(runtime);
         vcs::startWatchdog(runtime);
+        vcs::startStallReport(runtime, dataDirectory() / "logs"); // a stuck game writes what it waits for
         vcs::startProfiler(runtime);
         runtime.run();
 #if defined(PS2X_PGO_GEN)
