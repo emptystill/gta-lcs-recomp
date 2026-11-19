@@ -621,6 +621,14 @@ namespace
             frame.timeStepNonClipped = 0x003D9D9Cu;
             vcs::installFrameRateHooks(runtime, frame);
         }
+        // GS CSR reads that only want FIELD (bit 13: `ld` CSR, `dsrl 13`, `andi 1`; set at VBlank on the game thread):
+        // read without fencing on the render worker - each fence waited for all the queued GS work, ~5 a frame and
+        // 400-590 ms a second of the game thread in an explosion's fire (2026-11-18: why the game thread's time equalled
+        // the worker's). The buffer swap 0x2D9640's at 0x2D9678, and 0x1FC938, 0x35F0F4 (as VCS's flip, vcs_display.cpp).
+        // LCS_CSR_FENCE=1: fence as before.
+        if (!envOn("LCS_CSR_FENCE"))
+            for (uint32_t pc : {0x001FC938u, 0x002D9678u, 0x0035F0F4u})
+                runtime.addCsrReadWithoutFence(pc);
         // Particles on the time step (game/vcs_particle_timing.h; docs/LCS.md "Above 30 fps"): the same particle record
         // as VCS's (rates at +0x38 / +0x3A / +0x3E, size +0x30 / +0x34, next +0x48), systems of 0x94 bytes. AddParticle
         // 0x1CD5B8 (its overload 0x1CD580 = xmatch of VCS 0x1E9040, which calls it), CParticle::Update 0x1CE1B0 (the

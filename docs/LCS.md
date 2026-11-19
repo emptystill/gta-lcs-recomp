@@ -230,6 +230,16 @@ Its native is `sphereClipFrom(.., 12)` in `vcs_vu0_native.cpp` (`PS2X_VU0_VERIFY
 `LCS_VU0_0C00=0` interprets it again): 28.6 ms / 5 s now. Measured game frames a second (the frame counter, 2560x1440,
 the player's settings, no cap): calm ~105-118, high speed ~140-150, the explosions' fire 69-117 (min 48-55; runs differ
 with what burns). The render worker is the next limit there (`worker_ms` ~ the frame).
+- **The game thread waited for the renderer** (2026-11-19, the user: down to ~45 fps in explosions and shooting cars):
+  with the frames counted right, the game thread's time equalled the render worker's - `PS2X_RENDER_THREAD_LOG=1`:
+  ~5 `gs-priv` fences a frame, all waited, 400-590 ms a second. GS CSR reads fence on the worker (SIGNAL / FINISH come
+  from GS work), but LCS reads CSR only for FIELD (`ld`, `dsrl 13`, `andi 1`; set at VBlank on the game thread): at
+  0x2D9678 (the buffer swap 0x2D9640), 0x1FC938 and 0x35F0F4 (0x35E9D8 / 0x35EA78 read the GS revision at init). Those
+  three read without a fence now (`addCsrReadWithoutFence`, as VCS's flip; `LCS_CSR_FENCE=1` = before). After: no
+  fences; the game thread in the explosions 2.2-2.3 ms a frame against 5.6-8.2 with the fence (it had followed the
+  worker's 5-7.6); four alternating runs: calm 113 -> 126 fps, high speed 126 -> 161, explosions 128 -> 125 (that
+  scene's load differs run to run: 73-194 GS draws a frame, up to ~700 in a big fire). What limits the fire now is the
+  render worker and the GS stage (each ~10 ms at ~550 GS-path draws: VU1-drawn effects, ~17 us each).
 - **`perf` / F3 said 60 fps whatever the rate**: LCS never marked its game frames (`ps2perf::markGameFrame`), so each
   VBlank was a frame; now the frame kick (0x212810) marks them, as VCS's does.
 
