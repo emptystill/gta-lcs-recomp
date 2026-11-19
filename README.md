@@ -18,9 +18,7 @@ Download the zip from [Releases](../../releases) (Windows; the AppImage on Linux
 folder of its own and start `LCSLauncher`. It asks for your disc image, gets the build tools, builds the game from your
 disc (the first build takes a while) and starts it. It also updates itself and the build, and backs up your saves.
 
-This port is built on the **GTA: Vice City Stories native port** (the two games share Rockstar Leeds' engine): its
-runtime, renderer, platform layer, launcher and tools came from there, and its documentation is kept in
-[docs/vcs-reference/](docs/vcs-reference) as the map of what to look for in Liberty City Stories.
+Built on the work of others: see [Credits](#credits).
 
 ## Build
 
@@ -58,8 +56,7 @@ Or start `build\lcs.exe` directly: the build already told it where your disc is 
   there.
 - **F5** opens the trainer (weapons, vehicles, teleports, time, weather, god mode).
 - **Alt+Enter** switches between full screen and the window; **F8** saves a screenshot.
-- Saves (the memory card) live in `%LOCALAPPDATA%\LCSRecomp` on Windows, `~/.local/share/LCSRecomp` on Linux -
-  never in the Vice City Stories port's folder.
+- Saves (the memory card) live in `%LOCALAPPDATA%\LCSRecomp` on Windows, `~/.local/share/LCSRecomp` on Linux.
 
 ## Problems
 
@@ -89,7 +86,20 @@ stands and how it was brought up.
 | `launcher` | The launcher (its own renderer and UI; runs the tools) |
 | `docs` | LCS status, the platforms, the runtime's patches; `docs/vcs-reference` for VCS |
 
+## Credits
+
+- **[GTA: Vice City Stories native port](https://github.com/gothamor/gta-vcs-recomp)** by gothamor: this port started
+  as a copy of it (the two games share Rockstar Leeds' engine). Its runtime changes, renderer, platform layer,
+  settings, launcher and tools are the base of everything here, and its documentation is kept in
+  [docs/vcs-reference/](docs/vcs-reference) as the map of what to look for in Liberty City Stories. The code that
+  still carries `vcs_` in its name comes from it.
+- **[PS2Recomp](https://github.com/ran-j/PS2Recomp)** by ran-j and its contributors: the PS2 static recompiler and
+  runtime (vendored and modified in `third_party/PS2Recomp`; the changes are listed in
+  [docs/PS2RECOMP_PATCHES.md](docs/PS2RECOMP_PATCHES.md)).
+
+This project is not affiliated with or endorsed by Rockstar Games or Take-Two Interactive.
+
 ## License
 
-GPL-3.0 (inherited from PS2Recomp). Grand Theft Auto and all game content are property of Rockstar Games /
+GPL-3.0 (inherited from PS2Recomp and the Vice City Stories port). Grand Theft Auto and all game content are property of Rockstar Games /
 Take-Two Interactive.

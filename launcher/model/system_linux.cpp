@@ -249,7 +249,7 @@ namespace launcher
     {
         // logind holds the inhibitor while we hold its file descriptor
         if (on && g_inhibitFd < 0)
-            g_inhibitFd = dbus::inhibitSleep("VCS Launcher", "Building the game");
+            g_inhibitFd = dbus::inhibitSleep("LCS Launcher", "Building the game");
         else if (!on && g_inhibitFd >= 0)
         {
             ::close(g_inhibitFd);
