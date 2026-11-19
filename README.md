@@ -6,9 +6,17 @@ game's PS2 executable into C++. Windows first; Linux (Vulkan) and macOS (Metal) 
 **This repository contains no game code or game data.** You need your own copy of the game as an `.iso`.
 The build reads the executable from your disc, and the finished game reads everything else from it while it runs.
 
-**Status: early.** The game boots, plays its intro cutscene and goes into gameplay, with the PS2's look and 30 fps.
-The enhancements (widescreen, high frame rates, mouse and key bindings, native rendering and sound, the trainer) are
-being brought over one by one. What works and what is next: [docs/LCS.md](docs/LCS.md).
+**Status: first release (0.1.0), playable.** The story plays from the start, in widescreen (Hor+) at high frame rates
+(up to your display's refresh, or uncapped), with keyboard and mouse (a free mouse camera, mouse aim), the gamepad,
+the trainer (F5) and the launcher. Still to come: the frame-rate fixes for mission timers and some effects (things
+that count frames may run faster above 30 fps), native sound, world detail options. What works and what is next:
+[docs/LCS.md](docs/LCS.md).
+
+## Play from a release
+
+Download the zip from [Releases](../../releases) (Windows; the AppImage on Linux, the .dmg on macOS), extract it into a
+folder of its own and start `LCSLauncher`. It asks for your disc image, gets the build tools, builds the game from your
+disc (the first build takes a while) and starts it. It also updates itself and the build, and backs up your saves.
 
 This port is built on the **GTA: Vice City Stories native port** (the two games share Rockstar Leeds' engine): its
 runtime, renderer, platform layer, launcher and tools came from there, and its documentation is kept in
@@ -43,9 +51,12 @@ python tools/run.py 0 play               # play, with the output logged to build
 Or start `build\lcs.exe` directly: the build already told it where your disc is (`iso=` in `build\lcs.ini`).
 `LCSLauncher.exe` (`python tools/build.py --launcher`) is the same pipeline with buttons.
 
-- Controls for now: the runtime's own pad mapping - arrows / WASD to move, Shift = Cross, Enter = Start,
-  Space = Square, F = Triangle; a gamepad works as a PS2 pad.
-- **F2** opens the settings (resolution, window, sound devices); many of its options do nothing in LCS yet.
+- Controls: WASD to move, the mouse turns the camera and aims, left click fires, F enters vehicles; every key can be
+  rebound. A gamepad works as a PS2 pad. Button prompts follow the device you use.
+- Settings: aspect ratio, widescreen HUD, frame rate cap and master volume are in the game's own pause menu
+  (Display / Audio); everything else is in the launcher's **Game** page. The older F2 settings menu can be turned on
+  there.
+- **F5** opens the trainer (weapons, vehicles, teleports, time, weather, god mode).
 - **Alt+Enter** switches between full screen and the window; **F8** saves a screenshot.
 - Saves (the memory card) live in `%LOCALAPPDATA%\LCSRecomp` on Windows, `~/.local/share/LCSRecomp` on Linux -
   never in the Vice City Stories port's folder.
