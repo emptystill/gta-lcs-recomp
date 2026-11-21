@@ -9,12 +9,28 @@
 // fields there and returns. Off, it runs as before; VCS_FREECAM=0 does not hook it at all (the reference).
 #pragma once
 
+#include <cstdint>
+
 class PS2Runtime;
 
 namespace vcs::freecam
 {
+    // Where a game keeps its cameras (a CCam's fields, relative to it)
+    struct Layout
+    {
+        uint32_t activeCam = 0;      // byte: which of the CCams is active
+        uint32_t cams = 0, camSize = 0;
+        uint32_t front = 0, source = 0, sourceCopy = 0, up = 0, fov = 0, target = 0; // 0: none
+    };
+
     // Before runtime.run(): the hooks (applyVcs).
     void install(PS2Runtime &runtime);
+    // [lcs] Liberty City Stories: the camera hook is the game's own (lcs_overrides.cpp, after CCam::Process), which calls
+    // takeCamera; this only says where the fields are and turns the free camera on.
+    void installLayout(const Layout &layout);
+    // Game thread, after the active camera's update: true when the free camera wrote `cam` (the caller then skips the
+    // game's own result for it).
+    bool takeCamera(uint8_t *rdram, uint32_t cam);
 
     // Any thread: the trainer's Free camera is on and the game is in play - the pad then gives the game nothing and the
     // keyboard / mouse / gamepad fly the camera (game/vcs_input.h).

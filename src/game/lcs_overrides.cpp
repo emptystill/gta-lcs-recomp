@@ -18,6 +18,7 @@
 
 #include <cmath>
 #include "game/vcs_framerate.h"
+#include "game/vcs_freecam.h"
 #include "game/vcs_particle_timing.h"
 #include "game/vcs_input.h"
 #include "game/vcs_movie.h"
@@ -247,6 +248,13 @@ namespace
     PS2Runtime::RecompiledFunction g_origAfterCam = nullptr;
     PS2_GUEST_CC void afterCamProcess(uint8_t *rdram, R5900Context *ctx, PS2Runtime *runtime)
     {
+        // the trainer's free camera (game/vcs_freecam.h) flying: it writes the active CCam's result instead, and the
+        // routine is skipped as on VCS (its height routine there; the game's own update has run)
+        if (vcs::freecam::takeCamera(rdram, GPR_U32(ctx, 4)))
+        {
+            ctx->pc = GPR_U32(ctx, 31);
+            return;
+        }
         vcs::input::directCameraResult(rdram, GPR_U32(ctx, 4));
         g_origAfterCam(rdram, ctx, runtime);
     }
@@ -675,7 +683,14 @@ namespace
         {
             g_origAfterCam = runtime.lookupFunction(0x00287020u);
             if (g_origAfterCam)
+            {
                 runtime.replaceFunction(0x00287020u, &afterCamProcess);
+                // the trainer's free camera (F6): LCS's CCams - TheCamera 0x43BBF0 + 0x220 + i * 0x2B0, the active one
+                // the byte at +0x10C; Front +0x1C0, Source +0x1D0 (a copy +0x1E0), Up +0x1F0, FOV +0xE8 (docs/LCS.md
+                // "Mouse camera")
+                vcs::freecam::installLayout({0x0043BBF0u + 0x10Cu, 0x0043BBF0u + 0x220u, 0x2B0u, 0x1C0u, 0x1D0u, 0x1E0u,
+                                             0x1F0u, 0xE8u, 0u});
+            }
         }
         // The HUD at the screen edges (Display > HUD: Screen edges) and on its own layer, as VCS's (game/vcs_hud.h,
         // docs/LCS.md "HUD"): the 2D routines found by xmatch / their data. LCS_HUD=0: as before (all of it at 4:3).

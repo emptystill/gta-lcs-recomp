@@ -1238,6 +1238,18 @@ namespace vcs::input
         settings::add(s);
 
         s = {};
+        s.key = "controls.freecam_key";
+        s.page = kKeys;
+        s.section = "Menus";
+        s.label = "Free camera";
+        s.help = "Turns the trainer's free camera on and off: fly with W / A / S / D, E and Q, the mouse; Shift faster, "
+                 "Ctrl slower. On a gamepad: press Back + LB together.";
+        s.type = Type::Key;
+        s.group = "keys";
+        s.defaultValue = KEY_F6;
+        settings::add(s);
+
+        s = {};
         s.key = "controls.screenshot_key";
         s.page = kKeys;
         s.section = "Menus";

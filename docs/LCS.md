@@ -1104,6 +1104,24 @@ before did. A script still waiting when the clock stops (a pause) is taken back 
     a frame later), WARP_PLAYER_INTO_CAR (0x36E) instead of the char's, the car's AI mode (+0x198) and a ped flag.
     Checked: a warp on an open street (Chinatown) and the three spawn variants all level (front z -0.113..-0.116).
 
+## Free camera (2026-11-21)
+
+The user, for trailer shots of their own: the trainer's free camera (F6, or Back + LB; trainer > Camera), as VCS's
+(`src/game/vcs_freecam.cpp`, docs/vcs-reference/TRAINER.md): W / A / S / D along the view, E up, Q down, the mouse
+looks, Shift x4, Ctrl x0.25, Z / X zoom; speed 5-80 m/s; "Teleport player here"; off, `RESTORE_CAMERA_JUMPCUT` puts
+the camera back behind the player. The player waits (the pad gives the game nothing while it flies).
+
+How: VCS replaces CCam::ProcessSpecialHeightRoutines, called right after the active CCam's update. LCS's CCamera::
+Process calls CCam::Process 0x27A380 and right after 0x287020 with the same CCam - the hook the direct mouse camera
+already has ("Mouse camera"). There, while flying, `vcs::freecam::takeCamera` writes the CCam's Source (+0x1D0 and
+its copy +0x1E0), Front (+0x1C0), Up (+0x1F0) and FOV (+0xE8) and returns without the original; the frame's matrix,
+frustum, culling and streaming come from them. `vcs::freecam::Layout` holds those offsets per game (VCS's unchanged).
+The game's own update still runs (a cutscene ends only when its camera has played its path, VCS's lesson).
+
+Checked (`trainer toggle freecam 1`, `trainer freecam`): from Saint Mark's safehouse 2 s of W and 1.5 s of E at
+20 m/s moved it 40.7 m and up 29.6 m, the mouse turned it; the picture followed (Portland from above, streamed in);
+off, the view was back behind Toni in the room, the player where he was.
+
 ## Foot camera and walls (2026-11-16)
 
 The user saw the foot camera inside walls / a column.
@@ -1254,7 +1272,7 @@ In the order agreed with the user (most likely to break play first). VCS has eac
 - [ ] **Sound**: still the emulated IOP, never checked by ear; VCS's native sound driver and the music / effects levels
   as settings (`vcs_sound`, `vcs_volume`).
 - [ ] **World options**: traffic / pedestrian density, draw distance as settings (`vcs_world_detail`).
-- [ ] **The trainer**: missions (story and side jobs), the free camera.
+- [ ] **The trainer**: missions (story and side jobs). [x] The free camera (2026-11-21, "Free camera").
 - [ ] **Saves**: save / load in different places, checked.
 
 ## Tools for LCS debugging

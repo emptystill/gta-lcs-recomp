@@ -22,11 +22,9 @@ namespace vcs::freecam
     namespace
     {
         constexpr uint32_t kRamMask = 0x01FFFFFFu;
-        // TheCamera and its CCams (game-internals.md 12b)
+        // VCS: TheCamera and its CCams (game-internals.md 12b)
         constexpr uint32_t kTheCamera = 0x006F44D0u;
-        constexpr uint32_t kActiveCam = kTheCamera + 0x50u; // byte: which of Cams[3] is active
-        constexpr uint32_t kCams = kTheCamera + 0x70u, kCamSize = 0x270u;
-        constexpr uint32_t kCamFront = 0x10u, kCamSource = 0x20u, kCamUp = 0x60u, kCamFov = 0x134u, kCamTarget = 0x1A0u;
+        constexpr Layout kVcsLayout{kTheCamera + 0x50u, kTheCamera + 0x70u, 0x270u, 0x10u, 0x20u, 0u, 0x60u, 0x134u, 0x1A0u};
         constexpr uint32_t kCamHeightRoutines = 0x002A2ED0u; // CCam::ProcessSpecialHeightRoutines(cam), right after
                                                              // CCam::Process (FUN_00294540)
 
@@ -36,6 +34,7 @@ namespace vcs::freecam
 
         PS2Runtime::RecompiledFunction g_origHeight = nullptr;
         std::atomic<bool> g_installed{false};
+        Layout g_layout = kVcsLayout;
 
         // game thread
         bool g_flying = false;
@@ -59,18 +58,22 @@ namespace vcs::freecam
             wrf(ram, a + 8, z);
         }
 
-        bool activeCam(const uint8_t *ram, uint32_t cam) { return cam == kCams + ram[kActiveCam] * kCamSize; }
+        bool activeCam(const uint8_t *ram, uint32_t cam)
+        {
+            return cam == g_layout.cams + ram[g_layout.activeCam & kRamMask] % 3u * g_layout.camSize;
+        }
 
         // The camera where the game's camera was: no jump when the free camera starts.
         void begin(const uint8_t *ram, uint32_t cam)
         {
-            g_x = rdf(ram, cam + kCamSource);
-            g_y = rdf(ram, cam + kCamSource + 4);
-            g_z = rdf(ram, cam + kCamSource + 8);
-            const float fx = rdf(ram, cam + kCamFront), fy = rdf(ram, cam + kCamFront + 4), fz = rdf(ram, cam + kCamFront + 8);
+            const Layout &L = g_layout;
+            g_x = rdf(ram, cam + L.source);
+            g_y = rdf(ram, cam + L.source + 4);
+            g_z = rdf(ram, cam + L.source + 8);
+            const float fx = rdf(ram, cam + L.front), fy = rdf(ram, cam + L.front + 4), fz = rdf(ram, cam + L.front + 8);
             g_yaw = std::atan2(fy, fx);
             g_pitch = std::clamp(std::asin(std::clamp(fz, -1.0f, 1.0f)), -kPitchLimit, kPitchLimit);
-            const float fov = rdf(ram, cam + kCamFov);
+            const float fov = rdf(ram, cam + L.fov);
             g_fov = fov >= 10.0f && fov <= 130.0f ? fov : 70.0f;
             g_last = ps2x::hostNow();
             g_flying = true;
@@ -91,6 +94,7 @@ namespace vcs::freecam
         // changes how fast it flies), then the CCam gets it.
         void update(uint8_t *ram, uint32_t cam)
         {
+            const Layout &L = g_layout;
             const auto now = ps2x::hostNow();
             const float dt = std::clamp(std::chrono::duration<float>(now - g_last).count(), 0.0f, 0.1f);
             g_last = now;
@@ -110,11 +114,14 @@ namespace vcs::freecam
             g_y += (front[1] * in.forward + right[1] * in.strafe) * step;
             g_z += (front[2] * in.forward + in.rise) * step;
 
-            wrVec(ram, cam + kCamSource, g_x, g_y, g_z);
-            wrVec(ram, cam + kCamFront, front[0], front[1], front[2]);
-            wrVec(ram, cam + kCamUp, up[0], up[1], up[2]);
-            wrVec(ram, cam + kCamTarget, g_x + front[0], g_y + front[1], g_z + front[2]);
-            wrf(ram, cam + kCamFov, g_fov);
+            wrVec(ram, cam + L.source, g_x, g_y, g_z);
+            if (L.sourceCopy)
+                wrVec(ram, cam + L.sourceCopy, g_x, g_y, g_z);
+            wrVec(ram, cam + L.front, front[0], front[1], front[2]);
+            wrVec(ram, cam + L.up, up[0], up[1], up[2]);
+            if (L.target)
+                wrVec(ram, cam + L.target, g_x + front[0], g_y + front[1], g_z + front[2]);
+            wrf(ram, cam + L.fov, g_fov);
 
             std::lock_guard<std::mutex> lock(g_poseMutex);
             g_pose = {true, g_x, g_y, g_z, g_yaw, g_pitch, g_fov};
@@ -129,15 +136,11 @@ namespace vcs::freecam
             const uint32_t cam = GPR_U32(ctx, 4);
             if (!activeCam(rdram, cam))
                 return g_origHeight(rdram, ctx, runtime);
-            if (!flying())
+            if (!takeCamera(rdram, cam))
             {
-                end();
                 aim::cameraUpdated(cam); // free aim's hand-back to the follow camera (game/vcs_aim.h)
                 return g_origHeight(rdram, ctx, runtime);
             }
-            if (!g_flying)
-                begin(rdram, cam);
-            update(rdram, cam);
             ctx->pc = GPR_U32(ctx, 31);
         }
     }
@@ -151,6 +154,29 @@ namespace vcs::freecam
             return;
         runtime.replaceFunction(kCamHeightRoutines, &camHeight);
         g_installed = true;
+    }
+
+    void installLayout(const Layout &layout)
+    {
+        if (const char *e = std::getenv("VCS_FREECAM"); e && e[0] == '0')
+            return;
+        g_layout = layout;
+        g_installed = true;
+    }
+
+    bool takeCamera(uint8_t *rdram, uint32_t cam)
+    {
+        if (!g_installed.load(std::memory_order_relaxed) || !activeCam(rdram, cam))
+            return false;
+        if (!flying())
+        {
+            end();
+            return false;
+        }
+        if (!g_flying)
+            begin(rdram, cam);
+        update(rdram, cam);
+        return true;
     }
 
     bool flying() { return g_installed.load(std::memory_order_relaxed) && trainer::toggle(trainer::FreeCamera) && trainer::ready(); }

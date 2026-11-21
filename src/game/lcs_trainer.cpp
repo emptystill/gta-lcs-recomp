@@ -23,6 +23,7 @@
 #include "game/lcs_trainer.h"
 #include "ui/i18n.h"
 #include "game/vcs_trainer.h"
+#include "game/vcs_freecam.h"
 
 #include "ps2_runtime.h"
 #include "ps2_runtime_macros.h"
@@ -280,6 +281,7 @@ namespace
 
     std::mutex g_noticesMutex;
     std::vector<tr::Notice> g_notices;
+    std::atomic<int> g_freeCameraSpeed{20}; // m/s (the trainer's Camera page)
 
     // the weapons' guest calls (game thread takes them at the frame boundary)
     struct Step
@@ -970,6 +972,7 @@ namespace
             {"reload", tr::NoReload},      {"sprint", tr::InfiniteSprint},   {"fastreload", tr::FastReload},
             {"police", tr::PoliceIgnore},  {"ignore", tr::EveryoneIgnores},  {"vehicle", tr::VehicleInvincible},
             {"warp", tr::WarpIntoSpawned}, {"freeze", tr::FreezeTime},       {"hidehud", tr::HideHud},
+            {"freecam", tr::FreeCamera},
         };
         const auto w = words(args);
         const std::string verb = w.empty() ? "" : w[0];
@@ -1019,6 +1022,12 @@ namespace
             if (w[1] == "weathers")
                 return reply(listReply(tr::weathers()));
             return reply("error usage: trainer list vehicles|weapons|landmarks|weathers");
+        }
+        if (verb == "freecam") // the free camera as of its last update
+        {
+            const vcs::freecam::Pose p = vcs::freecam::pose();
+            return reply(fmt("ok active=%d x=%.2f y=%.2f z=%.2f yaw=%.4f pitch=%.4f fov=%.1f speed=%d", p.active ? 1 : 0,
+                             p.x, p.y, p.z, p.yaw, p.pitch, p.fov, tr::freeCameraSpeed()));
         }
         if (verb == "notices")
         {
@@ -1266,10 +1275,21 @@ namespace vcs::trainer
     bool toggle(Toggle t) { return t >= 0 && t < ToggleCount && g_toggles[t].load(std::memory_order_relaxed); }
     void setToggle(Toggle t, bool on)
     {
-        if (t < 0 || t >= ToggleCount || t == FreeCamera)
+        if (t < 0 || t >= ToggleCount)
             return notAvailable();
+        if (t == FreeCamera && on && !ready())
+            return post("Only while you play (not paused)");
         if (g_toggles[t].exchange(on) == on)
             return;
+        if (t == FreeCamera) // game/vcs_freecam.h; off: the camera back behind the player, as getting in does
+        {
+            if (!on)
+                queue([](uint8_t *, Scm &code, std::string &) {
+                    code.op(RESTORE_CAMERA_JUMPCUT);
+                    return true;
+                });
+            return post(on ? "Free camera on" : "Free camera off");
+        }
         if (t == UnlimitedAmmo || t == NoReload || t == HideHud || t == WarpIntoSpawned)
         {
             static const char *const names[] = {"Unlimited ammo", "No reload", "Hide HUD", "Get into spawned vehicles"};
@@ -1533,9 +1553,21 @@ namespace vcs::trainer
     }
 
     bool hasSavedPosition() { return g_hasSaved.load(std::memory_order_relaxed); }
-    void teleportToCamera() { notAvailable(); }
-    int freeCameraSpeed() { return 20; }
-    void setFreeCameraSpeed(int) {}
+    // The player (and his vehicle) to the ground below the free camera; the free camera ends there.
+    void teleportToCamera()
+    {
+        const vcs::freecam::Pose p = vcs::freecam::pose();
+        if (!toggle(FreeCamera) || !p.active)
+            return post("Turn the free camera on first");
+        setToggle(FreeCamera, false);
+        queue([p](uint8_t *ram, Scm &code, std::string &notice) {
+            moveTo(ram, code, p.x, p.y, -100.0f);
+            notice = "Teleported below the camera";
+            return true;
+        });
+    }
+    int freeCameraSpeed() { return g_freeCameraSpeed.load(std::memory_order_relaxed); }
+    void setFreeCameraSpeed(int metres) { g_freeCameraSpeed.store(std::clamp(metres, 1, 200)); }
 
     void setTime(int hour)
     {
