@@ -448,6 +448,35 @@ static struct
     int left = 0, index = 0;
 } g_burst;
 
+// [gta-recomp] the "record" control command's state (main thread): every new picture shown, at the window's size, piped
+// raw (RGB) to an ffmpeg process on PATH that encodes it (ps2control::recordGameFrame paces the game to it)
+static struct
+{
+    FILE *pipe = nullptr;
+    std::string path;
+    int width = 0, height = 0;
+    int64_t lastShown = -1;
+    uint64_t written = 0;
+    std::vector<uint8_t> rgb;
+} g_record;
+
+static void recordStop()
+{
+    ps2control::recordSetActive(false);
+    if (!g_record.pipe)
+        return;
+#if defined(_WIN32)
+    _pclose(g_record.pipe);
+#else
+    pclose(g_record.pipe);
+#endif
+    g_record.pipe = nullptr;
+    const ps2control::RecordCounts c = ps2control::recordCounts();
+    std::fprintf(stderr, "[record] %s: %llu frames written (%llu game frames, %llu waits timed out)\n",
+                 g_record.path.c_str(), static_cast<unsigned long long>(g_record.written),
+                 static_cast<unsigned long long>(c.gameFrames), static_cast<unsigned long long>(c.timeouts));
+}
+
 // [gta-recomp] Shows the GPU renderer's newest picture. False when there is no GPU renderer.
 // `owned` is our texture for pictures made on the CPU; `shown` is what the window draws (owned, or the HW renderer's).
 static bool UploadGpuFrame(present::Picture &owned, present::Picture &shown, PS2Runtime *rt, uint32_t &outWidth,
@@ -1288,6 +1317,76 @@ bool PS2Runtime::initialize(const char *title)
             if (FILE *f = std::fopen((g_burst.dir + "/burst.txt").c_str(), "w"))
                 std::fclose(f);
             reply("ok");
+        });
+        // [gta-recomp] "record start PATH [FPS]" / "record stop" / "record state": a video of the window's picture, one
+        // frame per new picture, encoded by ffmpeg (PATH; NVENC H.264 at constant quality - PS2X_RECORD_CODEC replaces the
+        // codec arguments). With VCS_TIMESTEP=FPS every frame is one game frame: the game waits for the encoder.
+        ps2control::addCommand("record", [](const std::string &args, ps2control::Reply reply) {
+            char verb[16] = {}, path[512] = {};
+            int fps = 60;
+            const int n = std::sscanf(args.c_str(), "%15s %511[^\n]", verb, path);
+            if (n >= 1 && std::string(verb) == "stop")
+            {
+                const uint64_t written = g_record.written;
+                recordStop();
+                reply("ok " + std::to_string(written));
+                return;
+            }
+            if (n >= 1 && std::string(verb) == "state")
+            {
+                const ps2control::RecordCounts c = ps2control::recordCounts();
+                reply("ok recording=" + std::to_string(g_record.pipe ? 1 : 0) + " written=" + std::to_string(g_record.written) +
+                      " game_frames=" + std::to_string(c.gameFrames) + " timeouts=" + std::to_string(c.timeouts));
+                return;
+            }
+            if (n < 2 || std::string(verb) != "start")
+            {
+                reply("error usage: record start PATH [FPS] | record stop | record state");
+                return;
+            }
+            std::string file = path;
+            if (const size_t space = file.find_last_of(' '); space != std::string::npos)
+            {
+                const int f = std::atoi(file.c_str() + space + 1);
+                if (f > 0)
+                {
+                    fps = f;
+                    file.resize(space);
+                }
+            }
+            recordStop();
+            int w = 0, h = 0;
+            platform::windowSize(w, h);
+            w &= ~1, h &= ~1; // the encoder's 4:2:0 wants even sizes
+            if (w <= 0 || h <= 0)
+            {
+                reply("error no window size");
+                return;
+            }
+            const char *codec = std::getenv("PS2X_RECORD_CODEC");
+            const std::string cmd = "ffmpeg -hide_banner -loglevel error -y -f rawvideo -pix_fmt rgb24 -s " + std::to_string(w) +
+                                    "x" + std::to_string(h) + " -r " + std::to_string(fps) + " -i - " +
+                                    (codec && *codec ? std::string(codec)
+                                                     : std::string("-c:v h264_nvenc -preset p7 -tune hq -rc vbr -cq 16 -b:v 0 "
+                                                                   "-pix_fmt yuv420p -movflags +faststart")) +
+                                    " \"" + file + "\"";
+#if defined(_WIN32)
+            g_record.pipe = _popen(cmd.c_str(), "wb");
+#else
+            g_record.pipe = popen(cmd.c_str(), "w");
+#endif
+            if (!g_record.pipe)
+            {
+                reply("error cannot start ffmpeg");
+                return;
+            }
+            g_record.path = file;
+            g_record.width = w, g_record.height = h;
+            g_record.lastShown = -1;
+            g_record.written = 0;
+            ps2control::recordSetActive(true);
+            std::fprintf(stderr, "[record] %s: %dx%d at %d fps\n", file.c_str(), w, h, fps);
+            reply("ok " + std::to_string(w) + "x" + std::to_string(h));
         });
         ps2control::start();
         ps2AudioInit(); // [gta-recomp] SPU2 output stream
@@ -3382,6 +3481,19 @@ void PS2Runtime::run()
             ++g_burst.index;
             --g_burst.left;
         }
+        if (g_record.pipe) // [gta-recomp] "record" (above): a new picture to the encoder
+        {
+            const int64_t shown = gsHwShownInputNs();
+            if (shown != g_record.lastShown)
+            {
+                g_record.lastShown = shown;
+                if (present::capture(shownTex, srcWidth, srcHeight, aspect, g_record.width, g_record.height, g_record.rgb,
+                                     frameAspect) &&
+                    std::fwrite(g_record.rgb.data(), 1, g_record.rgb.size(), g_record.pipe) == g_record.rgb.size())
+                    ++g_record.written;
+                ps2control::recordFrameCaptured();
+            }
+        }
         ps2control::pump(capturePng, shootPng, [this] { requestStop(); });
         present::setFrameInputTime(gsHwShownInputNs()); // [gta-recomp] input-to-screen delay (PS2X_RHI_STATS)
         present::present();
@@ -3445,6 +3557,7 @@ void PS2Runtime::run()
     }
     shutdownGpuRenderer(); // [gta-recomp]
     ps2perf::shutdown();   // [gta-recomp]
+    recordStop();          // [gta-recomp] a recording's file finished (ffmpeg writes the MP4's index at its end)
     ps2control::stop();    // [gta-recomp]
     frameTex = {};
     shownTex = {};

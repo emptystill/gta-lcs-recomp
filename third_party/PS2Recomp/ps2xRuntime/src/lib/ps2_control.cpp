@@ -378,5 +378,61 @@ namespace ps2control
         }
         if (g_server.joinable())
             g_server.detach(); // a connected client may still be reading; the process is ending
+        recordSetActive(false);
+    }
+
+    namespace
+    {
+        std::atomic<bool> g_recordOn{false};
+        std::atomic<uint64_t> g_recordKicked{0}, g_recordCaptured{0}, g_recordTimeouts{0};
+    }
+
+    void recordSetActive(bool on)
+    {
+        if (on)
+        {
+            g_recordKicked.store(0);
+            g_recordCaptured.store(0);
+            g_recordTimeouts.store(0);
+        }
+        g_recordOn.store(on);
+    }
+
+    bool recordActive()
+    {
+        return g_recordOn.load(std::memory_order_relaxed);
+    }
+
+    void recordGameFrame()
+    {
+        if (!g_recordOn.load(std::memory_order_acquire))
+            return;
+        static const uint64_t ahead = [] {
+            const char *e = std::getenv("PS2X_RECORD_AHEAD");
+            const int n = e ? std::atoi(e) : 0;
+            return static_cast<uint64_t>(n > 0 ? n : 4); // 2 deadlocked: a picture shows ~3 frames after its kick
+        }();
+        const auto start = std::chrono::steady_clock::now();
+        while (g_recordOn.load(std::memory_order_acquire) &&
+               g_recordKicked.load(std::memory_order_relaxed) > g_recordCaptured.load(std::memory_order_acquire) + ahead)
+        {
+            if (std::chrono::steady_clock::now() - start > std::chrono::seconds(1))
+            {
+                g_recordTimeouts.fetch_add(1, std::memory_order_relaxed);
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::microseconds(250));
+        }
+        g_recordKicked.fetch_add(1, std::memory_order_release);
+    }
+
+    void recordFrameCaptured()
+    {
+        g_recordCaptured.fetch_add(1, std::memory_order_release);
+    }
+
+    RecordCounts recordCounts()
+    {
+        return {g_recordKicked.load(), g_recordCaptured.load(), g_recordTimeouts.load()};
     }
 }

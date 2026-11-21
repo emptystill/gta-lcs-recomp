@@ -1053,6 +1053,88 @@ namespace
         }
         if (!tr::ready())
             return reply("error not in game");
+        // tools/trailer.py: nearcars -> ok <the vehicles within 60 m of the player, nearest first, not his own (hex)>
+        if (verb == "nearcars")
+        {
+            const uint8_t *ram = g_rdram;
+            const uint32_t me = ram ? player(ram) : 0;
+            if (!me)
+                return reply("error not in game");
+            const uint32_t mine = vehicleOf(ram, me);
+            const float px = rdf(ram, me + kPos), py = rdf(ram, me + kPos + 4);
+            const uint32_t pool = rd32(ram, kVehiclePool);
+            const uint32_t base = rd32(ram, pool), flags = rd32(ram, pool + 4), size = rd32(ram, pool + 8);
+            std::vector<std::pair<float, uint32_t>> cars;
+            for (uint32_t i = 0; pool && i < size && i < 1024; ++i)
+            {
+                if (ram[(flags + i) & kRamMask] & 0x80u)
+                    continue; // free
+                const uint32_t car = base + i * kVehicleSize;
+                if (car == mine)
+                    continue;
+                const float dx = rdf(ram, car + kPos) - px, dy = rdf(ram, car + kPos + 4) - py;
+                const float d = dx * dx + dy * dy;
+                if (d < 60.0f * 60.0f)
+                    cars.push_back({d, car});
+            }
+            std::sort(cars.begin(), cars.end());
+            std::string out = "ok";
+            for (const auto &c : cars)
+                out += fmt(" %08x", c.second);
+            return reply(out);
+        }
+        // tools/trailer.py: roadcar -> ok <x y z heading-degrees speed> of a traffic car driving 15-120 m away (a road, its
+        // direction), the fastest; error none
+        if (verb == "roadcar")
+        {
+            const uint8_t *ram = g_rdram;
+            const uint32_t me = ram ? player(ram) : 0;
+            if (!me)
+                return reply("error not in game");
+            const uint32_t mine = vehicleOf(ram, me);
+            const float px = rdf(ram, me + kPos), py = rdf(ram, me + kPos + 4), pz = rdf(ram, me + kPos + 8);
+            const uint32_t pool = rd32(ram, kVehiclePool);
+            const uint32_t base = rd32(ram, pool), flags = rd32(ram, pool + 4), size = rd32(ram, pool + 8);
+            uint32_t best = 0;
+            float bestSpeed = 0.15f; // units per 1/50 s: ~27 km/h at least
+            for (uint32_t i = 0; pool && i < size && i < 1024; ++i)
+            {
+                if (ram[(flags + i) & kRamMask] & 0x80u)
+                    continue;
+                const uint32_t car = base + i * kVehicleSize;
+                if (car == mine)
+                    continue;
+                const float dx = rdf(ram, car + kPos) - px, dy = rdf(ram, car + kPos + 4) - py;
+                const float d = std::sqrt(dx * dx + dy * dy);
+                const float vx = rdf(ram, car + kVehSpeed), vy = rdf(ram, car + kVehSpeed + 4);
+                const float v = std::sqrt(vx * vx + vy * vy);
+                // at the player's level (a car in the tunnel under Chinatown, 20 m down, put the player inside the rock)
+                if (d > 15.0f && d < 120.0f && v > bestSpeed && std::fabs(rdf(ram, car + kVehForward + 8)) < 0.2f &&
+                    std::fabs(rdf(ram, car + kPos + 8) - pz) < 6.0f)
+                    best = car, bestSpeed = v;
+            }
+            if (!best)
+                return reply("error none");
+            return reply(fmt("ok %.2f %.2f %.2f %.1f %.3f", rdf(ram, best + kPos), rdf(ram, best + kPos + 4),
+                             rdf(ram, best + kPos + 8), headingDegrees(ram, best), bestSpeed));
+        }
+        // tools/trailer.py: heading DEGREES | carspeed V | goto X Y Z (floats)
+        if (verb == "heading" && w.size() >= 2)
+        {
+            tr::setVehicleHeading(std::strtof(w[1].c_str(), nullptr));
+            return answerWhenDone();
+        }
+        if (verb == "carspeed" && w.size() >= 2)
+        {
+            tr::setVehicleSpeed(std::strtof(w[1].c_str(), nullptr));
+            return answerWhenDone();
+        }
+        if (verb == "goto" && w.size() >= 4)
+        {
+            tr::goTo(std::strtof(w[1].c_str(), nullptr), std::strtof(w[2].c_str(), nullptr),
+                     std::strtof(w[3].c_str(), nullptr));
+            return answerWhenDone();
+        }
         using Fn = std::function<void()>;
         const std::pair<const char *, Fn> kActions[] = {
             {"heal", [] { tr::heal(); }},
@@ -1375,6 +1457,33 @@ namespace vcs::trainer
     void boostVehicle()
     {
         vehicleAction("Boost!", [](uint8_t *, uint32_t, int32_t h, Scm &code) { code.op(SET_CAR_FORWARD_SPEED).i(h).f(45.0f); });
+    }
+
+    // Control channel only (tools/trailer.py's shots): the vehicle turned to a heading (upright, the camera behind it),
+    // pushed to a speed, the player (or his vehicle) moved to a point
+    void setVehicleHeading(float degrees)
+    {
+        vehicleAction("Heading set", [degrees](uint8_t *, uint32_t, int32_t h, Scm &code) {
+            code.op(SET_CAR_HEADING).i(h).f(degrees);
+            code.op(SET_CAR_FORWARD_SPEED).i(h).f(0.0f);
+            code.op(RESTORE_CAMERA_JUMPCUT);
+        });
+    }
+
+    void setVehicleSpeed(float speed)
+    {
+        vehicleAction("Speed set", [speed](uint8_t *, uint32_t, int32_t h, Scm &code) {
+            code.op(SET_CAR_FORWARD_SPEED).i(h).f(speed);
+        });
+    }
+
+    void goTo(float x, float y, float z)
+    {
+        queue([x, y, z](uint8_t *ram, Scm &code, std::string &notice) {
+            moveTo(ram, code, x, y, z);
+            notice = fmt("Moved to (%.0f, %.0f, %.0f)", x, y, z);
+            return true;
+        });
     }
 
     void paintVehicle()

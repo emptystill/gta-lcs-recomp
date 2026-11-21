@@ -66,6 +66,10 @@ namespace vcs::trainer
     void repairVehicle();
     void flipVehicle();                 // the player's vehicle upright, facing where it faces
     void boostVehicle();
+    // [lcs] control channel only (tools/trailer.py): the vehicle's heading (degrees) / forward speed, a move to a point
+    void setVehicleHeading(float degrees);
+    void setVehicleSpeed(float speed);
+    void goTo(float x, float y, float z);
     void paintVehicle();                // random colours
     void teleport(int landmark);        // one of landmarks()
     void savePosition();

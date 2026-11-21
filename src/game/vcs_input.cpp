@@ -368,6 +368,9 @@ namespace vcs::input
 
         std::mutex g_injectedMutex;
         float g_injectedX = 0.0f, g_injectedY = 0.0f; // "mouse <dx> <dy>" (tests): counts, as from the mouse
+        float g_injectedVX = 0.0f, g_injectedVY = 0.0f; // "mouse vel <dx> <dy>": counts added every game frame
+        std::atomic<bool> g_cameraBehind{false};        // "camera behind": the mouse camera behind at the next frame
+        std::atomic<float> g_cameraHeading{-1000.0f};   // "camera heading H": looking along H (degrees) at the next frame
 
         // The game's stick curve (FUN_002842e8, game-internals.md 12a): v = byte - 128; |v| <= 42 is 0, past that
         // (|v| - 42) 127 / 85, truncated - the first third of the travel does nothing. The smallest deflection the game
@@ -514,6 +517,8 @@ namespace vcs::input
                     dx += g_injectedX;
                     dy += g_injectedY;
                     g_injectedX = g_injectedY = 0.0f;
+                    if (frameAdvanced) // "mouse vel": the same counts every game frame (even pans in recordings)
+                        dx += g_injectedVX, dy += g_injectedVY;
                 }
                 // a hand on the mouse moves it more than a nudge of the desk does
                 keysUsed = keysUsed || std::fabs(dx) + std::fabs(dy) > 12.0f;
@@ -628,6 +633,33 @@ namespace vcs::input
                         }
                         const float look = dmode == L.directCarMode ? m.carLook : m.mouseLook;
                         const float turn = -dx * look, tilt = -up * look; // pitch: + looks down (the camera rises)
+                        if (frameAdvanced && g_cameraBehind.exchange(false))
+                        {
+                            // "camera behind" (tools/trailer.py): the heading behind the vehicle driven, else Toni
+                            const uint32_t bped = L.playerPed ? rd32(L.playerPed) : 0u;
+                            const uint32_t bveh = bped >= 0x100000u && bped < 0x2000000u && L.pedVehicle ? rd32(bped + L.pedVehicle) : 0u;
+                            const uint32_t who = bveh >= 0x100000u && bveh < 0x2000000u ? bveh : bped;
+                            if (who >= 0x100000u && who < 0x2000000u)
+                            {
+                                const float fx = rdf(who + 0x10u), fy = rdf(who + 0x14u);
+                                if (fx * fx + fy * fy > 0.01f)
+                                {
+                                    float b = std::atan2(-fy, -fx);
+                                    dstate.beta = b < 0.0f ? b + 6.2831855f : b;
+                                    dstate.alpha = dstate.alpha0;
+                                }
+                            }
+                        }
+                        if (const float h = g_cameraHeading.load(); frameAdvanced && h > -999.0f)
+                        {
+                            // looking along heading h (the trainer's degrees: forward = (-sin h, cos h)): the camera
+                            // stands opposite, at atan2(-forward.y, -forward.x)
+                            g_cameraHeading.store(-1000.0f);
+                            const float r = h * 0.017453292f;
+                            const float b = std::atan2(-std::cos(r), std::sin(r));
+                            dstate.beta = b < 0.0f ? b + 6.2831855f : b;
+                            dstate.alpha = dstate.alpha0;
+                        }
                         if (frameAdvanced)
                         {
                             float beta = std::fmod(dstate.beta + turn, 6.2831855f);
@@ -1090,6 +1122,7 @@ namespace vcs::input
                 s.choices = {{"0.5 s", 5}, {"1 s", 10}, {"1.5 s", 15}, {"2 s", 20}, {"3 s", 30}, {"5 s", 50}, {"Never", -1}};
                 // Never by default (LCS): the user wants the vehicle camera as free as the one on foot
                 s.defaultValue = -1;
+                s.env = "VCS_CAR_RETURN"; // (LCS_CAR_RETURN) tools/trailer.py's driving shots: the camera behind the car
                 s.onChange = [](int v) { carcam::setReturnDelay(v < 0 ? -1.0f : v / 10.0f); };
                 settings::add(s);
 
@@ -1600,10 +1633,30 @@ namespace vcs::input
         });
         // mouse <dx> <dy> -> ok: mouse motion (counts; y grows downwards) for the next pad read, physical input or not
         // (the mouse camera's checks in tools/controls_check.py)
+        // camera behind -> ok: the mouse camera behind the vehicle the player drives (or him) at the next game frame
+        ps2control::addCommand("camera", [](const std::string &args, ps2control::Reply reply) {
+            float h = 0.0f;
+            if (std::sscanf(args.c_str(), "heading %f", &h) == 1)
+            {
+                g_cameraHeading.store(std::remainder(h, 360.0f));
+                return reply("ok");
+            }
+            if (args != "behind")
+                return reply("error usage: camera behind | camera heading DEGREES");
+            g_cameraBehind.store(true);
+            reply("ok");
+        });
+        // mouse vel <dx> <dy> -> ok: those counts every game frame until "mouse vel 0 0" (smooth pans for tools/trailer.py)
         ps2control::addCommand("mouse", [](const std::string &args, ps2control::Reply reply) {
             float dx = 0.0f, dy = 0.0f;
+            if (std::sscanf(args.c_str(), "vel %f %f", &dx, &dy) == 2)
+            {
+                std::lock_guard<std::mutex> lock(g_injectedMutex);
+                g_injectedVX = dx, g_injectedVY = dy;
+                return reply("ok");
+            }
             if (std::sscanf(args.c_str(), "%f %f", &dx, &dy) != 2)
-                return reply("error usage: mouse <dx> <dy>");
+                return reply("error usage: mouse <dx> <dy> | mouse vel <dx> <dy>");
             std::lock_guard<std::mutex> lock(g_injectedMutex);
             g_injectedX += dx;
             g_injectedY += dy;

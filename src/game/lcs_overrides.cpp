@@ -261,6 +261,9 @@ namespace
         // counted as a frame, so they showed 60 fps whatever the game ran at (2026-11-18: 78 to 150 frames a second
         // while they said 60)
         ps2perf::markGameFrame();
+        // a video being recorded (tools/trailer.py): wait for the encoder. Here, once a frame - the frame boundary
+        // (rig::onGameFrame) runs again after every guest call the trainer chains there, which counted frames twice
+        ps2control::recordGameFrame();
         vcs::onFrameKick();
         lcs::prompts::onFrameKick(rdram); // the button prompts' textures and context to the renderer (game/lcs_prompts.h)
         lcs::options::onFrameKick(rdram); // our settings' rows in the pause menu's table (game/lcs_options.h)

@@ -1284,6 +1284,11 @@ In the order agreed with the user (most likely to break play first). VCS has eac
   newest three. Checked with the rig's `pause on` (12 s): "the EE stands still", the game thread in
   `vcs::rig::onGameFrame` / `SleepEx`. A 15-minute hunt (rain, night, M60, burning cars; the wanted level held down
   by the card's mission) did not freeze.
+- **The rig's `player` was VCS's** (2026-11-21, found by tools/trailer.py): it read the player from 0x4E4910 and the
+  mission flag from 0x4CD3E7 (VCS) and answered "no player"; now 0x408E40 / 0x3D9C29 (the trainer's). **Still VCS's:
+  the F3 game-state panel** (`src/debug/game_info.cpp`: player, camera, clock, pools, scripts - "no player ped yet"
+  in LCS, and the stall report's game state with it) - to port with LCS's addresses. The trainer's are right
+  (`lcs_trainer.cpp`: the vehicle pool 0x3D5AEC, 0x780 a vehicle).
 - `tools/eedecomp.py ADDR...`: works on the `lcs` Ghidra project (Ghidra / JDK in `build/ghidra-tools`, set
   GHIDRA_HOME / JAVA_HOME).
 

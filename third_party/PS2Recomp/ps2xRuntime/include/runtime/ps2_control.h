@@ -16,6 +16,7 @@
 // tools/gamectl.py is the client.
 #pragma once
 
+#include <cstdint>
 #include <functional>
 #include <string>
 
@@ -52,4 +53,18 @@ namespace ps2control
     void pump(const std::function<std::string(const std::string &path)> &capture,
               const std::function<void(const std::string &path, Done done)> &shoot, const std::function<void()> &quit);
     void stop();
+
+    // [gta-recomp] Video recording ("record start PATH ..." / "record stop", ps2_runtime.cpp): while it runs the game
+    // thread is held at each frame boundary until the frames before it were recorded (at most PS2X_RECORD_AHEAD, 4,
+    // ahead; never more than 1 s), so with a forced time step (VCS_TIMESTEP) every video frame is one game frame
+    // whatever the encoder's speed.
+    void recordSetActive(bool on); // main thread
+    bool recordActive();
+    void recordGameFrame();     // game thread, once per game frame (the game's frame hook)
+    void recordFrameCaptured(); // main thread: a new picture went to the encoder
+    struct RecordCounts
+    {
+        uint64_t gameFrames = 0, captured = 0, timeouts = 0;
+    };
+    RecordCounts recordCounts();
 }

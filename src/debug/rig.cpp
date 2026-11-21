@@ -310,8 +310,8 @@ namespace vcs::rig
         constexpr uint32_t kActiveScripts = 0x004CD3C4u;  // CRunningScript list heads (+0 next, +4 prev)
         constexpr uint32_t kIdleScripts = 0x004CD3C8u;
         constexpr uint32_t kNextScriptId = 0x0048742Cu;
-        constexpr uint32_t kMissionRunning = 0x004CD3E7u; // u8, set by LOAD_AND_LAUNCH_MISSION_INTERNAL
-        constexpr uint32_t kPlayerPed = 0x004E4910u;      // CWorld::Players[0].m_pPed
+        constexpr uint32_t kMissionRunning = 0x003D9C29u; // u8: a mission runs (LCS; lcs_trainer.cpp)
+        constexpr uint32_t kPlayerPed = 0x00408E40u;      // CWorld::Players[0].m_pPed (LCS; was VCS's 0x4E4910)
         constexpr uint32_t kScriptSize = 0x218u;
         // A rig script's code lives in its own locals 0x30.. (+0x114..+0x1c4): locals 0..0x2f stay free for outputs,
         // the timers (locals 0x68 / 0x69 at +0x1f4) are not touched.

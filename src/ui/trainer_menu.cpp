@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <cfloat>
 #include <cstdio>
+#include <cstdlib>
 #include <functional>
 #include <string>
 #include <vector>
@@ -377,6 +378,13 @@ namespace ui
 
         void drawNotices(const ImGuiViewport *vp, float s)
         {
+            // LCS_TRAINER_NOTICES=0: none on screen (tools/trailer.py's recordings set the scene through the trainer)
+            static const bool quiet = [] {
+                const char *e = std::getenv("LCS_TRAINER_NOTICES");
+                return e && *e == '0';
+            }();
+            if (quiet)
+                return;
             const double now = tr::now();
             std::vector<tr::Notice> list = tr::notices(4.0);
             if (g_hideShotNotices)

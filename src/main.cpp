@@ -528,6 +528,7 @@ namespace
         s.max = 100;
         s.format = "%d%%";
         s.defaultValue = 100;
+        s.env = "VCS_VOLUME"; // (LCS_VOLUME) 0 for recordings: the game runs at the encoder's pace, its sound too
         s.onChange = applyVolume;
         settings::add(s);
 
