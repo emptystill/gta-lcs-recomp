@@ -171,8 +171,9 @@ motion is (2026-11-01, the user's "rethink everything"; before, a sidebar of pag
   a red disc on night blue - the title bar's logo; the same script draws lcs.exe's icon (`src/lcs.ico`) on orange, so
   the game and the launcher don't look alike in Explorer or on the taskbar.
 - Language (`core/i18n.{h,cpp}`): English or Spanish, the same choice as the game's menus - `ui.language` in the
-  build's lcs.ini (0 English, 1 Spanish), read at start and written by Settings > *Language / Idioma*. The screens are
-  written in English; `render/font.cpp` passes every text it measures, draws, shortens or wraps through
+  build's lcs.ini (0 English, 1 Spanish), read at start and written by Settings > *Language / Idioma*. English is the
+  default when the setting is unset. The screens are written in English. `render/font.cpp` passes every text it
+  measures, draws, shortens or wraps through
   `core::i18n::tr`, whose table is `core/i18n_es.inc` (whole texts, and patterns with `{}` holes for texts with
   numbers or names in them, the holes translated in turn). What the scripts report (doctor's reasons, log lines)
   stays English. `LCS_I18N_DUMP=<file>` appends every text drawn that has no Spanish (with `--screenshot`: a

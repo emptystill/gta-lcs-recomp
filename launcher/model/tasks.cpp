@@ -364,15 +364,6 @@ namespace launcher
                 sourceVersion = "development";
         }
         loadSettings();
-        // [lcs] the language the game's menus are in (lcs.ini ui.language; Spanish when unset, as the game's default)
-        {
-            std::ifstream in(build / "lcs.ini");
-            std::string line;
-            while (std::getline(in, line))
-                if (line.rfind("ui.language=", 0) == 0)
-                    language = trim(line.substr(12)) == "0" ? 0 : 1;
-            core::i18n::setSpanish(language == 1);
-        }
 
         // the disc lcs.exe would use
         std::string iniIso;
@@ -587,7 +578,7 @@ namespace launcher
         if (t.kind == "build_dir_set" && t.ok())
         {
             build = pathFrom(t.result["path"].str());
-            loadSettings(); // launcher.ini came along
+            loadSettings(); // the launcher settings and shared language follow the build folder
             say(t.result["old_built"].boolean()
                     ? "Build folder changed. The game is built again there; the old folder can be deleted afterwards: " +
                           t.result["previous"].str()
@@ -966,6 +957,17 @@ namespace launcher
             else if (key == "reduce_motion")
                 settings.reduceMotion = value == "1";
         }
+
+        // [lcs] The launcher and the port's menus share the language in lcs.ini.
+        language = 0;
+        std::ifstream gameIni(build / "lcs.ini");
+        while (std::getline(gameIni, line))
+        {
+            const size_t eq = line.find('=');
+            if (eq != std::string::npos && trim(line.substr(0, eq)) == "ui.language")
+                language = trim(line.substr(eq + 1)) == "1" ? 1 : 0;
+        }
+        core::i18n::setSpanish(language == 1);
     }
 
     void App::saveSettings()

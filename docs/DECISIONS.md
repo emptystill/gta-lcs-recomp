@@ -57,7 +57,8 @@ The user does not want anything of the VCS port in what the player sees. The set
   night-blue dark (`src/ui/theme.cpp`); titles in a heavy face (Impact), text in a condensed one (Bahnschrift), both
   from the system (Windows; DejaVu / Arial on Linux / macOS), no font shipped. The trainer's Vice City sunset header
   became the game's red with the orange rule.
-- **Language**: English or Spanish, chosen in Game > Language / Idioma (Spanish by default: the user's game is Spanish).
+- **Language**: English or Spanish, chosen in Game > Language / Idioma. The original default was Spanish for the
+  user's disc. With no saved choice, the menus now default to English.
   Every text goes through `ui::i18n::tr` (`src/ui/i18n.cpp`, the table `src/ui/i18n_es.inc`, English as the key);
   `LCS_I18N_DUMP=<file>` lists the settings' texts the table lacks. The trainer's notices are translated where they
   are shown; the control channel's answers stay English for the tools.
