@@ -20,7 +20,7 @@ namespace ui::i18n
 #include "ui/i18n_es.inc"
         };
 
-        std::atomic<bool> g_spanish{true};
+        std::atomic<bool> g_spanish{false};
 
         const std::unordered_map<std::string, std::string> &table()
         {
@@ -44,7 +44,7 @@ namespace ui::i18n
         s.help = "The language of these menus (F2, F5). The game's own text is the disc's.";
         s.type = settings::Type::Choice;
         s.choices = {{"English", 0}, {"Español", 1}};
-        s.defaultValue = 1;
+        s.defaultValue = 0;
         s.env = "LCS_LANGUAGE";
         s.onChange = [](int v) { g_spanish.store(v == 1, std::memory_order_relaxed); };
         settings::add(s);
